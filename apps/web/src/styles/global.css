@@ -1,0 +1,59 @@
+/* 폰트 정의 */
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Light.ttf') format('truetype');
+	font-weight: 300;
+	font-style: thin;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Medium.ttf') format('truetype');
+	font-weight: 500;
+	font-style: normal;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Bold.ttf') format('truetype');
+	font-weight: 700;
+	font-style: normal;
+}
+
+/* 테마 */
+@theme {
+	--font-poppins: 'Poppins', sans-serif;
+
+	--color-bg-main: #131316;
+	--color-bg-modal: #1c1d21;
+	--color-bg-input: #1c1d21;
+
+	--color-border-modal: #272727;
+	--color-border-input: #383a42;
+
+	--color-text-sub: #9194a1;
+	--color-text-placeholder: #808080;
+
+	--color-btn-primary: #0d59f2;
+	--color-btn-hover: #0c40e9;
+	--color-btn-disabled: #2f3037;
+
+	--color-status-success: #256af4;
+	--color-status-error: #ec1a13;
+}
+
+/* 메인 설정 */
+@layer base {
+	body {
+		background-color: var(--color-bg-main);
+		color: white;
+		font-family: var(--font-poppins);
+
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+}
