@@ -11,13 +11,13 @@ Thumbs.db
 out/
 
 # --- Gradle ---
+**/build/
 .gradle/
-build/
 !gradle-wrapper.jar
 !gradle-wrapper.properties
 
 # --- Spring Boot & Java ---
-/logs/
+**/logs/
 *.log
 *.pid
 .env
