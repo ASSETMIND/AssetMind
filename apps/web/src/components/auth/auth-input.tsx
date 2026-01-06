@@ -41,7 +41,7 @@ const AuthInput = forwardRef(
 					<button
 						type='button'
 						onClick={handleToggle}
-						className='absolute right-4 top-1/2 -translate-y-1/2 text-text-sub transition-colors hover:text-white'
+						className='absolute right-4 top-1/2 -translate-y-1/2'
 						aria-label={isPasswordVisible ? '비밀번호 숨기기' : '비밀번호 보기'}
 						tabIndex={-1}
 					>

@@ -26,8 +26,7 @@ export default function Modal({ children, onClose }: Props) {
 					px-8
 					py-10
           overflow-hidden 
-          rounded-2xl 
-          border border-border-modal 
+          border
           bg-bg-modal 
           font-poppins
           mx-4
@@ -35,13 +34,13 @@ export default function Modal({ children, onClose }: Props) {
 				>
 					<button
 						onClick={onClose}
-						className='absolute top-6 right-6 text-text-sub hover:text-white transition-colors cursor-pointer'
+						className='absolute top-6 right-6 cursor-pointer'
 						aria-label='Close modal'
 					>
 						<CloseIcon />
 					</button>
 
-					<div className='text-white'>{children}</div>
+					<div>{children}</div>
 				</div>
 			</div>
 		</Portal>

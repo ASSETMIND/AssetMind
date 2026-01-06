@@ -14,7 +14,7 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 			<div className='flex flex-col w-full px-2'>
 				<h2 className='mb-6 text-center text-4xl font-bold'>SIGN UP</h2>
 
-				<form className='flex flex-col gap-5'>
+				<form className='flex flex-col gap-8'>
 					<div className='flex flex-col gap-2'>
 						<label className='font-medium'>아이디</label>
 						<div className='relative'>
@@ -52,7 +52,7 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 					<div className='flex flex-col gap-2'>
 						<label className='font-medium'>휴대폰 번호</label>
 
-						<div className='relative mb-2'>
+						<div className='relative'>
 							<Input type='tel' placeholder='010-0000-0000' className='pr-28' />
 							<Button
 								type='button'
@@ -79,17 +79,15 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						</div>
 					</div>
 
-					<div className='mt-2'>
-						<Button type='submit' size='lg' className='w-full'>
-							가입하기
-						</Button>
-					</div>
+					<Button type='submit' size='lg' className='w-full'>
+						가입하기
+					</Button>
 				</form>
 
 				<div className='mt-4 flex gap-4 items-center justify-center'>
-					<p className='text-[#9194A1]'>이미 게정이 있으신가요?</p>
+					<p>이미 게정이 있으신가요?</p>
 					<button
-						className=' text-btn-primary cursor-pointer font-semibold'
+						className='cursor-pointer font-semibold'
 						onClick={onClickLogin}
 					>
 						로그인

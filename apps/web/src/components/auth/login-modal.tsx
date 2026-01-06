@@ -32,12 +32,12 @@ export default function LoginModal({
 							placeholder='비밀번호를 입력해 주세요.'
 						/>
 					</div>
-					<Button className='mt-2' type='submit'>
+					<Button className='mt-2' size='lg' type='submit'>
 						로그인
 					</Button>
 				</form>
 
-				<div className='mt-4 flex gap-4 text-[#9194A1]'>
+				<div className='mt-4 flex gap-4'>
 					<button className='cursor-pointer' onClick={onClickFindIdPw}>
 						아이디/비밀번호 찾기
 					</button>
@@ -48,8 +48,8 @@ export default function LoginModal({
 				</div>
 				<div className='mt-4 w-full'>
 					<div className='relative flex w-full items-center justify-center'>
-						<div className='absolute w-full border-t border-border-input'></div>
-						<span className='relative bg-bg-modal px-3 font-bold text-text-sub'>
+						<div className='absolute w-full border-t' />
+						<span className='relative bg-bg-modal px-3 font-bold'>
 							or continue with
 						</span>
 					</div>
