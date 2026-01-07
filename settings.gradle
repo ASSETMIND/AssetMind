@@ -3,3 +3,4 @@ rootProject.name = 'AssetMind'
 // server-auth, server-core, server-stock 멀티 모듈 서버를 알리기 위한 뼈대 gradle 파일
 // server-stock
 include 'apps:server-stock'
+include 'apps:server-auth'
