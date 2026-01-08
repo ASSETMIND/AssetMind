@@ -2,18 +2,18 @@
 
 | 문서 ID     | ETL-KIS-001   |
 |:----------|:--------------|
-| **문서 버전** | 1.0           |
+| **문서 버전** | 1.1           |
 | **프로젝트**  | AssetMind     |
 | **작성자**   | 이재석           |
 | **작성일**   | 2026년 01월 08일 |
 
 ## 1. 개요
-본 문서는 한국투자증권(KIS) 실시간 웹소켓 API(`H0NXCNT0`)를 통해 수신되는 주식 체결 데이터 중, 서비스 구현에 필수적인 필드와 처리 규칙을 정의한다.
+본 문서는 한국투자증권(KIS) 실시간 웹소켓 API(`H0UNCNT0`)를 통해 수신되는 주식 체결 데이터 중, 서비스 구현에 필수적인 필드와 처리 규칙을 정의한다.
 
 ## 2. 수집 대상 필드 (Raw Data Specification)
-> KIS API (국내주식 실시간체결가) 참조: https://apiportal.koreainvestment.com/apiservice-apiservice?/tryitout/H0NXCNT0
+> KIS API (국내주식 실시간체결가) 참조: https://apiportal.koreainvestment.com/apiservice-apiservice?/tryitout/H0UNCNT0
 * **Source**: 한국투자증권 WebSocket (Realtime)
-* **TR ID**: `H0NXCNT0` (주식체결가)
+* **TR ID**: `H0UNCNT0` (주식체결가)
 * **Format**: `|` 구분자 문자열
 
 | Index | 필드 ID | 필드명 (Logical) | 타입 (Raw) | 설명                        | 비고 |

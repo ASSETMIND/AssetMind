@@ -18,13 +18,13 @@
 
 ## 3. 데이터 흐름도 (Data Flow Sequence Diagram)
 
-![실시간 아키텍처 다이어그램](https://github.com/user-attachments/assets/5b131a4d-298e-4e9f-86bd-e2bb455f0422)
+![실시간 아키텍처 다이어그램](https://github.com/user-attachments/assets/f92b7f78-19d5-4abd-bf6f-18b793a15d37)
 
 ### 3.1 흐름 상세 설명 (Flow Description)
 위 시퀀스 다이어그램은 `초기 진입(Initial Load)`부터 `실시간 데이터 서빙(Serving)`까지의 전체 생명주기를 나타낸다.
 
 1.  **메타데이터 조회 (Initialization):**
-    * 사용자가 메인 페이지에 접속하면, Server는 **PostgreSQL**에서 관리 중인 '관심 종목 리스트(25개)'의 종목 코드를 조회한다.
+    * 사용자가 메인 페이지에 접속하면, Server는 **PostgreSQL**에서 관리 중인 '종목 리스트(100개)'의 종목 코드를 조회한다.
     * 이 단계에서는 종목명, 로고 등 변하지 않는 **정적 데이터**만 확보한다.
 
 2.  **실시간 스트림 연결 (Ingestion):**
