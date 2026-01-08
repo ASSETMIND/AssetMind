@@ -1,5 +1,12 @@
 # StockTickDto 클래스 구조 설계
 
+| 문서 ID | DTO-KIS-001   |
+| :--- |:--------------|
+| **문서 버전** | 1.0           |
+| **프로젝트** | AssetMind     |
+| **작성자** | 이재석           |
+| **작성일** | 2026년 01월 08일 |
+
 ## 1. 개요
 `StockTickDto`는 **실시간 주식 체결 원천 데이터 DTO** 로써, 파서(Parser)를 통해 Raw String을 시스템 내부에서 사용 가능한 형태(Object)로 변환한 불변 객체(Immutable Record)이다. 
 `List<StockTickDto>` 형식으로 프론트로 응답할 객체이다.
