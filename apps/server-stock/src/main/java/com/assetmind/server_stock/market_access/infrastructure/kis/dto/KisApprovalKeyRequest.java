@@ -10,8 +10,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record KisApprovalKeyRequest(
         @JsonProperty("grant_type") String grantType,
-        @JsonProperty("appKey") String appKey,
-        @JsonProperty("secretKey") String secretKey
+        @JsonProperty("appkey") String appKey,
+        @JsonProperty("secretkey") String secretKey
 ) {
     public static KisApprovalKeyRequest of(String appKey, String secretKey) {
         return new KisApprovalKeyRequest("client_credentials", appKey, secretKey);

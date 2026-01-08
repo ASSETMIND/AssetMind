@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
 import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
+import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
 import org.assertj.core.api.Assertions;
@@ -121,5 +122,25 @@ class MarketAccessServiceTest {
         // then
         String token = marketAccessService.getAccessToken();
         assertThat(token).isEqualTo("valid-old-token"); // 갱신 과정에서 예외가 났으므로 new-token 으로 바뀌지 않아야함
+    }
+
+    @Test
+    @DisplayName("WebSocket 연결을 위해 접속키를 요청하면, Provider를 통해 즉시 발급받아 반환한다.")
+    void whenGetApprovalKeyForConnection_thenDelegateToProvider() {
+        // given
+        // 접속키는 캐싱하지 않고 매번 새로 받아오는지 검증
+        String expectedKeyVal = "fresh-approval-key";
+        ApiApprovalKey expectedKey = ApiApprovalKey.from(expectedKeyVal);
+
+        given(marketTokenProvider.fetchApprovalKey()).willReturn(expectedKey);
+
+        // when
+        ApiApprovalKey result = marketAccessService.getApprovalKey();
+
+        // then
+        assertThat(result.value()).isEqualTo(expectedKeyVal);
+
+        // 캐싱 로직 없이 호출 시마다 Provider에 요청하는지 확인 (1번 호출 검증)
+        verify(marketTokenProvider, times(1)).fetchApprovalKey();
     }
 }
