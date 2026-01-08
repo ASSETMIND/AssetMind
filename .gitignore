@@ -1,3 +1,7 @@
+.env
+
+.__pycache__/
+
 # --- OS & System ---
 .DS_Store
 Thumbs.db
@@ -20,4 +24,3 @@ out/
 **/logs/
 *.log
 *.pid
-.env
