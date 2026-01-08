@@ -1,0 +1,55 @@
+/* 파핀스 폰트 정의 */
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Light.ttf') format('truetype');
+	font-weight: 300;
+	font-style: thin;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Medium.ttf') format('truetype');
+	font-weight: 500;
+	font-style: normal;
+}
+@font-face {
+	font-family: 'Poppins';
+	src: url('/fonts/Poppins-Bold.ttf') format('truetype');
+	font-weight: 700;
+	font-style: normal;
+}
+
+/* 
+	다크 테마 정의
+	임시값 넣어둠
+*/
+@theme {
+	--font-poppins: 'Poppins';
+
+	--color-bg-main: #131316;
+	--color-bg-modal: #1c1d21;
+	--color-bg-input: #1c1d21;
+
+	--color-border-modal: #272727;
+	--color-border-input: #383a42;
+
+	--color-text-sub: #9194a1;
+	--color-text-placeholder: #808080;
+}
+
+/* 메인 설정 */
+@layer base {
+	body {
+		background-color: var(--color-bg-main);
+		color: white;
+		font-family: var(--font-poppins);
+
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+}
