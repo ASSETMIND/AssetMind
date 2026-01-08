@@ -31,7 +31,7 @@ class MarketAccessServiceTest {
         // given
         // 예상 토큰 준비: Mock TokenProvider가 호출되면 해당 객체를 리턴하도록 설정
         String expectedToken = "valid-test-token";
-        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.createApiAccessToken(expectedToken, 21600000));
+        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.of(expectedToken, 21600000));
 
         // when
         marketAccessService.init();
@@ -48,7 +48,7 @@ class MarketAccessServiceTest {
         // given
         // 예상 캐싱 토큰 준비: Mock TokenProvider가 호출되면 해당 객체를 리턴하도록 설정
         String cachedToken = "cached-token";
-        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.createApiAccessToken(cachedToken, 21600000));
+        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.of(cachedToken, 21600000));
 
         marketAccessService.init(); // 예상 토큰 미리 캐싱
 
@@ -71,7 +71,7 @@ class MarketAccessServiceTest {
         // given
         // init()을 호출하지 않아서 캐싱된 토큰이 존재하지 않는 상태
         String newToken = "new-token";
-        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.createApiAccessToken(newToken, 21600000));
+        when(marketTokenProvider.fetchToken()).thenReturn(ApiAccessToken.of(newToken, 21600000));
 
         // when
         String token = marketAccessService.getAccessToken();
@@ -90,8 +90,8 @@ class MarketAccessServiceTest {
         // given
         // 첫 번째 호출(init)과 두 번째 호출(refresh)의 반환값을 다르게 설정하여 다른 토큰이라는 것을 표현
         when(marketTokenProvider.fetchToken())
-                .thenReturn(ApiAccessToken.createApiAccessToken("old-token", 21600000))
-                .thenReturn(ApiAccessToken.createApiAccessToken("new-token", 21600000));
+                .thenReturn(ApiAccessToken.of("old-token", 21600000))
+                .thenReturn(ApiAccessToken.of("new-token", 21600000));
 
         marketAccessService.init(); // 현재 상태: old-token
 
@@ -109,7 +109,7 @@ class MarketAccessServiceTest {
     void givenValidOldToken_whenRefreshAccessTokenFail_thenKeepValidOldToken() {
         // given
         when(marketTokenProvider.fetchToken())
-                .thenReturn(ApiAccessToken.createApiAccessToken("valid-old-token", 21600000))
+                .thenReturn(ApiAccessToken.of("valid-old-token", 21600000))
                 .thenThrow(new MarketAccessFailedException("KIS API Error"));
 
         marketAccessService.init(); // 토큰 최초 발급 성공
