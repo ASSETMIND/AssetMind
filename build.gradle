@@ -34,6 +34,11 @@ subprojects {
             mavenCentral()
         }
 
+        ext {
+            set('springCloudVersion', "2025.0.1")
+        }
+
+
         // 모든 모듈 서버가 공통으로 쓸 라이브러리 (Lombok, Test)
         dependencies {
             // Lombok 설정
