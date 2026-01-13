@@ -1,0 +1,58 @@
+// 멀티 모듈 서버의 뼈대 설정
+plugins {
+    id 'java'
+
+    // 프로젝트 전체에서 Spring 3.5.9 버전을 사용
+    // apply false : 해당 루트 프로젝트 자체는 Spring Boot 앱이 아니므로 apply false로 설정
+    id 'org.springframework.boot' version '3.5.9' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+// 하위 모듈들에 대한 설정
+subprojects {
+    // 1주차 스프린트안에 buildSrc 또는 build-logic 폴더를 생성하여 spring boot 플러그인 정의 예정
+    // 우선 이름 기반 제어를 사용 (로딩 시점 문제 해결 방안을 찾는중..)
+    if (it.name.startsWith('server-')) {
+        // 플러그인 적용
+        apply plugin: 'java'
+        apply plugin: 'org.springframework.boot'
+        apply plugin: 'io.spring.dependency-management'
+
+        // 공통 정보 설정
+        group = 'com.assetmind'
+        version = '0.0.1-SNAPSHOT'
+
+        // Java 21 버전 사용
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+        }
+
+        // 라이브러리 저장소
+        repositories {
+            mavenCentral()
+        }
+
+        // 모든 모듈 서버가 공통으로 쓸 라이브러리 (Lombok, Test)
+        dependencies {
+            // Lombok 설정
+            compileOnly 'org.projectlombok:lombok'
+            annotationProcessor 'org.projectlombok:lombok'
+
+            // 테스트 공통
+            testImplementation 'org.springframework.boot:spring-boot-starter-test'
+            testImplementation 'io.projectreactor:reactor-test'
+            testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        }
+
+        tasks.named('test') {
+            useJUnitPlatform()
+        }
+    }
+}
+
+tasks.named('wrapper') {
+    gradleVersion = '9.2.1'
+    distributionType = Wrapper.DistributionType.ALL
+}
