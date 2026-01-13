@@ -1,0 +1,1 @@
+# 외부 API 인증 처리를 위한 구체적인 전략 구현 (Strategy Pattern Implementation)

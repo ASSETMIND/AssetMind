@@ -8,7 +8,12 @@ authors = [
 readme = "README.md"
 requires-python = "^3.12"
 dependencies = [
-    "boto3 (>=1.42.22,<2.0.0)"
+    "boto3 (>=1.42.22,<2.0.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "pyyaml (>=6.0.3,<7.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "pydantic (>=2.12.5,<3.0.0)",
+    "pydantic-settings (>=2.12.0,<3.0.0)"
 ]
 
 

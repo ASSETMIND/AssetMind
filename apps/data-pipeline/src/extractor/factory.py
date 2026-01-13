@@ -1,0 +1,1 @@
+# 설정과 의존성을 주입하여 온전한 Extractor 객체를 생성 및 조립 (Factory / Director Role)
