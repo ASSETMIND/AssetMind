@@ -1,0 +1,1 @@
+# Extractor 및 어댑터가 반드시 구현해야 할 핵심 인터페이스 정의 (Abstract Base Classes)

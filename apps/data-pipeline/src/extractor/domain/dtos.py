@@ -1,0 +1,1 @@
+# 계층 간 데이터 교환을 위한 요청/응답 객체 정의 (Data Transfer Objects)

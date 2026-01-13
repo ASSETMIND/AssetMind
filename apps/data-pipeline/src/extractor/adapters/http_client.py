@@ -1,0 +1,1 @@
+# 비동기 HTTP 통신을 수행하는 클라이언트 래퍼 (Adapter Pattern, aiohttp 기반)
