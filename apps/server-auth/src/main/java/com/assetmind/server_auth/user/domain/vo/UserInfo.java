@@ -21,18 +21,4 @@ public record UserInfo(
         Objects.requireNonNull(email);
         Objects.requireNonNull(username);
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof UserInfo userInfo)) {
-            return false;
-        }
-        return Objects.equals(email, userInfo.email) && Objects.equals(username,
-                userInfo.username);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(email, username);
-    }
 }
