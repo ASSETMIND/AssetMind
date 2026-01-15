@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.domain;
+package com.assetmind.server_auth.user.domain.type;
 
 public enum UserRole {
     /**
