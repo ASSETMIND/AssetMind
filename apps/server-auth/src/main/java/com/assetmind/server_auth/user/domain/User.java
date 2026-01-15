@@ -1,5 +1,7 @@
 package com.assetmind.server_auth.user.domain;
 
+import com.assetmind.server_auth.global.error.BusinessException;
+import com.assetmind.server_auth.global.error.ErrorCode;
 import com.assetmind.server_auth.user.domain.port.UserIdGenerator;
 import com.assetmind.server_auth.user.domain.vo.SocialID;
 import com.assetmind.server_auth.user.domain.vo.UserInfo;
@@ -65,7 +67,7 @@ public class User {
      */
     public void upgradeToRoleUser() {
         if (this.userRole == UserRole.USER) {
-            throw new IllegalStateException("이미 정식 회원입니다.");
+            throw new BusinessException(ErrorCode.ALREADY_GET_USER_PERMISSION);
         }
         this.userRole = UserRole.USER;
     }
