@@ -39,22 +39,22 @@ public class UserEntity {
     @Column(name = "social_provider", nullable = true)
     private Provider socialProvider;
 
-    @Column(name = "social_id", nullable = true)
-    private String socialId;
+    @Column(name = "social_provider_id", nullable = true)
+    private String socialProviderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
 
     public UserEntity(UUID id, String email, String username, String password,
-            Provider socialProvider, String socialId, UserRole role)
+            Provider socialProvider, String socialProviderId, UserRole role)
     {
         this.id = id;
         this.email = email;
         this.username = username;
         this.password = password;
         this.socialProvider = socialProvider;
-        this.socialId = socialId;
+        this.socialProviderId = socialProviderId;
         this.role = role;
     }
 
