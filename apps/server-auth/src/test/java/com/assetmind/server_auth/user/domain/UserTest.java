@@ -54,6 +54,7 @@ class UserTest {
             assertThat(user.getPassword()).isEqualTo(validPassword);
             assertThat(user.getUserInfo().email()).isEqualTo(validEmail);
             assertThat(user.getUserInfo().username()).isEqualTo(validUsername);
+            assertThat(user.getSocialID()).isNull();
         }
 
         @Test
@@ -88,6 +89,7 @@ class UserTest {
 
             // then
             assertThat(guestUser.getUserRole()).isEqualTo(UserRole.USER);
+            assertThat(guestUser.getSocialID()).isEqualTo(validSocialID);
         }
 
         @Test
@@ -102,6 +104,18 @@ class UserTest {
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.ALREADY_GET_USER_PERMISSION);
+        }
+
+        @Test
+        @DisplayName("실패: 연동할 소셜 정보가 null이면 예외가 발생한다.")
+        void givenNullSocialID_whenLinkSocialAndUpgrade_thenThrowException() {
+            // given
+            User guestUser = User.createGuest(validUserInfo, validPassword, idGenerator);
+
+            // when & then
+            assertThatThrownBy(() -> guestUser.linkSocialAndUpgrade(null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("연동할 소셜 정보");
         }
     }
 
