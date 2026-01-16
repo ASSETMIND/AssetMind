@@ -1,0 +1,61 @@
+package com.assetmind.server_auth.user.infrastructure.persistence;
+
+import com.assetmind.server_auth.user.domain.type.Provider;
+import com.assetmind.server_auth.user.domain.type.UserRole;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * User 도메인의 영속성 정보를 DB에 저장하는 도메인의 엔티티
+ */
+@Entity
+@Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class UserEntity {
+
+    @Id
+    @Column(columnDefinition = "uuid")
+    private UUID id;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @Column(nullable = false)
+    private String username;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "social_provider", nullable = true)
+    private Provider socialProvider;
+
+    @Column(name = "social_id", nullable = true)
+    private String socialId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserRole role;
+
+    public UserEntity(UUID id, String email, String username, String password,
+            Provider socialProvider, String socialId, UserRole role)
+    {
+        this.id = id;
+        this.email = email;
+        this.username = username;
+        this.password = password;
+        this.socialProvider = socialProvider;
+        this.socialId = socialId;
+        this.role = role;
+    }
+
+}
