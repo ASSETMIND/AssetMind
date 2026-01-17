@@ -1,15 +1,29 @@
 """
 HTTP 클라이언트 어댑터 (HTTP Client Adapter)
 
-이 모듈은 aiohttp 라이브러리를 사용하여 비동기 HTTP 통신을 수행하는 어댑터입니다.
-기존 requests 기반 로직을 비동기(Async/Await) 방식으로 전환하며,
-도메인 계층의 IHttpClient 인터페이스를 준수하여 외부 라이브러리 의존성을 격리합니다.
+이 모듈은 aiohttp 라이브러리를 기반으로 비동기(Asynchronous) HTTP 통신을 수행하는 인프라 구현체입니다.
+도메인 계층의 IHttpClient 인터페이스를 준수하여, 비즈니스 로직이 외부 통신 라이브러리(aiohttp)에
+직접적으로 의존하지 않도록 의존성을 역전(DIP)시킵니다.
+
+데이터 흐름 (Data Flow):
+Client Request (URL, Params) -> Session Pool (Get/Reuse) -> Async HTTP Request
+-> Status Code Validation (>=400 Error) -> Content-Type Check -> Parse JSON/Text -> Return Data
 
 주요 기능:
-- AsyncIO 기반의 Non-blocking HTTP 요청 (GET, POST)
-- Context Manager(async with) 지원을 통한 안전한 리소스 관리
-- 세션(Session) 재사용을 통한 커넥션 풀링(Connection Pooling) 최적화
-- 타임아웃 및 에러 핸들링의 중앙화 (Domain Exception 변환)
+- Non-blocking I/O 기반의 고성능 GET/POST 요청 처리
+- aiohttp.ClientSession 재사용을 통한 TCP Connection Pooling 및 Handshake 비용 절감
+- Context Manager (async with) 지원으로 안전한 리소스(Session) 생성 및 반환 보장
+- 라이브러리 종속적인 예외(aiohttp.ClientError)를 도메인 표준 예외(NetworkError)로 변환 및 캡슐화
+
+Trade-off:
+- Async Complexity vs Performance:
+    - 장점: I/O Bound 작업에서 스레드 블로킹 없이 높은 동시성(Concurrency) 처리 가능.
+    - 단점: 호출하는 상위 모듈까지 모두 `async/await` 전파(Function Color Problem)로 인한 복잡도 증가.
+    - 근거: 대량의 데이터 수집 및 API 호출이 빈번한 파이프라인 특성상 동기 방식의 Latency는 허용 불가능함.
+- Session Pooling Strategy:
+    - 장점: 매 요청마다 세션을 생성/파기하지 않고 재사용하여 TCP Handshake 오버헤드 최소화.
+    - 단점: 세션 수명 주기 관리 책임 발생 (Context Manager 미사용 시 리소스 누수 위험).
+    - 근거: 빈번한 API 호출 환경에서 연결 설정 비용(Connection Overhead)이 전체 성능의 병목이 되므로 풀링 필수.
 """
 
 import aiohttp
