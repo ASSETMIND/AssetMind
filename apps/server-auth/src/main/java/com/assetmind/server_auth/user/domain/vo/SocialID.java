@@ -11,15 +11,6 @@ public record SocialID(
         Provider provider,
         String providerID
 ) {
-    public SocialID {
-        if (provider == null) {
-            throw new IllegalArgumentException("소셜 로그인 제공자는 필수 입니다.");
-        }
-
-        if (providerID == null || providerID.isBlank()) {
-            throw new IllegalArgumentException("소셜 로그인 식별값은 필수 입니다.");
-        }
-    }
 
     @Override
     public String toString() {
