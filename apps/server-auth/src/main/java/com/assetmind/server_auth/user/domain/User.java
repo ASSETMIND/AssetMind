@@ -80,4 +80,16 @@ public class User {
         this.socialID = socialID;
         this.userRole = UserRole.USER;
     }
+
+    public String getEmailValue() {
+        return this.userInfo.email().value();
+    }
+
+    public String getUsernameValue() {
+        return this.userInfo.username().value();
+    }
+
+    public String getPasswordValue() {
+        return this.password.value();
+    }
 }
