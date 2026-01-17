@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 컨테이너
+  postgres:
+    image: postgres:16-alpine
+    container_name: assetmind-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./db/postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # Redis 컨테이너
+  redis:
+    image: redis:alpine
+    container_name: assetmind-redis
+    ports:
+      - "6379:6379"
+    restart: always

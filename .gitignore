@@ -1,7 +1,32 @@
 .env
 
+
 __pycache__/
 *.py[cod]
 *$py.class
 
 ./apps/data-pipeline/logs/
+
+# --- OS & System ---
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- IntelliJ IDEA ---
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# --- Gradle ---
+**/build/
+.gradle/
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# --- Spring Boot & Java ---
+**/logs/
+*.log
+*.pid
+**/db
