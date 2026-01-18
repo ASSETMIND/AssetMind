@@ -12,7 +12,7 @@ export default function Button(props: Props) {
 	return (
 		<button
 			className={twMerge(
-				'flex w-full items-center justify-center font-medium border',
+				'flex w-full items-center justify-center font-medium border cursor-pointer',
 				getButtonSizeStyle(size),
 				className
 			)}

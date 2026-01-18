@@ -8,49 +8,66 @@ type AuthInputType = 'text' | 'password' | 'email';
 type Props = Omit<React.ComponentPropsWithRef<'input'>, 'type'> & {
 	type: AuthInputType;
 	enablePasswordToggle?: boolean;
+	label?: string;
+	errorMessage?: string;
 };
 
 const AuthInput = forwardRef(
 	(props: Props, ref: ForwardedRef<HTMLInputElement>) => {
-		const { className, type, enablePasswordToggle = true, ...rest } = props;
+		const {
+			className,
+			type,
+			enablePasswordToggle = true,
+			label,
+			errorMessage,
+			...rest
+		} = props;
+
 		const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
 		const isPasswordType = type === 'password';
 		const showToggleBtn = isPasswordType && enablePasswordToggle;
-
 		const currentType = isPasswordType
 			? isPasswordVisible
 				? 'text'
 				: 'password'
 			: type;
 
-		const handleToggle = () => {
-			setIsPasswordVisible((prev) => !prev);
-		};
-
 		return (
-			<div className='relative w-full'>
-				<Input
-					ref={ref}
-					type={currentType}
-					className={showToggleBtn ? 'pr-12' : ''}
-					{...rest}
-				/>
+			<div className='flex flex-col gap-1 w-full relative'>
+				{label && <label className='font-medium'>{label}</label>}
 
-				{showToggleBtn && (
-					<button
-						type='button'
-						onClick={handleToggle}
-						className='absolute right-4 top-1/2 -translate-y-1/2'
-						aria-label={isPasswordVisible ? '비밀번호 숨기기' : '비밀번호 보기'}
-						tabIndex={-1}
-					>
-						{isPasswordVisible ? <EyeOnIcon /> : <EyeOffIcon />}
-					</button>
+				<div className='relative w-full'>
+					<Input
+						ref={ref}
+						type={currentType}
+						className={`
+              w-full pr-10 transition-colors 
+              ${errorMessage ? 'border-red-500 focus:ring-red-500' : ''}
+              ${className}
+            `}
+						{...rest}
+					/>
+
+					{showToggleBtn && (
+						<button
+							type='button'
+							onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500'
+							tabIndex={-1}
+						>
+							{isPasswordVisible ? <EyeOnIcon /> : <EyeOffIcon />}
+						</button>
+					)}
+				</div>
+				{errorMessage && (
+					<p className='absolute -bottom-5 left-1 text-xs text-red-500 font-medium animate-fadeIn'>
+						{errorMessage}
+					</p>
 				)}
 			</div>
 		);
-	}
+	},
 );
 
 AuthInput.displayName = 'AuthInput';

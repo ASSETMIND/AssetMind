@@ -7,18 +7,9 @@ type Props = {
 };
 
 export default function Modal({ children, onClose }: Props) {
-	const handleBgClick = (e: React.MouseEvent) => {
-		if (e.target === e.currentTarget) {
-			onClose();
-		}
-	};
-
 	return (
 		<Portal>
-			<div
-				onClick={handleBgClick}
-				className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 transition-opacity'
-			>
+			<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 transition-opacity'>
 				<div
 					className='
           relative 
