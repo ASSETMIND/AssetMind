@@ -253,3 +253,36 @@ class TestKISAuthStrategy:
         # Then
         assert token_str == "Bearer new_tok_2"
         mock_http_client.post.assert_called_once()
+
+    # ==========================================
+    # Category: Concurrency
+    # ==========================================
+
+    @pytest.mark.asyncio
+    async def test_tc013_concurrency_race_condition(self, strategy, mock_http_client):
+        """[TC-013] 동시 다발적 요청 시 API 호출이 단 한 번만 발생해야 한다 (Double-Checked Locking 검증)."""
+        # Given: 토큰이 만료된 초기 상태
+        strategy._access_token = None
+        strategy._expires_at = None
+        
+        # API 응답에 인위적인 지연(0.1초)을 주어 Race Condition 상황을 시뮬레이션
+        # 락이 없다면 첫 번째 요청이 끝나기 전에 후속 요청들이 진입하여 중복 호출이 발생함
+        async def delayed_response(*args, **kwargs):
+            await asyncio.sleep(0.1) 
+            return {
+                "access_token": "concurrent_tok",
+                "access_token_token_expired": "2099-01-01 12:00:00"
+            }
+        mock_http_client.post.side_effect = delayed_response
+
+        # When: 5개의 get_token 요청을 '동시에' 실행
+        tasks = [strategy.get_token(mock_http_client) for _ in range(5)]
+        results = await asyncio.gather(*tasks)
+
+        # Then
+        # 1. 모든 요청이 정상적으로 토큰을 반환해야 함
+        assert all(token == "Bearer concurrent_tok" for token in results)
+        
+        # 2. (핵심) 실제 HTTP 요청은 정확히 '1회'만 발생해야 함
+        # Lock이 없다면 이 카운트가 2 이상이 됨
+        assert mock_http_client.post.call_count == 1

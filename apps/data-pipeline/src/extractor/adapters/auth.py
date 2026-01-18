@@ -28,6 +28,7 @@ Trade-off:
     - 근거: API 호출 빈도가 높지 않거나, 첫 호출의 수백 ms 지연이 치명적이지 않은 환경에서 복잡도를 낮추기 위함.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -76,6 +77,8 @@ class KISAuthStrategy(IAuthStrategy):
         self.app_secret: str = config.kis_app_secret
         self.base_url: str = config.kis_base_url
 
+        self._lock = asyncio.Lock()
+
         # State Variables (In-Memory Cache)
         self._access_token: Optional[str] = None
         self._expires_at: Optional[datetime] = None
@@ -99,9 +102,14 @@ class KISAuthStrategy(IAuthStrategy):
             AuthError: 토큰 발급 실패 시.
             NetworkError: 네트워크 통신 장애 시.
         """
+        # 1차 검사: 락 없이 빠르게 확인 (대부분의 요청은 여기서 통과하여 성능 유지)
         if self._should_refresh():
-            self._logger.info("Access token is missing or expired. Initiating refresh.")
-            await self._issue_token(http_client)
+            # 락 획득 (여기서 대기 발생)
+            async with self._lock:
+                # 2차 검사: 락을 기다리는 동안 앞선 요청이 갱신했을 수 있으므로 다시 확인
+                if self._should_refresh():
+                    self._logger.info("Access token is missing or expired. Initiating refresh.")
+                    await self._issue_token(http_client)
         
         # 방어적 코딩: 로직상 _issue_token 이후에는 반드시 토큰이 존재해야 함
         if not self._access_token:
