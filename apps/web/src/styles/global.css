@@ -1,4 +1,4 @@
-/* 폰트 정의 */
+/* 파핀스 폰트 정의 */
 @font-face {
 	font-family: 'Poppins';
 	src: url('/fonts/Poppins-Light.ttf') format('truetype');
@@ -24,9 +24,12 @@
 	font-style: normal;
 }
 
-/* 테마 */
+/* 
+	다크 테마 정의
+	임시값 넣어둠
+*/
 @theme {
-	--font-poppins: 'Poppins', sans-serif;
+	--font-poppins: 'Poppins';
 
 	--color-bg-main: #131316;
 	--color-bg-modal: #1c1d21;

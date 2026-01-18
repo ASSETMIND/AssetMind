@@ -13,6 +13,13 @@ import { useSignup } from '../../hooks/auth/use-signup';
 import { useCheckID } from '../../hooks/auth/use-check-ID';
 import type { IdentityVerificationResponse } from '../../types/portone';
 
+/*
+	회원가입 화면 UI 구성을 담당하는 view 역할의 컴포넌트
+
+	실제 로직이나 라우팅은 props로 주입받은 함수에 위임
+	이 컴포넌트는 UI 렌더링에만 집중하도록 설계
+ */
+
 type Props = {
 	onClose: () => void;
 	onClickLogin: () => void;
@@ -261,6 +268,27 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 					{/* 비밀번호 확인 */}
 					<div className='flex flex-col gap-2'>
 						<label className='font-medium'>비밀번호 확인</label>
+						<AuthInput
+							type='password'
+							placeholder='비밀번호를 한 번 더 입력해 주세요.'
+						/>
+					</div>
+
+					{/* 본인인증 섹션 */}
+					<div className='flex flex-col gap-2'>
+						<label className='font-medium'>휴대폰 번호</label>
+
+						<div className='relative'>
+							<Input type='tel' placeholder='010-0000-0000' className='pr-28' />
+							<Button
+								type='button'
+								size='sm'
+								className='absolute right-2 top-1/2 h-8 w-24 -translate-y-1/2 text-xs'
+							>
+								인증번호 전송
+							</Button>
+						</div>
+
 						<div className='relative'>
 							<AuthInput
 								type='password'
@@ -290,6 +318,7 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 					</Button>
 				</form>
 
+				{/* 하단 바로가기 버튼들 */}
 				<div className='mt-4 flex gap-4 items-center justify-center'>
 					<p>이미 계정이 있으신가요?</p>
 					<button

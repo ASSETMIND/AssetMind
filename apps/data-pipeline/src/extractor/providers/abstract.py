@@ -1,0 +1,1 @@
+# 데이터 수집의 공통 흐름을 정의한 추상 기반 클래스 (Template Method Pattern Base)
