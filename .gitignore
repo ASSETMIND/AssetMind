@@ -4,7 +4,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.__pycache__/
+
+./apps/data-pipeline/logs/
 
 # --- OS & System ---
 .DS_Store
