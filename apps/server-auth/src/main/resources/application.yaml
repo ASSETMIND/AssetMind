@@ -19,3 +19,18 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: 6379
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      smtp:
+        auth: true                # 구글 로그인 필수
+        starttls:
+          enable: true            # 통신 내용 암호화
+          required: true          # 내용 암호화 안되면 전송 금지
+        connectiontimeout: 5000   # 5초안에 연결 안되면 포기
+        timeout: 5000             # 5초 동안 응답 없으면 포기
+        writetimeout: 5000        # 5초 동안 전송 안되면 포기
