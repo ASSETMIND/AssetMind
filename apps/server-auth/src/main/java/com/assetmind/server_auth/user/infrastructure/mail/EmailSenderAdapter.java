@@ -46,7 +46,7 @@ public class EmailSenderAdapter implements EmailSendPort {
             javaMailSender.send(message); // 메일 전송
 
             log.info("이메일 발송 성공 - To: {}", targetAddress);
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("이메일 발송 실패 - To: {}, Error: {}", targetAddress, e.getMessage());
             // @Async 메서드는 별도 스레드에서 수행되므로, 예외 발생 시 호출자(Controller 등)에게 전파되지 않음.
             // 따라서 예외를 throw하는 대신, 로그를 남겨서 모니터링 가능하도록 처리
