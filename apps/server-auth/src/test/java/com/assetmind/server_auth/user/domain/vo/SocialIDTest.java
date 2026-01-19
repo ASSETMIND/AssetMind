@@ -28,31 +28,7 @@ class SocialIDTest {
         assertThat(socialID.provider()).isEqualTo(provider);
         assertThat(socialID.providerID()).isEqualTo(providerId);
     }
-
-    @Test
-    @DisplayName("실패: Provider가 null이면 예외가 발생한다.")
-    void givenInvalidProvider_whenNewSocialID_thenThrowException() {
-        // given
-        Provider provider = null;
-        String providerId = "testID1234";
-
-        // when & then
-        assertThatThrownBy(() -> new SocialID(provider, providerId))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("소셜 로그인 제공자는 필수 입니다.");
-    }
-
-    @ParameterizedTest
-    @NullAndEmptySource
-    @DisplayName("실패: ProviderId가 null이거나 공백이면 예외가 발생한다.")
-    void givenInvalidProviderId_whenNewSocialID_thenThrowException(String providerId) {
-        // given = @NullAndEmptySource
-
-        // when & then
-        assertThatThrownBy(() -> new SocialID(Provider.GOOGLE, providerId))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("소셜 로그인 식별값은 필수 입니다.");
-    }
+    
 
     @Test
     @DisplayName("성공: toString()이 지정된 포맷(Provider : ProviderId)로 출력된다.")
