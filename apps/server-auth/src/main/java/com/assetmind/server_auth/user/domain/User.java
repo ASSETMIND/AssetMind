@@ -2,7 +2,6 @@ package com.assetmind.server_auth.user.domain;
 
 import com.assetmind.server_auth.global.error.BusinessException;
 import com.assetmind.server_auth.global.error.ErrorCode;
-import com.assetmind.server_auth.user.domain.port.UserIdGenerator;
 import com.assetmind.server_auth.user.domain.vo.Password;
 import com.assetmind.server_auth.user.domain.vo.SocialID;
 import com.assetmind.server_auth.user.domain.vo.UserInfo;
@@ -53,17 +52,18 @@ public class User {
 
     /**
      * 초기 유저 생성시 GUEST(게스트) 역할로 유저를 생성 - 이메일 인증
+     * @param id - 유저 ID(UUID)
      * @param userInfo - 유저 정보
      * @param password - 유저 비밀번호
-     * @param idGenerator - ID 생성자 인터페이스(ID 생성 방식 정의)
      * @return 유저 객체
      */
-    public static User createGuest(UserInfo userInfo, Password password, UserIdGenerator idGenerator) {
+    public static User createGuest(UUID id, UserInfo userInfo, Password password) {
         // 유저 정보 및 소셜 정보가 Null 값인지 한번 더 검증
+        Objects.requireNonNull(id);
         Objects.requireNonNull(userInfo);
         Objects.requireNonNull(password);
 
-        return new User(idGenerator.generate(), userInfo, password, null, UserRole.GUEST);
+        return new User(id, userInfo, password, null, UserRole.GUEST);
     }
 
     /**

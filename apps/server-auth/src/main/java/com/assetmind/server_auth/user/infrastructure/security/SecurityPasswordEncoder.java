@@ -1,6 +1,6 @@
 package com.assetmind.server_auth.user.infrastructure.security;
 
-import com.assetmind.server_auth.user.domain.port.PasswordEncoder;
+import com.assetmind.server_auth.user.application.port.PasswordEncoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;

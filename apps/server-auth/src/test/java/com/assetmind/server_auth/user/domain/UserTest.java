@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.assetmind.server_auth.global.error.BusinessException;
 import com.assetmind.server_auth.global.error.ErrorCode;
-import com.assetmind.server_auth.user.domain.port.UserIdGenerator;
 import com.assetmind.server_auth.user.domain.type.Provider;
 import com.assetmind.server_auth.user.domain.type.UserRole;
 import com.assetmind.server_auth.user.domain.vo.Email;
@@ -34,9 +33,7 @@ class UserTest {
     // Password VO는 이미 암호화된 상태라고 가정하고 생성 (DB 로드용 생성자 활용)
     private final Password validPassword = new Password("ENCODED_PASSWORD_VALUE");
 
-    // ID 생성기 Stub (고정된 UUID 반환)
-    private final UUID FIXED_UUID = UUID.fromString("dea7b2fb-e7ac-4c45-86cb-9e0e5cd81e93");
-    private final UserIdGenerator idGenerator = () -> FIXED_UUID;
+    private final UUID USER_UUID = UUID.fromString("dea7b2fb-e7ac-4c45-86cb-9e0e5cd81e93");
 
     @Nested
     @DisplayName("신규 유저 생성 (createGuest)")
@@ -46,10 +43,10 @@ class UserTest {
         @DisplayName("성공: 유효한 정보로 GUEST 유저를 생성한다.")
         void givenValidInfo_whenCreateGuest_thenCreated() {
             // when
-            User user = User.createGuest(validUserInfo, validPassword, idGenerator);
+            User user = User.createGuest(USER_UUID, validUserInfo, validPassword);
 
             // then
-            assertThat(user.getId()).isEqualTo(FIXED_UUID);
+            assertThat(user.getId()).isEqualTo(USER_UUID);
             assertThat(user.getUserRole()).isEqualTo(UserRole.GUEST);
             assertThat(user.getPassword()).isEqualTo(validPassword);
             assertThat(user.getUserInfo().email()).isEqualTo(validEmail);
@@ -58,10 +55,18 @@ class UserTest {
         }
 
         @Test
+        @DisplayName("실패: 필수 정보(UserId)가 없으면 생성할 수 없다.")
+        void givenNullUserId_whenCreateGuest_thenThrowException() {
+            // when & then
+            assertThatThrownBy(() -> User.createGuest(null, validUserInfo, validPassword))
+                    .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
         @DisplayName("실패: 필수 정보(UserInfo)가 없으면 생성할 수 없다.")
         void givenNullUserInfo_whenCreateGuest_thenThrowException() {
             // when & then
-            assertThatThrownBy(() -> User.createGuest(null, validPassword, idGenerator))
+            assertThatThrownBy(() -> User.createGuest(USER_UUID, null, validPassword))
                     .isInstanceOf(NullPointerException.class);
         }
 
@@ -69,7 +74,7 @@ class UserTest {
         @DisplayName("실패: 필수 정보(Password)가 없으면 생성할 수 없다.")
         void givenNullPassword_whenCreateGuest_thenThrowException() {
             // when & then
-            assertThatThrownBy(() -> User.createGuest(validUserInfo, null, idGenerator))
+            assertThatThrownBy(() -> User.createGuest(USER_UUID, validUserInfo, null))
                     .isInstanceOf(NullPointerException.class);
         }
     }
@@ -82,7 +87,7 @@ class UserTest {
         @DisplayName("성공: GUEST 상태인 유저가 USER로 승격된다.")
         void givenGuestRoleUser_whenLinkSocialAndUpgrade_thenUpgradeToUser() {
             // given
-            User guestUser = User.createGuest(validUserInfo, validPassword, idGenerator);
+            User guestUser = User.createGuest(USER_UUID, validUserInfo, validPassword);
 
             // when
             guestUser.linkSocialAndUpgrade(validSocialID);
@@ -96,7 +101,7 @@ class UserTest {
         @DisplayName("실패: 이미 USER인 경우 BusinessException이 발생한다.")
         void givenUserRoleUser_whenLinkSocialAndUpgrade_thenThrowException() {
             // given
-            User user = User.createGuest(validUserInfo, validPassword, idGenerator);
+            User user = User.createGuest(USER_UUID, validUserInfo, validPassword);
             user.linkSocialAndUpgrade(validSocialID); // 먼저 USER(정회원)으로 상태 변경
 
             // when & then
@@ -110,7 +115,7 @@ class UserTest {
         @DisplayName("실패: 연동할 소셜 정보가 null이면 예외가 발생한다.")
         void givenNullSocialID_whenLinkSocialAndUpgrade_thenThrowException() {
             // given
-            User guestUser = User.createGuest(validUserInfo, validPassword, idGenerator);
+            User guestUser = User.createGuest(USER_UUID, validUserInfo, validPassword);
 
             // when & then
             assertThatThrownBy(() -> guestUser.linkSocialAndUpgrade(null))

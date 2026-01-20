@@ -1,7 +1,6 @@
 package com.assetmind.server_auth.user.infrastructure.mail;
 
-import com.assetmind.server_auth.user.domain.port.EmailSendPort;
-import jakarta.mail.MessagingException;
+import com.assetmind.server_auth.user.application.port.EmailSendPort;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

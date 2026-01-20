@@ -1,7 +1,7 @@
 package com.assetmind.server_auth.user.infrastructure.persistence;
 
 import com.assetmind.server_auth.user.domain.User;
-import com.assetmind.server_auth.user.domain.port.UserRepository;
+import com.assetmind.server_auth.user.application.port.UserRepository;
 import com.assetmind.server_auth.user.domain.vo.SocialID;
 import java.util.Optional;
 import java.util.UUID;
