@@ -15,7 +15,10 @@ public enum ErrorCode {
 
     // User Domain 에러
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "존재하지 않는 회원입니다."),
-    ALREADY_GET_USER_PERMISSION(HttpStatus.BAD_REQUEST, "U002", "이미 정식 회원입니다.");
+    ALREADY_GET_USER_PERMISSION(HttpStatus.BAD_REQUEST, "U002", "이미 정식 회원입니다."),
+
+    // Jwt 토큰 에러
+    INVALID_SIGN_UP_TOKEN(HttpStatus.BAD_REQUEST, "U003", "유효하지 않거나 용도가 잘못된 회원가입 토큰입니다.");
 
     private final HttpStatus status;
     private final String code;
