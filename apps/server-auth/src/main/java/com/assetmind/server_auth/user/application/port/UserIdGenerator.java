@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.domain.port;
+package com.assetmind.server_auth.user.application.port;
 
 import java.util.UUID;
 

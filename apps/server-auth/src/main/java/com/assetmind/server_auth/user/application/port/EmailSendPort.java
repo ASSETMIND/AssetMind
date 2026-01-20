@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.domain.port;
+package com.assetmind.server_auth.user.application.port;
 
 /**
  * 이메일 전송을 정의하는 인터페이스

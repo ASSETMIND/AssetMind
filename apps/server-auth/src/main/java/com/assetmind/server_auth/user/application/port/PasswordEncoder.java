@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.domain.port;
+package com.assetmind.server_auth.user.application.port;
 
 /**
  * 비밀번호 암호화 인터페이스 정의
