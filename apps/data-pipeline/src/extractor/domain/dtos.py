@@ -1,51 +1,48 @@
+"""
+데이터 전송 객체 모듈 (Data Transfer Objects)
+
+계층 간(Service <-> Extractor) 데이터 교환을 위한 표준 객체를 정의합니다.
+설정 주도(Configuration-Driven) 아키텍처를 지원하기 위해, 고정된 필드 대신
+작업 식별자(job_id)와 유연한 파라미터 딕셔너리를 사용합니다.
+"""
+
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, Optional
 from enum import Enum
 
 class SourceType(Enum):
-    """데이터 수집 원천(Source)을 정의하는 열거형."""
-    KIS = "KIS"        # 한국투자증권
-    KRX = "KRX"        # 한국거래소
-    OVERSEAS = "OVERSEAS"  # 해외 데이터 소스 (Yahoo Finance 등)
+    """데이터 수집 원천(Source)을 정의하는 열거형.
+    Factory에서 Extractor 구현체를 선택할 때 사용됩니다.
+    """
+    KIS = "KIS"            # 한국투자증권
+    KRX = "KRX"            # 한국거래소
+    OVERSEAS = "OVERSEAS"  # 해외 데이터 소스
 
 @dataclass
 class RequestDTO:
-    """데이터 추출 요청 정보를 담는 데이터 전송 객체 (Data Transfer Object).
-    
-    Extractor 계층으로 데이터를 요청할 때 필요한 모든 파라미터를 캡슐화합니다.
-    
+    """데이터 수집 요청 정보를 담는 DTO.
+
+    특정 API나 데이터 소스에 종속되지 않는 범용 구조를 가집니다.
+
     Attributes:
-        ticker (str): 종목 코드 (예: '005930').
-        source (SourceType): 데이터를 수집할 원천 소스 타입.
-        start_date (Optional[str]): 조회 시작 날짜 (YYYYMMDD).
-        end_date (Optional[str]): 조회 종료 날짜 (YYYYMMDD).
-        period (str): 데이터 주기 (D:일, W:주, M:월). 기본값은 'D'.
-        extra_params (Dict[str, Any]): 소스별 특화된 추가 파라미터를 담기 위한 딕셔너리.
+        job_id (str): 설정 파일(YAML)에 정의된 수집 정책을 식별하는 키.
+                      (예: 'kis_daily_price', 'krx_market_cap')
+        params (Dict[str, Any]): 수집에 필요한 동적 파라미터 집합.
+                                 (예: {'symbol': '005930', 'date': '20240101'})
     """
-    ticker: str
-    source: SourceType
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    period: str = "D"
-    extra_params: Dict[str, Any] = field(default_factory=dict)
+    job_id: str
+    params: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class ResponseDTO:
-    """데이터 추출 결과를 표준화하여 반환하는 객체.
-    
-    모든 Extractor는 내부 로직과 상관없이 반드시 이 형태로 결과를 반환해야 합니다.
-    
+    """데이터 수집(Extraction) 단계의 결과를 담는 DTO.
+
+    E 단계는 데이터를 해석하거나 변형하지 않고 원본 그대로 전달하는 것을 원칙으로 하므로,
+    Raw Data를 담을 수 있는 유연한 구조를 가집니다.
+
     Attributes:
-        ticker (str): 요청된 종목 코드.
-        source (SourceType): 데이터가 수집된 원천 소스.
-        data (List[Dict[str, Any]]): 실제 파싱된 데이터 리스트 (OHLCV 등).
-        raw_data (Optional[Any]): 디버깅용 원본 응답 데이터 (선택 사항).
-        success (bool): 수집 성공 여부.
-        message (str): 실패 시 에러 메시지 또는 성공 메시지.
+        data (Any): 수집된 원본 데이터. (JSON Dict, Text, Bytes 등)
+        meta (Dict[str, Any]): 데이터의 출처, 수집 시각, 응답 코드 등 메타데이터.
     """
-    ticker: str
-    source: SourceType
-    data: List[Dict[str, Any]]
-    raw_data: Optional[Any] = None
-    success: bool = True
-    message: str = ""
+    data: Any
+    meta: Dict[str, Any] = field(default_factory=dict)
