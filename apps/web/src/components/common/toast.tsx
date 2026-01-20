@@ -1,9 +1,3 @@
-/*
-	토스트 컴포넌트는 추후 보수 예정
-	현재 토스트를 사용하는 곳이 없어 상세 테스트 진행 안함
-	시간 2.5초 유지, 닫기버튼 있음 
-*/
-
 import { useEffect, useState } from 'react';
 import Portal from './portal';
 import CloseIcon from '../icon/close';
@@ -14,51 +8,41 @@ type Props = {
 	duration?: number;
 };
 
-export default function Toast({ children, onClose, duration = 2500 }: Props) {
+export default function Toast({ children, onClose, duration = 2000 }: Props) {
 	const [isClosing, setIsClosing] = useState(false);
 
-	// 임시 로직임 확정로직 X
+	// 자동 닫힘 타이머 (기본 2초)
 	useEffect(() => {
+		setIsClosing(false);
 		const timer = setTimeout(() => {
 			setIsClosing(true);
 		}, duration);
 		return () => clearTimeout(timer);
-	}, [duration]);
-
-	useEffect(() => {
-		if (isClosing) {
-			const timer = setTimeout(() => {
-				onClose();
-			}, 300);
-			return () => clearTimeout(timer);
-		}
-	}, [isClosing, onClose]);
-
-	const handleClose = () => {
-		setIsClosing(true);
-	};
+	}, [duration, children]); // 의존성 배열에 children을 추가해서 강제 초기화
 
 	return (
 		<Portal type='toast'>
-			<div className='fixed bottom-8 left-0 right-0 z-50 flex justify-center'>
+			<div className='fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none'>
 				<div
+					onTransitionEnd={() => isClosing && onClose()}
 					className={`
-            mx-4 max-w-sm
+            pointer-events-auto
             flex items-center justify-between gap-4
-            rounded-xl border bg-bg-modal 
-            pl-6 pr-4 py-4
-            transform transition-all duration-300 ease-in-out
+            min-w-sm p-4
+            bg-black border border-border-modal
+            ease-in-out
             ${
 							isClosing
-								? 'translate-y-4 opacity-0'
-								: 'translate-y-0 opacity-100'
+								? 'opacity-0 -translate-y-6'
+								: 'opacity-100 translate-y-0'
 						}
           `}
 				>
-					<p className='flex-1 text-sm font-medium'>{children}</p>
+					<p className='flex-1 text-sm font-bold'>{children}</p>
+
 					<button
 						type='button'
-						onClick={handleClose}
+						onClick={() => setIsClosing(true)}
 						className='flex items-center justify-center'
 						aria-label='닫기'
 					>

@@ -13,6 +13,8 @@ type AuthInputType = 'text' | 'password' | 'email';
 type Props = Omit<React.ComponentPropsWithRef<'input'>, 'type'> & {
 	type: AuthInputType;
 	enablePasswordToggle?: boolean;
+	label?: string;
+	errorMessage?: string;
 };
 
 /*
@@ -21,58 +23,61 @@ type Props = Omit<React.ComponentPropsWithRef<'input'>, 'type'> & {
 */
 const AuthInput = forwardRef(
 	(props: Props, ref: ForwardedRef<HTMLInputElement>) => {
-		const { className, type, enablePasswordToggle = true, ...rest } = props;
+		const {
+			className,
+			type,
+			enablePasswordToggle = true,
+			label,
+			errorMessage,
+			...rest
+		} = props;
+
 		const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
 		// 타입이 패스워드면 토글버튼 띄움
 		const isPasswordType = type === 'password';
 		const showToggleBtn = isPasswordType && enablePasswordToggle;
-
-		/**
-			실제 input 속성에 전달될 type 속성 결정
-			비밀번호 타입이면서 사용자가 보기를 선택한 경우 -> 텍스트로 변경하여 내용을 보여줌
-			그 외의 경우 -> 전달받은 type(email, text, password 등)을 그대로 유지
-     */
 		const currentType = isPasswordType
 			? isPasswordVisible
 				? 'text'
 				: 'password'
 			: type;
 
-		const handleToggle = () => {
-			setIsPasswordVisible((prev) => !prev);
-		};
-
 		return (
-			<div className='relative w-full'>
-				{/* 기본 인풋 활용 */}
-				<Input
-					ref={ref}
-					type={currentType}
-					className={showToggleBtn ? 'pr-12' : ''} // 토글 버튼 있을 때 공간확보
-					{...rest}
-				/>
+			<div className='flex flex-col gap-1 w-full relative'>
+				{label && <label className='font-medium'>{label}</label>}
 
-				{/*
-					조건부 렌더링을 통한 비밀번호 토글버튼
-					겹쳐 표시하기위해 absolute 사용
-					탭키로 이동 가능 다음 인풋 이동 가능
-				*/}
-				{showToggleBtn && (
-					<button
-						type='button'
-						onClick={handleToggle}
-						className='absolute right-4 top-1/2 -translate-y-1/2'
-						aria-label={isPasswordVisible ? '비밀번호 숨기기' : '비밀번호 보기'}
-						tabIndex={-1}
-					>
-						{/* 토글버튼 */}
-						{isPasswordVisible ? <EyeOnIcon /> : <EyeOffIcon />}
-					</button>
+				<div className='relative w-full'>
+					<Input
+						ref={ref}
+						type={currentType}
+						className={`
+              w-full pr-10 transition-colors 
+              ${errorMessage ? 'border-red-500 focus:ring-red-500' : ''}
+              ${className}
+            `}
+						{...rest}
+					/>
+
+					{showToggleBtn && (
+						<button
+							type='button'
+							onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+							className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500'
+							tabIndex={-1}
+						>
+							{isPasswordVisible ? <EyeOnIcon /> : <EyeOffIcon />}
+						</button>
+					)}
+				</div>
+				{errorMessage && (
+					<p className='absolute -bottom-5 left-1 text-xs text-red-500 font-medium animate-fadeIn'>
+						{errorMessage}
+					</p>
 				)}
 			</div>
 		);
-	}
+	},
 );
 
 AuthInput.displayName = 'AuthInput';
