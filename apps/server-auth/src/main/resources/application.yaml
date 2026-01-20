@@ -34,3 +34,6 @@ spring:
         connectiontimeout: 5000   # 5초안에 연결 안되면 포기
         timeout: 5000             # 5초 동안 응답 없으면 포기
         writetimeout: 5000        # 5초 동안 전송 안되면 포기
+
+jwt:
+  secret: ${JWT_SECRET_KEY}
