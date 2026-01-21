@@ -1,6 +1,7 @@
 package com.assetmind.server_auth.user.application;
 
 import com.assetmind.server_auth.user.application.dto.UserRegisterCommand;
+import java.util.UUID;
 
 public interface UserRegisterUseCase {
 
@@ -37,5 +38,5 @@ public interface UserRegisterUseCase {
      * @param cmd - 회원가입 유저 데이터 DTO
      * @return 가입된 유저 ID
      */
-    Long register(UserRegisterCommand cmd);
+    UUID register(UserRegisterCommand cmd);
 }

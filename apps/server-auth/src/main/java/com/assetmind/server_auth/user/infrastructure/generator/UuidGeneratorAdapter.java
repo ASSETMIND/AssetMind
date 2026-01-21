@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.infrastructure.id;
+package com.assetmind.server_auth.user.infrastructure.generator;
 
 import com.assetmind.server_auth.user.application.port.UserIdGenerator;
 import java.util.UUID;
