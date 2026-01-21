@@ -1,0 +1,50 @@
+services:
+  # 1. MinIO 서버 (S3 Mock)
+  minio:
+    image: minio/minio:latest
+    container_name: minio-server
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # 2. MinIO 초기화 (버킷 생성) 서비스
+  setup-minio:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/sh", "/scripts/init_minio.sh"]
+
+  # 3. Python 애플리케이션 (Data Pipeline)
+  data-pipeline:
+    build: .
+    container_name: python-pipeline
+    env_file:
+      - .env
+    depends_on:
+      setup-minio:
+        condition: service_completed_successfully
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests # [추가] 테스트 파일도 컨테이너에서 볼 수 있게 마운트
+    # [핵심 수정] main.py 실행 후, 컨테이너가 종료되지 않고 무한 대기(tail -f) 하도록 설정
+    command: ["sh", "-c", "python src/main.py && tail -f /dev/null"]
+
+volumes:
+  minio_data:

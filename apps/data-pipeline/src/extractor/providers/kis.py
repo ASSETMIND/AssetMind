@@ -1,0 +1,1 @@
+# 한국투자증권(KIS) API 연동을 위한 실제 데이터 수집 구현체 (Concrete Implementation)
