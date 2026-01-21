@@ -204,4 +204,22 @@ class UserRepositoryImplTest {
             assertThat(found).isEmpty();
         }
     }
+
+    @Test
+    @DisplayName("성공: 해당 이메일이 존재하는지 조회한다. 존재하면 True를, 존재하지 않으면 False를 반환한다.")
+    void givenEmail_whenExistsByEmail_thenReturnBoolean() {
+        // given
+        UUID uuid = UUID.randomUUID();
+        User testUser = createTestUser(uuid, "test@test.com", "테스트001", "test1234",
+                Provider.GOOGLE, "google-123", UserRole.USER);
+        userRepository.save(testUser);
+
+        // when
+        boolean resultTrue = userRepository.existsByEmail(testUser.getEmailValue());
+        boolean resultFalse = userRepository.existsByEmail("NotExsist@email.com");
+
+        // then
+        assertThat(resultTrue).isTrue();
+        assertThat(resultFalse).isFalse();
+    }
 }
