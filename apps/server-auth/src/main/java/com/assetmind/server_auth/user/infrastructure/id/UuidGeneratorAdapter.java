@@ -1,8 +1,8 @@
 package com.assetmind.server_auth.user.infrastructure.id;
 
+import com.assetmind.server_auth.user.application.port.UserIdGenerator;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import org.springframework.util.IdGenerator;
 
 /**
  * ID 생성 어댑터
@@ -10,10 +10,10 @@ import org.springframework.util.IdGenerator;
  * 자바의 UUID 라이브러리를 사용하여 고유 식별자를 생성
  */
 @Component
-public class UuidGeneratorAdapter implements IdGenerator {
+public class UuidGeneratorAdapter implements UserIdGenerator {
 
     @Override
-    public UUID generateId() {
+    public UUID generate() {
         return UUID.randomUUID();
     }
 }

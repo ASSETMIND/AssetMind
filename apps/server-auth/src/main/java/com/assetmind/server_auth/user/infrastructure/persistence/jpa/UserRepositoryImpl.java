@@ -37,4 +37,9 @@ public class UserRepositoryImpl implements UserRepository {
         return jpaRepository.findBySocialId(socialId.provider(), socialId.providerID())
                 .map(mapper::toDomain);
     }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return jpaRepository.existsByEmail(email);
+    }
 }

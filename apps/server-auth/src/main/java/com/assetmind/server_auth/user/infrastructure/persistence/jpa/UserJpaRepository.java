@@ -19,4 +19,6 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
             @Param("provider") Provider provider,
             @Param("provider_id") String providerId
     );
+
+    boolean existsByEmail(String email);
 }
