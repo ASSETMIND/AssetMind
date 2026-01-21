@@ -12,6 +12,8 @@ import com.assetmind.server_auth.user.domain.vo.Password;
 import com.assetmind.server_auth.user.domain.vo.SocialID;
 import com.assetmind.server_auth.user.domain.vo.UserInfo;
 import com.assetmind.server_auth.user.domain.vo.Username;
+import com.assetmind.server_auth.user.infrastructure.persistence.jpa.UserEntityMapper;
+import com.assetmind.server_auth.user.infrastructure.persistence.jpa.UserRepositoryImpl;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.exception.ConstraintViolationException;
@@ -22,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * JPA를 이용한 UserRepository의 구현체가
