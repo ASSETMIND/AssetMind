@@ -89,7 +89,7 @@ public class UserRegisterService implements UserRegisterUseCase {
     public String verifyCode(String email, String code) {
         String savedCode = verificationCodePort.getCode(email);
 
-        // 토큰이 만료되었거나(null), 일치하지 않는 경우
+        // 인증 코드가 만료되었거나(null), 일치하지 않는 경우
         if (savedCode == null || !savedCode.equals(code)) {
             throw new InvalidVerificationCode();
         }
