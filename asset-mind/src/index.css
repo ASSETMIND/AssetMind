@@ -1,25 +1,71 @@
+/* 1. Pretendard 폰트 불러오기 (CDN) */
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* 2. 전역 기본 스타일 (Reset & Global) */
 @layer base {
-  html {
-    @apply font-sans bg-background-primary text-text-primary;
+  html, body {
+    @apply h-full w-full;
+    @apply font-sans bg-background-primary text-text-primary; /* 전체 배경: 아주 어두운 색(#131316) */
+    @apply antialiased; /* 폰트 가독성 최적화 */
+    @apply overflow-hidden; /* 모달 뷰이므로 불필요한 스크롤 방지 */
+  }
+
+  /* 커스텀 스크롤바 (필요 시 모달 내부에서 작동) */
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border-divider rounded-full;
   }
 }
 
+/* 3. 공용 컴포넌트 클래스 (UI/UX 명세 반영) */
 @layer components {
-  /* H1 반응형 처리 (Mobile 24px -> Tablet 32px -> Desktop 48px) */
+  /* [Typography] 피그마 명세 기반 */
   .text-h1 {
     @apply text-[24px] md:text-[32px] lg:text-[48px] font-medium leading-[120%] tracking-[-0.05em];
   }
-
-  /* T1 반응형 처리 (Mobile 24px -> Tablet 32px -> Desktop 48px) */
   .text-t1 {
-    @apply text-[24px] md:text-[32px] lg:text-[48px] font-medium leading-[140%] tracking-normal;
+    /* Mobile(14px) -> Tablet(16px) -> Desktop(20px) */
+    @apply text-[14px] md:text-[16px] lg:text-[20px] font-medium leading-[140%] tracking-normal;
   }
   
-  /* 그 외 고정 사이즈는 tailwind.config.js의 토큰(text-b1 등)을 그대로 사용하면 됩니다. */
+  /* [Layout] 모달 시스템 */
+  /* 배경 오버레이: 화면 전체를 덮고 내용을 중앙 정렬 */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+    @apply bg-black/60 backdrop-blur-[2px]; /* 배경을 살짝 어둡고 흐리게 처리 */
+  }
+
+  /* 모달 컨테이너: 둥근 모서리, 배경색(#1C1D21), 내부 패딩 */
+  .modal-container {
+    @apply w-full max-w-[480px] p-10 rounded-[24px];
+    @apply bg-background-surface shadow-2xl;
+    @apply flex flex-col relative;
+  }
+
+  /* [Form] 입력 필드 (Input) 스타일 */
+  /* 기본 상태 */
+  .input-base {
+    @apply w-full h-[52px] px-4 rounded-lg border bg-transparent text-b1 text-text-primary outline-none transition-all duration-200;
+    @apply border-border-inputNormal placeholder-text-placeholder;
+    @apply focus:border-border-inputFocus focus:bg-background-elevated;
+  }
+
+  /* 에러 상태 (붉은 테두리) */
+  .input-error {
+    @apply border-border-inputError text-text-error focus:border-border-inputError;
+  }
+  
+  /* [Button] 버튼 공통 유틸리티 */
+  .btn-full {
+    @apply w-full flex items-center justify-center rounded-lg transition-colors font-medium;
+  }
 }
