@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.infrastructure.persistence;
+package com.assetmind.server_auth.user.infrastructure.persistence.jpa;
 
 import com.assetmind.server_auth.user.domain.User;
 import com.assetmind.server_auth.user.application.port.UserRepository;
@@ -36,5 +36,10 @@ public class UserRepositoryImpl implements UserRepository {
     public Optional<User> findBySocialId(SocialID socialId) {
         return jpaRepository.findBySocialId(socialId.provider(), socialId.providerID())
                 .map(mapper::toDomain);
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return jpaRepository.existsByEmail(email);
     }
 }

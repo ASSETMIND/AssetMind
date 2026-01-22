@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.infrastructure.persistence;
+package com.assetmind.server_auth.user.infrastructure.persistence.jpa;
 
 import com.assetmind.server_auth.user.domain.type.Provider;
 import java.util.Optional;
@@ -19,4 +19,6 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, UUID> {
             @Param("provider") Provider provider,
             @Param("provider_id") String providerId
     );
+
+    boolean existsByEmail(String email);
 }

@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.infrastructure.persistence;
+package com.assetmind.server_auth.user.infrastructure.persistence.jpa;
 
 import com.assetmind.server_auth.user.domain.type.Provider;
 import com.assetmind.server_auth.user.domain.type.UserRole;
