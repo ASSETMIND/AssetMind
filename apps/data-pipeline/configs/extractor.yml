@@ -20,65 +20,13 @@ policy:
   # [Case 1] 국내 주식 기간별 시세 (일봉)
   # 가장 기본적인 데이터 수집 작업입니다.
   # ----------------------------------------------------------------------------
-  kis_daily_price:
-    description: "국내주식 기간별 시세(일봉) 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-price"
-    tr_id: "FHKST01010400"
+  kis_kospi_index_daily:
+    description: "코스피 종합 지수 기간별 시세(일봉) 조회"
+    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
+    tr_id: "FHKUP03500100"
     params:
-      FID_COND_MRKT_DIV_CODE: "J" # 시장 분류 (J: 주식, ETF, ETN)
-      FID_ORG_ADJ_PRC: "0" # 수정주가 반영 여부 (0: 미반영, 1: 반영)
-      FID_PERIOD_DIV_CODE: "D" # 기간 분류 (D: 일봉)
-      # *참고: FID_INPUT_ISCD(종목코드), FID_INPUT_DATE_1(시작일) 등은
-      #       RequestDTO.params(동적 파라미터)로 전달되므로 여기서는 생략합니다.
-
-  # ----------------------------------------------------------------------------
-  # [Case 2] 국내 주식 기간별 시세 (주봉)
-  # 위와 동일한 API를 사용하지만, 파라미터만 'W'(Weekly)로 변경하여 별도 Job으로 정의합니다.
-  # 코드를 수정할 필요 없이 설정만으로 '주봉 수집기'가 생성된 효과를 냅니다.
-  # ----------------------------------------------------------------------------
-  kis_weekly_price:
-    description: "국내주식 기간별 시세(주봉) 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-price"
-    tr_id: "FHKST01010400"
-    params:
-      FID_COND_MRKT_DIV_CODE: "J"
-      FID_ORG_ADJ_PRC: "0"
-      FID_PERIOD_DIV_CODE: "W" # 기간 분류 (W: 주봉)
-
-  # ----------------------------------------------------------------------------
-  # [Case 3] 국내 주식 현재가 조회
-  # 시계열 데이터가 아닌, 특정 시점의 호가 정보를 조회합니다.
-  # TR_ID와 Path가 다르지만, 로직 수정 없이 Job ID 호출만으로 동작합니다.
-  # ----------------------------------------------------------------------------
-  kis_current_price:
-    description: "국내주식 현재가 시세 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-price"
-    tr_id: "FHKST01010100"
-    params:
-      FID_COND_MRKT_DIV_CODE: "J"
-
-  # ----------------------------------------------------------------------------
-  # [Case 4] 재무제표 (대차대조표) - 확장 예시
-  # 주가 데이터가 아닌 기업 재무 데이터입니다.
-  # 이처럼 성격이 다른 데이터도 설정 추가만으로 수집 가능합니다.
-  # ----------------------------------------------------------------------------
-  kis_balance_sheet:
-    description: "국내주식 대차대조표 조회"
-    path: "/uapi/domestic-stock/v1/finance/balance-sheet"
-    tr_id: "FHKST01010600" # (가상의 TR_ID, 실제 API 명세 확인 필요)
-    params:
-      FID_DIV_CODE: "1" # 1: 연간, 2: 분기
-    extra_headers:
-      custtype: "P" # (예시) 개인 고객 타입 헤더가 필요한 경우
-
-  # ----------------------------------------------------------------------------
-  # [Case 5] 해외 주식(미국) 기간별 시세 - 확장 예시
-  # 해외 주식은 Base URL은 같지만 Path와 TR_ID 체계가 다릅니다.
-  # ----------------------------------------------------------------------------
-  kis_overseas_daily_price:
-    description: "해외주식(미국) 기간별 시세 조회"
-    path: "/uapi/overseas-price/v1/quotations/dailyprice"
-    tr_id: "HHDFS76240000"
-    params:
-      AUTH: "" # 해외주식 API 특유의 더미 파라미터 등도 설정 가능
-      EXCD: "NAS" # 거래소 코드 (나스닥)
+      FID_COND_MRKT_DIV_CODE: "U" # 시장 분류 (U: 업종/지수)
+      FID_PERIOD_DIV_CODE: "D" # 기간 분류 (D: 일봉, W: 주봉, M: 월봉)
+      # FID_INPUT_ISCD: "0001" (코스피 종합)
+      # FID_INPUT_DATE_1: "20240101" (시작일)
+      # FID_INPUT_DATE_2: "20240131" (종료일)
