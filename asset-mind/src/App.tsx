@@ -1,4 +1,17 @@
+import { useState } from 'react'; // 👈 상태 관리를 위해 추가
+import { GoogleIcon } from './components/icons/GoogleIcon';
+import { KakaoIcon } from './components/icons/KakaoIcon';
+import { EyeIcon } from './components/icons/EyeIcon';
+// import { X } from 'lucide-react';
+
 function App() {
+  // 비밀번호 보이기/숨기기 상태 (false: 숨김, true: 보임)
+  const [showPassword, setShowPassword] = useState(false);
+
+  // 눈 아이콘 클릭 시 실행될 함수
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
   return (
     <div className="modal-overlay">
       <div className="modal-container">
@@ -26,20 +39,27 @@ function App() {
                 placeholder="아이디를 입력해 주세요."
                 defaultValue="잘못된 아이디" 
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary cursor-pointer">👁️</div>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary cursor-pointer"></div>
             </div>
             <p className="text-l4 text-text-error">존재하지 않는 아이디 입니다.</p>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-l2 text-text-secondary">비밀번호</label>
+          <div className="space-y-2">
+            <label className="text-xs text-text-secondary">비밀번호</label>
             <div className="relative">
               <input 
-                type="password" 
-                className="input-base" 
+                type={showPassword ? "text" : "password"} 
+                className="input-base pr-10" // pr-10은 아이콘 자리 확보용 패딩
                 placeholder="비밀번호를 입력해 주세요." 
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary cursor-pointer">👁️</div>
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+              >
+                {/* isOpen 상태에 따라 눈 모양이 바뀜 */}
+                <EyeIcon isOpen={!showPassword} className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
@@ -61,10 +81,17 @@ function App() {
           </div>
 
           <div className="flex justify-center gap-4">
-            <button className="w-12 h-12 rounded-full bg-social-google-bg flex items-center justify-center">G</button>
-            <button className="w-12 h-12 rounded-full bg-social-kakao-bg flex items-center justify-center text-social-kakao-icon">K</button>
+            {/* 구글 버튼 */}
+            <button className="w-12 h-12 rounded-full bg-social-google-bg flex items-center justify-center border border-border-inputNormal hover:bg-gray-50 transition-colors">
+              <GoogleIcon className="w-10 h-10" />
+            </button>
+            
+            {/* 카카오 버튼 */}
+            <button className="w-12 h-12 rounded-full bg-social-kakao-bg flex items-center justify-center hover:opacity-90 transition-opacity">
+              <KakaoIcon className="w-10 h-10 text-social-kakao-icon" />
+            </button>
           </div>
-
+          
         </div>
       </div>
     </div>
