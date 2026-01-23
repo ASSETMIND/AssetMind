@@ -7,19 +7,15 @@ import { http, HttpResponse, type HttpResponseResolver } from 'msw';
 
 // 회원가입 Resolver
 const signupResolver: HttpResponseResolver = async ({ request }) => {
-	// 요청 본문 파싱
 	const requestBody = (await request.json()) as {
 		id?: string;
 		email?: string;
 		password?: string;
 	};
 
-	// 클라이언트에서 id로 보내는지 email로 보내는지 확인하여 추출
 	const email = requestBody.email || requestBody.id;
-
 	console.log('MSW: 회원가입 요청 받음', requestBody);
 
-	// [테스트 시나리오] 이미 가입된 이메일
 	if (email === 'fail@test.com') {
 		return HttpResponse.json(
 			{ message: '이미 존재하는 계정입니다.' },
@@ -27,7 +23,6 @@ const signupResolver: HttpResponseResolver = async ({ request }) => {
 		);
 	}
 
-	// 정상 가입 처리
 	return HttpResponse.json(
 		{
 			message: '회원가입이 완료되었습니다!',
@@ -44,15 +39,42 @@ const checkIdResolver: HttpResponseResolver = ({ request }) => {
 
 	console.log(`[MSW] 중복 확인 요청옴: ${email}`);
 
-	// [테스트 시나리오] 중복된 이메일 (배열 반환)
 	if (email === 'fail@test.com') {
 		return HttpResponse.json([
 			{ id: 1, email: 'fail@test.com', name: '기존유저' },
 		]);
 	}
 
-	// [테스트 시나리오] 사용 가능 (빈 배열)
 	return HttpResponse.json([]);
+};
+
+//인증번호 전송 Resolver
+const sendCodeResolver: HttpResponseResolver = async ({ request }) => {
+	const body = (await request.json()) as { email: string };
+	console.log(`[MSW] 인증코드 발송 요청: ${body.email}`);
+
+	// 성공 응답 (200 OK)
+	return HttpResponse.json(
+		{ message: '인증번호가 발송되었습니다.' },
+		{ status: 200 },
+	);
+};
+
+// 인증번호 검증 Resolver
+const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
+	const body = (await request.json()) as { email: string; code: string };
+	console.log(`[MSW] 코드 검증 요청: ${body.code} (email: ${body.email})`);
+
+	// [테스트 시나리오] '123456' 입력 시에만 성공
+	if (body.code === '123456') {
+		return HttpResponse.json({ message: '인증되었습니다.' }, { status: 200 });
+	}
+
+	// 그 외에는 실패 (400 Bad Request)
+	return HttpResponse.json(
+		{ message: '인증번호가 일치하지 않습니다.' },
+		{ status: 400 },
+	);
 };
 
 /*
@@ -65,4 +87,10 @@ export const handlers = [
 
 	// 이메일 중복 확인 (GET)
 	http.get('*/users', checkIdResolver),
+
+	// [추가] 인증번호 발송 (POST)
+	http.post('*/api/auth/send-code', sendCodeResolver),
+
+	// [추가] 인증번호 검증 (POST)
+	http.post('*/api/auth/verify-code', verifyCodeResolver),
 ];

@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 /*
-  비밀 번호 정규식
-  최소 8자 이상 대소문자,특수문자 숫자 최소 한개 포함
+	비밀 번호 정규식
+	최소 8자 이상 대소문자,특수문자 숫자 최소 한개 포함
 */
-const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{8,}$/;
+const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).{8,}$/;
 
 // 회원가입 스키마 정의
 export const signupSchema = z
@@ -14,6 +14,9 @@ export const signupSchema = z
 			.string()
 			.min(1, '이메일을 입력해주세요.')
 			.email('올바른 이메일 형식이 아닙니다.'),
+
+		// 인증번호 6자리 유효성 검사
+		authCode: z.string().length(6, '인증번호 6자리를 입력해주세요.'),
 
 		// 정규식을 준수한 비밀번호 입력
 		password: z
