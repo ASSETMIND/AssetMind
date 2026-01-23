@@ -15,3 +15,17 @@ export async function checkIDDuplicate(email: string): Promise<boolean> {
 	const { data } = await axiosInstance.get(`api/users?email=${email}`);
 	return data.length === 0; // 데이터가 없으면 빈배열 반환 -> true
 }
+
+// 인증번호 이메일 발송 요청
+export async function sendVerificationCode(email: string): Promise<void> {
+	// body에 email을 담아서 POST 요청
+	await axiosInstance.post('api/auth/send-code', { email });
+}
+
+// 인증번호 검증 요청
+export async function verifyEmailCode(
+	email: string,
+	code: string,
+): Promise<void> {
+	await axiosInstance.post('api/auth/verify-code', { email, code });
+}

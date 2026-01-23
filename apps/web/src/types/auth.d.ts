@@ -14,7 +14,6 @@ export interface SocialLoginParams {
 export interface SignupParams {
 	id: string;
 	password: string;
-	identityVerificationId: string;
 }
 
 // 아이디 찾기
