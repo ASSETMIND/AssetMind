@@ -54,7 +54,7 @@
   /* [Form] 입력 필드 (Input) 스타일 */
   /* 기본 상태 */
   .input-base {
-    @apply w-full h-[52px] px-4 rounded-lg border bg-transparent text-b1 text-text-primary outline-none transition-all duration-200;
+    @apply w-full h-[52px] px-4 rounded-lg border bg-transparent text-b2 text-text-primary outline-none transition-all duration-200;
     @apply border-border-inputNormal placeholder-text-placeholder;
     @apply focus:border-border-inputFocus focus:bg-background-elevated;
   }
