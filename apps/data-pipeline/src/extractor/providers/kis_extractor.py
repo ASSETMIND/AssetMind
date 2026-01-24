@@ -44,136 +44,153 @@ class KISExtractor(AbstractExtractor):
         auth_strategy: IAuthStrategy, 
         config: AppConfig
     ):
-        """KISExtractor 인스턴스를 생성하고 필수 설정을 검증합니다.
+        """KISExtractor를 초기화합니다.
 
         Args:
-            http_client (IHttpClient): HTTP 요청을 수행할 클라이언트.
-            auth_strategy (IAuthStrategy): 인증 토큰 관리 전략.
+            http_client (IHttpClient): HTTP 요청 클라이언트.
+            auth_strategy (IAuthStrategy): KIS 인증 토큰 발급 전략.
             config (AppConfig): 앱 설정 객체.
-
-        Raises:
-            ExtractorError: 필수 설정 항목이 누락된 경우 발생.
         """
+        # 부모 클래스(AbstractExtractor) 초기화 (여기서 config 기본 검증 수행됨)
         super().__init__(http_client, config)
         self.auth_strategy = auth_strategy
-
         
-        # 설정 객체에 KIS API 기본 URL이 포함되어 있는지 확인합니다.
-        if not hasattr(config, "kis_base_url") or not config.kis_base_url:
-            raise ExtractorError("Critical Config Error: 'kis_base_url' is missing in AppConfig.")
-            
-        # 설정 객체에 데이터 수집 정책(Dictionary)이 포함되어 있는지 확인합니다.
-        if not hasattr(config, "extraction_policy") or not isinstance(config.extraction_policy, dict):
-            raise ExtractorError("Critical Config Error: 'extraction_policy' dictionary is missing.")
+        # Rationale: AppConfig가 Pydantic 모델이므로 kis 필드의 존재는 보장되지만, 
+        # 명시적으로 base_url이 비어있는지 체크하여 Fail-Fast를 유도함.
+        if not config.kis.base_url:
+            raise ExtractorError("Critical Config Error: 'kis.base_url' is empty in AppConfig.")
 
-    def _validate_request(self, request: RequestDTO) -> None:
-        """요청 정보와 설정 파일의 정합성을 검사합니다.
+    async def extract(self, request: RequestDTO) -> ResponseDTO:
+        """데이터 수집을 수행하는 공개 메서드 (Template Method).
 
-        요청된 작업(job_id)이 설정 파일에 정의되어 있는지,
-        그리고 해당 정책에 필수적인 API 정보(path, tr_id)가 있는지 확인합니다.
+        검증 -> 데이터 인출 -> 응답 생성의 표준 흐름을 제어합니다.
 
         Args:
-            request (RequestDTO): 데이터 수집 요청 객체.
-
-        Raises:
-            ExtractorError: job_id가 없거나 설정 파일에 해당 정책이 없는 경우.
-        """
-        # 요청 객체에 작업 ID가 명시되어 있는지 확인합니다.
-        if not request.job_id:
-            raise ExtractorError("Invalid Request: 'job_id' is mandatory for KIS Extraction.")
-
-        # 설정 파일에서 해당 작업 ID에 대한 정책을 가져옵니다.
-        policy = self.config.extraction_policy.get(request.job_id)
-        
-        # 정책이 존재하지 않으면 수집을 진행할 수 없으므로 에러를 발생시킵니다.
-        if not policy:
-            self.logger.error(f"Policy missing for job_id: {request.job_id}")
-            raise ExtractorError(f"Configuration Error: Policy not found for job_id '{request.job_id}'. Check extractor.yml.")
-
-        # 정책 딕셔너리에 API 호출을 위한 필수 키(경로, TR_ID)가 포함되어 있는지 검사합니다.
-        required_keys = ["path", "tr_id"]
-        missing_keys = [key for key in required_keys if key not in policy]
-        
-        if missing_keys:
-            raise ExtractorError(
-                f"Configuration Error: Policy '{request.job_id}' is incomplete. Missing keys: {missing_keys}"
-            )
-
-    async def _fetch_raw_data(self, request: RequestDTO) -> Any:
-        """설정된 정책과 요청 파라미터를 결합하여 실제 API 호출을 수행합니다.
-
-        인증 토큰 획득, 헤더 구성, 파라미터 병합 과정을 거쳐 HTTP 요청을 전송합니다.
-
-        Args:
-            request (RequestDTO): 검증이 완료된 요청 객체.
+            request (RequestDTO): 수집 요청 정보 (job_id, params 포함).
 
         Returns:
-            Any: API 서버로부터 받은 원본 응답 데이터 (Dictionary).
+            ResponseDTO: 수집된 원본 데이터와 메타데이터.
+
+        Raises:
+            ExtractorError: 수집 과정 중 발생한 모든 비즈니스 예외.
         """
-        # 인증 전략 객체를 통해 유효한 액세스 토큰을 가져옵니다.
+        try:
+            # 1. 요청 유효성 검증 (Validation)
+            self._validate_request(request)
+
+            # 2. 데이터 인출 (Fetching)
+            raw_data = await self._fetch_raw_data(request)
+
+            # 3. 응답 객체 생성 (Response Creation)
+            response = self._create_response(raw_data, request.job_id)
+            
+            self.logger.info(f"Extraction Successful | Job: {request.job_id}")
+            
+            return response
+
+        except ExtractorError as e:
+            # 이미 처리된 ExtractorError는 그대로 상위로 전파
+            self.logger.error(f"Extraction Failed: {e}")
+            raise e
+        except Exception as e:
+            # 예상치 못한 시스템 에러는 ExtractorError로 래핑하여 일관성 유지
+            self.logger.error(f"Unexpected System Error during extraction: {e}", exc_info=True)
+            raise ExtractorError(f"System Error: {str(e)}")
+    
+    def _validate_request(self, request: RequestDTO) -> None:
+        """요청된 작업(Job)이 KIS 수집 정책에 부합하는지 검증합니다.
+
+        1. job_id가 Config의 extraction_policy에 존재하는지 확인.
+        2. 해당 Policy의 Provider가 'KIS'인지 확인.
+        3. KIS API 호출에 필수적인 'tr_id' 필드가 설정되어 있는지 확인.
+
+        Args:
+            request (RequestDTO): 요청 객체.
+
+        Raises:
+            ExtractorError: 정책이 없거나, Provider가 다르거나, 필수 필드가 누락된 경우.
+        """
+        if not request.job_id:
+            raise ExtractorError("Invalid Request: 'job_id' is mandatory.")
+
+        # Rationale: Pydantic 모델의 딕셔너리 속성(extraction_policy)에 접근.
+        policy = self.config.extraction_policy.get(request.job_id)
+        
+        if not policy:
+            self.logger.error(f"Policy missing for job_id: {request.job_id}")
+            raise ExtractorError(f"Configuration Error: Policy not found for job_id '{request.job_id}'.")
+
+        # Rationale: 다른 Provider(예: FRED)의 작업을 KIS 수집기에 요청하는 실수를 방지.
+        if policy.provider != "KIS":
+            raise ExtractorError(f"Provider Mismatch: Job '{request.job_id}' is for '{policy.provider}', not 'KIS'.")
+
+        # Rationale: JobPolicy 스키마에서 tr_id는 Optional이므로, KIS 구현체에서 필수 여부를 강제해야 함.
+        if not policy.tr_id:
+             raise ExtractorError(f"Configuration Error: 'tr_id' is missing in policy '{request.job_id}'.")
+
+    async def _fetch_raw_data(self, request: RequestDTO) -> Any:
+        """설정된 정책과 인증 정보를 결합하여 KIS API를 호출합니다.
+
+        Args:
+            request (RequestDTO): 검증된 요청 객체.
+
+        Returns:
+            Any: API 원본 응답 데이터 (Dict).
+        """
+        # 1. 인증 토큰 확보 (AuthStrategy 위임)
         token = await self.auth_strategy.get_token(self.http_client)
 
-        # 설정 파일에서 현재 작업에 해당하는 정책을 로드합니다.
+        # 2. 정책 로드 (Validation 단계를 통과했으므로 존재 보장)
         policy = self.config.extraction_policy[request.job_id]
         
-        # 기본 URL과 정책에 정의된 경로를 결합하여 전체 요청 URL을 생성합니다.
-        url = f"{self.config.kis_base_url}{policy['path']}"
-        tr_id = policy['tr_id']
-
-        # API 호출에 필요한 HTTP 헤더를 구성합니다.
-        # 토큰, 앱 키, 시크릿, TR_ID가 포함되며, 정책에 추가 헤더가 있다면 병합합니다.
+        # 3. URL 구성
+        # Config의 계층 구조(config.kis.base_url)와 객체 속성(policy.path)을 활용.
+        url = f"{self.config.kis.base_url}{policy.path}"
+        
+        # 4. 헤더 구성
+        # SecretStr 타입인 앱 키/시크릿을 평문으로 복호화(get_secret_value)하여 헤더에 주입.
         headers = {
             "content-type": "application/json; charset=utf-8",
             "authorization": token,
-            "appkey": self.config.kis_app_key,
-            "appsecret": self.config.kis_app_secret,
-            "tr_id": tr_id,
-            **policy.get("extra_headers", {})
+            "appkey": self.config.kis.app_key.get_secret_value(),
+            "appsecret": self.config.kis.app_secret.get_secret_value(),
+            "tr_id": policy.tr_id
         }
 
-        # 파라미터 병합: 설정 파일의 고정 파라미터(static)와 요청 파라미터(dynamic)를 합칩니다.
-        # 요청 파라미터가 고정 파라미터보다 우선순위를 가집니다.
-        static_params = policy.get("params", {})
-        dynamic_params = request.params
-        merged_params = {**static_params, **dynamic_params}
+        # 5. 파라미터 병합
+        # Static Params(Config)와 Dynamic Params(Request)를 병합. Request가 우선순위를 가짐.
+        merged_params = {**policy.params, **request.params}
 
-        self.logger.debug(f"Executing KIS Request | Job: {request.job_id} | TR_ID: {tr_id}")
+        self.logger.debug(f"Executing KIS Request | Job: {request.job_id} | TR_ID: {policy.tr_id}")
 
-        # 구성된 정보로 HTTP GET 요청을 비동기로 수행하고 결과를 반환합니다.
-        raw_response = await self.http_client.get(url, headers=headers, params=merged_params)
+        # 6. 비동기 호출 수행
+        return await self.http_client.get(url, headers=headers, params=merged_params)
 
-        return raw_response
-
-    def _create_response(self, raw_data: Any) -> ResponseDTO:
-        """API 원본 데이터를 ResponseDTO 객체로 포장합니다.
-
-        API 응답 코드를 확인하여 비즈니스 로직상 실패인 경우 에러를 발생시키고,
-        성공인 경우 데이터를 가공 없이 그대로 반환 객체에 담습니다.
+    def _create_response(self, raw_data: Any, job_id: str) -> ResponseDTO:
+        """KIS API 응답의 결과 코드(rt_cd)를 확인하고 DTO로 포장합니다.
 
         Args:
-            raw_data (Any): _fetch_raw_data에서 반환된 API 원본 데이터.
-
+            raw_data (Any): API 원본 응답.
+            job_id (str): 요청된 작업 ID.
         Returns:
-            ResponseDTO: 원본 데이터와 메타데이터가 담긴 전송 객체.
+            ResponseDTO: 결과 객체.
 
         Raises:
-            ExtractorError: API 응답 코드가 성공(0)이 아닌 경우.
+            ExtractorError: rt_cd가 성공('0')이 아닌 경우.
         """
-        # API 응답 내의 결과 코드(rt_cd)를 추출합니다.
+        # Rationale: KIS API 표준인 rt_cd 필드를 확인하여 비즈니스 성공 여부 판단.
         rt_cd = raw_data.get("rt_cd", "")
         
-        # 결과 코드가 '0'(성공)이 아니라면 수집 실패로 간주합니다.
         if rt_cd != "0":
             msg = raw_data.get("msg1", "Unknown Error")
             self.logger.error(f"KIS API Business Failure: {msg} (Code: {rt_cd})")
-            # 단순히 데이터를 반환하지 않고 에러를 발생시켜 파이프라인을 중단하거나 재시도를 유도합니다.
             raise ExtractorError(f"KIS API Failed: {msg} (Code: {rt_cd})")
 
-        # 수집 성공 시, 원본 데이터를 DTO에 담아 반환합니다.
         return ResponseDTO(
             data=raw_data,
             meta={
                 "source": "KIS",
+                "job_id": job_id,
                 "extracted_at": datetime.now().isoformat(),
                 "status_code": rt_cd
             }
