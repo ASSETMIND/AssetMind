@@ -7,9 +7,11 @@ import com.assetmind.server_auth.user.exception.UserDuplicatedEmail;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 모든 REST Controller 에서 발생하는
@@ -25,12 +27,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationError(MethodArgumentNotValidException e) {
-        String message = e.getMessage();
-        log.warn("Validation Error : {}", message);
+        FieldError fieldError = e.getFieldError();
+        String cleanErrorMessage = (fieldError != null) ? fieldError.getDefaultMessage() : "잘못된 요청입니다.";
+
+        log.warn("Validation Error : {}", cleanErrorMessage);
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.fail(message));
+                .body(ApiResponse.fail(cleanErrorMessage));
     }
 
     /**
@@ -83,6 +87,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail(e.getMessage()));
+    }
+
+    /**
+     * 잘못된 API URL 요청 예외 처리
+     * -> 404 Not Found
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException e) {
+        log.warn("Wrong URL Request: {}", e.getResourcePath());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail("요청하신 URL을 찾을 수 없습니다."));
     }
 
     /**
