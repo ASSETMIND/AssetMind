@@ -1,84 +1,127 @@
 # ==============================================================================
-# 데이터 수집 정책 설정 (Extraction Policy Configuration)
+# 통합 데이터 수집 정책 (Unified Extraction Policy)
 #
-# 이 파일은 AppConfig를 통해 로드되며, KISExtractor는 이 설정을 참조하여
-# 동적으로 API 요청을 생성합니다.
-#
-# 구조 (Structure):
-#   [job_id]:                  # RequestDTO.job_id와 일치해야 하는 고유 키
-#     description: str         # (선택) 작업 설명
-#     path: str                # (필수) API Endpoint URL Path
-#     tr_id: str               # (필수) 한국투자증권 Transaction ID
-#     params:                  # (선택) 고정 파라미터 (Static Parameters)
-#       key: value
-#     extra_headers:           # (선택) 추가 헤더 (Extra Headers)
-#       key: value
+# 구조:
+#   [job_id]:
+#     provider: "KIS" | "FRED" | "ECOS"  <-- 핵심: 어떤 API를 쓸지 지정
+#     description: ...
+#     endpoint: ...
+#     params: ...
 # ==============================================================================
 
 policy:
   # ----------------------------------------------------------------------------
-  # [Case 1] 국내 주식 기간별 시세 (일봉)
-  # 가장 기본적인 데이터 수집 작업입니다.
+  # [Group 1] 한국투자증권 (KIS) 관련 작업
   # ----------------------------------------------------------------------------
-  kis_daily_price:
-    description: "국내주식 기간별 시세(일봉) 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-price"
-    tr_id: "FHKST01010400"
+  # 1-1. 국내 주식 (일봉)
+  kis_kospi_daily:
+    provider: "KIS" # KISExtractor 사용
+    domain: "domestic-stock" # KIS 내부에서의 구분 (국내)
+    description: "코스피 지수 일봉"
+    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
+    tr_id: "FHKUP03500100"
     params:
-      FID_COND_MRKT_DIV_CODE: "J" # 시장 분류 (J: 주식, ETF, ETN)
-      FID_ORG_ADJ_PRC: "0" # 수정주가 반영 여부 (0: 미반영, 1: 반영)
-      FID_PERIOD_DIV_CODE: "D" # 기간 분류 (D: 일봉)
-      # *참고: FID_INPUT_ISCD(종목코드), FID_INPUT_DATE_1(시작일) 등은
-      #       RequestDTO.params(동적 파라미터)로 전달되므로 여기서는 생략합니다.
+      FID_COND_MRKT_DIV_CODE: "U"
+      FID_PERIOD_DIV_CODE: "D"
+
+  # 1-2. 미국 주식 (일봉) - 같은 API지만 성격이 다름
+  kis_nasdaq_daily:
+    provider: "KIS"
+    domain: "overseas-stock" # KIS 내부에서의 구분 (해외)
+    description: "나스닥 지수 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N" # 나스닥
+
+  # 1-3. 금 (Gold) - SPDR Gold Shares (GLD)
+  kis_gold_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock" # 해외주식 도메인 사용
+    description: "금(Gold) 가격 추종 ETF (GLD) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100" # 해외주식 기간별시세 (일/주/월/년)
+    params:
+      FID_COND_MRKT_DIV_CODE: "N" # 뉴욕증권거래소(NYSE)
+      FID_INPUT_ISCD: "GLD" # 티커: GLD
+      FID_PERIOD_DIV_CODE: "D" # 일봉
+
+  # 1-4. 은 (Silver) - iShares Silver Trust (SLV)
+  kis_silver_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock"
+    description: "은(Silver) 가격 추종 ETF (SLV) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N"
+      FID_INPUT_ISCD: "SLV"
+      FID_PERIOD_DIV_CODE: "D"
+
+  # 1-5. 원유 (Crude Oil) - United States Oil Fund (USO)
+  kis_oil_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock"
+    description: "WTI 원유 가격 추종 ETF (USO) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N"
+      FID_INPUT_ISCD: "USO"
+      FID_PERIOD_DIV_CODE: "D"
+
+  # 1-6. 천연가스 (Natural Gas) - United States Natural Gas Fund (UNG)
+  kis_gas_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock"
+    description: "천연가스 선물 추종 ETF (UNG) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N"
+      FID_INPUT_ISCD: "UNG"
+      FID_PERIOD_DIV_CODE: "D"
+
+  # 1-7. 구리 (Copper) - United States Copper Index Fund (CPER)
+  kis_copper_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock"
+    description: "구리 가격 추종 ETF (CPER) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N"
+      FID_INPUT_ISCD: "CPER"
+      FID_PERIOD_DIV_CODE: "D"
+
+  # 1-8. 밀 (Wheat) - Teucrium Wheat Fund (WEAT)
+  kis_wheat_etf_daily:
+    provider: "KIS"
+    domain: "overseas-stock"
+    description: "밀 선물 가격 추종 ETF (WEAT) 일봉"
+    path: "/uapi/overseas-stock/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+    params:
+      FID_COND_MRKT_DIV_CODE: "N"
+      FID_INPUT_ISCD: "WEAT"
+      FID_PERIOD_DIV_CODE: "D"
 
   # ----------------------------------------------------------------------------
-  # [Case 2] 국내 주식 기간별 시세 (주봉)
-  # 위와 동일한 API를 사용하지만, 파라미터만 'W'(Weekly)로 변경하여 별도 Job으로 정의합니다.
-  # 코드를 수정할 필요 없이 설정만으로 '주봉 수집기'가 생성된 효과를 냅니다.
+  # [Group 2] FRED (Federal Reserve Economic Data) 관련 작업
   # ----------------------------------------------------------------------------
-  kis_weekly_price:
-    description: "국내주식 기간별 시세(주봉) 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-daily-price"
-    tr_id: "FHKST01010400"
+  fred_us_gdp:
+    provider: "FRED" # FREDExtractor 사용
+    description: "미국 실질 GDP (분기별)"
+    path: "/series/observations"
     params:
-      FID_COND_MRKT_DIV_CODE: "J"
-      FID_ORG_ADJ_PRC: "0"
-      FID_PERIOD_DIV_CODE: "W" # 기간 분류 (W: 주봉)
+      series_id: "GDPC1"
+      frequency: "q"
 
   # ----------------------------------------------------------------------------
-  # [Case 3] 국내 주식 현재가 조회
-  # 시계열 데이터가 아닌, 특정 시점의 호가 정보를 조회합니다.
-  # TR_ID와 Path가 다르지만, 로직 수정 없이 Job ID 호출만으로 동작합니다.
+  # [Group 3] 한국은행 (ECOS) 관련 작업
   # ----------------------------------------------------------------------------
-  kis_current_price:
-    description: "국내주식 현재가 시세 조회"
-    path: "/uapi/domestic-stock/v1/quotations/inquire-price"
-    tr_id: "FHKST01010100"
-    params:
-      FID_COND_MRKT_DIV_CODE: "J"
-
-  # ----------------------------------------------------------------------------
-  # [Case 4] 재무제표 (대차대조표) - 확장 예시
-  # 주가 데이터가 아닌 기업 재무 데이터입니다.
-  # 이처럼 성격이 다른 데이터도 설정 추가만으로 수집 가능합니다.
-  # ----------------------------------------------------------------------------
-  kis_balance_sheet:
-    description: "국내주식 대차대조표 조회"
-    path: "/uapi/domestic-stock/v1/finance/balance-sheet"
-    tr_id: "FHKST01010600" # (가상의 TR_ID, 실제 API 명세 확인 필요)
-    params:
-      FID_DIV_CODE: "1" # 1: 연간, 2: 분기
-    extra_headers:
-      custtype: "P" # (예시) 개인 고객 타입 헤더가 필요한 경우
-
-  # ----------------------------------------------------------------------------
-  # [Case 5] 해외 주식(미국) 기간별 시세 - 확장 예시
-  # 해외 주식은 Base URL은 같지만 Path와 TR_ID 체계가 다릅니다.
-  # ----------------------------------------------------------------------------
-  kis_overseas_daily_price:
-    description: "해외주식(미국) 기간별 시세 조회"
-    path: "/uapi/overseas-price/v1/quotations/dailyprice"
-    tr_id: "HHDFS76240000"
-    params:
-      AUTH: "" # 해외주식 API 특유의 더미 파라미터 등도 설정 가능
-      EXCD: "NAS" # 거래소 코드 (나스닥)
+  ecos_base_rate:
+    provider: "ECOS" # ECOSExtractor 사용
+    description: "한국은행 기준금리 추이"
+    path: "/StatisticSearch/200Y001/D/20230101/20231231"
+    params: {}
