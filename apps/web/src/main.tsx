@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/index.css';
 import App from './App.tsx';
 import QueryProvider from './providers/query-providers.tsx';
+import { BrowserRouter } from 'react-router-dom';
 
 // MSW 모킹 활성화 함수
 async function enableMocking() {
@@ -22,9 +23,11 @@ async function enableMocking() {
 enableMocking().then(() => {
 	createRoot(document.getElementById('root')!).render(
 		<StrictMode>
-			<QueryProvider>
-				<App />
-			</QueryProvider>
-		</StrictMode>
+			<BrowserRouter>
+				<QueryProvider>
+					<App />
+				</QueryProvider>
+			</BrowserRouter>
+		</StrictMode>,
 	);
 });

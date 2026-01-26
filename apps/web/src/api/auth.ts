@@ -3,7 +3,7 @@
 // 최상위 폴더의 db.json, routes.json 파일에 목업서버 정의 > 테스트 진행
 
 import { axiosInstance } from '../libs/axios';
-import type { SignupParams } from '../types/auth';
+import type { LoginParams, LoginResponse, SignupParams } from '../types/auth';
 
 // 회원가입 POST /auth/signup
 export async function signup(data: SignupParams): Promise<void> {
@@ -28,4 +28,13 @@ export async function verifyEmailCode(
 	code: string,
 ): Promise<void> {
 	await axiosInstance.post('api/auth/verify-code', { email, code });
+}
+
+export async function login(data: LoginParams): Promise<LoginResponse> {
+	// <LoginResponse> 제네릭을 사용하여 리턴 타입을 명시
+	const { data: response } = await axiosInstance.post<LoginResponse>(
+		'api/auth/login',
+		data,
+	);
+	return response;
 }

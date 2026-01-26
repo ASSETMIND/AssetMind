@@ -53,7 +53,6 @@ describe('useSignupLogic 유닛 테스트', () => {
 			expect(mockCheckIDMutate).not.toHaveBeenCalled();
 		});
 
-		//
 		test('아이디 중복 확인 결과가 "중복(false)"이면 에러를 설정해야 한다', async () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 

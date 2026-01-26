@@ -34,3 +34,17 @@ export const signupSchema = z
 
 // zod 스키마로부터 추론된 정적 타입
 export type SignupSchemaType = z.infer<typeof signupSchema>;
+
+// 로그인 스키마 정의
+// 아이디는 이메일 형식인 것만 체크
+// 비밀번호: 입력 여부만 체크
+export const loginSchema = z.object({
+	id: z
+		.string()
+		.min(1, '아이디를 입력해주세요.')
+		.email('올바른 이메일 형식이 아닙니다.'),
+	password: z.string().min(1, '비밀번호를 입력해주세요.'),
+});
+
+// 로그인 타입 추론
+export type LoginSchemaType = z.infer<typeof loginSchema>;
