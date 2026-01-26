@@ -4,6 +4,15 @@ export interface LoginParams {
 	password: string;
 }
 
+export interface LoginResponse {
+	accessToken: string;
+	user: {
+		id: number;
+		email: string;
+		name?: string;
+	};
+}
+
 // 소셜로그인
 export interface SocialLoginParams {
 	provider: 'kakao' | 'google' | null;

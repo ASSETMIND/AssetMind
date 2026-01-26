@@ -5,7 +5,7 @@ import { http, HttpResponse, type HttpResponseResolver } from 'msw';
   실제 요청을 처리하고 응답을 생성하는 로직 함수
 */
 
-// 회원가입 Resolver
+// 1. 회원가입 Resolver
 const signupResolver: HttpResponseResolver = async ({ request }) => {
 	const requestBody = (await request.json()) as {
 		id?: string;
@@ -32,7 +32,7 @@ const signupResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
-// 이메일 중복 확인 Resolver
+// 2. 이메일 중복 확인 Resolver
 const checkIdResolver: HttpResponseResolver = ({ request }) => {
 	const url = new URL(request.url);
 	const email = url.searchParams.get('email');
@@ -48,7 +48,7 @@ const checkIdResolver: HttpResponseResolver = ({ request }) => {
 	return HttpResponse.json([]);
 };
 
-//인증번호 전송 Resolver
+// 3. 인증번호 전송 Resolver
 const sendCodeResolver: HttpResponseResolver = async ({ request }) => {
 	const body = (await request.json()) as { email: string };
 	console.log(`[MSW] 인증코드 발송 요청: ${body.email}`);
@@ -60,7 +60,7 @@ const sendCodeResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
-// 인증번호 검증 Resolver
+// 4. 인증번호 검증 Resolver
 const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 	const body = (await request.json()) as { email: string; code: string };
 	console.log(`[MSW] 코드 검증 요청: ${body.code} (email: ${body.email})`);
@@ -77,6 +77,33 @@ const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
+// 5. 로그인 Resolver
+const loginResolver: HttpResponseResolver = async ({ request }) => {
+	const body = (await request.json()) as { id: string; password: string };
+	console.log(`[MSW] 로그인 요청: ${body.id}`);
+
+	// [테스트 시나리오] 특정 계정으로 로그인 시 성공
+	if (body.id === 'test@test.com' && body.password === 'password123!') {
+		return HttpResponse.json(
+			{
+				accessToken: 'mock-access-token-12345', // 가짜 토큰 발급
+				user: {
+					id: 1,
+					email: body.id,
+					name: '테스트유저',
+				},
+			},
+			{ status: 200 },
+		);
+	}
+
+	// 실패 시나리오 (401 Unauthorized)
+	return HttpResponse.json(
+		{ message: '아이디 또는 비밀번호가 일치하지 않습니다.' },
+		{ status: 401 },
+	);
+};
+
 /*
   [Handlers]
   URL 경로와 HTTP 메서드를 Resolver 함수와 매핑
@@ -88,9 +115,12 @@ export const handlers = [
 	// 이메일 중복 확인 (GET)
 	http.get('*/users', checkIdResolver),
 
-	// [추가] 인증번호 발송 (POST)
+	// 인증번호 발송 (POST)
 	http.post('*/api/auth/send-code', sendCodeResolver),
 
-	// [추가] 인증번호 검증 (POST)
+	// 인증번호 검증 (POST)
 	http.post('*/api/auth/verify-code', verifyCodeResolver),
+
+	// 로그인 (POST)
+	http.post('*/api/auth/login', loginResolver),
 ];
