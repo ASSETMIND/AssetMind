@@ -1,6 +1,7 @@
 from src.common.config import get_config
 from src.extractor.domain.interfaces import IAuthStrategy, IHttpClient
 from src.extractor.providers.kis_extractor import KISExtractor
+from src.extractor.providers.fred_extractor import FREDExtractor
 from typing import Any, Dict
 
 class MockHttpClient(IHttpClient):
@@ -16,7 +17,7 @@ class MockAuthStrategy(IAuthStrategy):
     async def get_token(self, http_client: IHttpClient) -> str:
         return "Bearer MOCK_TOKEN"
 
-def config_verification():
+def verify_config():
     """설정 모듈의 정상 동작 여부를 확인하는 내부 함수."""
     print("="*60)
     print(">>> [Step 1] Configuration Loading Started...")
@@ -52,78 +53,119 @@ def config_verification():
 
     print("✅ Verification Completed.")
 
-def kis_extractor_verification():
+def verify_extractor(target_provider: str = "KIS"):
+    """특정 Provider에 대한 설정 및 Extractor 초기화를 검증합니다.
+
+    Args:
+        target_provider (str): 'KIS' 또는 'FRED'
+    """
+    target_provider = target_provider.upper()
     print("="*80)
-    print(">>> [Step 1] Configuration Loading Verification")
+    print(f">>> [Verification Start] Target Provider: {target_provider}")
     print("="*80)
 
-    target_task = "extractor"
-    
+    # -----------------------------------------------------
+    # Step 1. Configuration Loading
+    # -----------------------------------------------------
+    print(f"\n>>> [Step 1] Loading Configuration...")
     try:
-        config = get_config(task_name=target_task)
+        config = get_config(task_name="extractor")
         print(f"✅ AppConfig Loaded Successfully!")
         print(f"   - Task Name: {config.task_name}")
-        print(f"   - Policy Count: {len(config.extraction_policy)}")
-        print("-" * 80 + "\n")
+        print(f"   - Total Policies: {len(config.extraction_policy)}")
     except Exception as e:
         print(f"❌ CRITICAL ERROR: Failed to load config. \n{e}")
         return
 
-    print("="*80)
-    print(">>> [Step 2] KIS Extractor Initialization & Policy Mapping Verification")
-    print("="*80)
+    # -----------------------------------------------------
+    # Step 2. Extractor Initialization (Dependency Injection)
+    # -----------------------------------------------------
+    print(f"\n>>> [Step 2] Initializing {target_provider} Extractor...")
 
-    # 1. Mock 의존성 주입 및 Extractor 생성
     mock_http = MockHttpClient()
     mock_auth = MockAuthStrategy()
+    extractor = None
 
     try:
-        # KISExtractor가 AppConfig를 올바르게 참조하는지 테스트
-        extractor = KISExtractor(
-            http_client=mock_http, 
-            auth_strategy=mock_auth, 
-            config=config
-        )
-        print("✅ KISExtractor Instantiated Successfully!")
+        if target_provider == "KIS":
+            # KIS는 AuthStrategy가 필수
+            extractor = KISExtractor(
+                http_client=mock_http, 
+                auth_strategy=mock_auth, 
+                config=config
+            )
+            # KIS Global Config Check
+            is_key_present = bool(config.kis.app_key.get_secret_value())
+            print(f"✅ KISExtractor Instantiated.")
+            print(f"   - Base URL: {config.kis.base_url}")
+            print(f"   - App Key:  {'[PROTECTED]' if is_key_present else '[MISSING]'}")
+
+        elif target_provider == "FRED":
+            # FRED는 AuthStrategy 불필요 (Config 내 API Key 사용)
+            extractor = FREDExtractor(
+                http_client=mock_http,
+                config=config
+            )
+            # FRED Global Config Check
+            is_key_present = bool(config.fred.api_key.get_secret_value())
+            print(f"✅ FREDExtractor Instantiated.")
+            print(f"   - Base URL: {config.fred.base_url}")
+            print(f"   - API Key:  {'[PROTECTED]' if is_key_present else '[MISSING]'}")
         
-        # 2. Global KIS Setting 확인
-        print(f"   - Base URL: {config.kis.base_url}")
-        print(f"   - App Key:  {'[PROTECTED]' if config.kis.app_key.get_secret_value() else '[MISSING]'}")
-        print("\n")
+        else:
+            print(f"❌ ERROR: Unknown provider type '{target_provider}'")
+            return
 
     except Exception as e:
-        print(f"❌ ERROR: Failed to initialize KISExtractor. Check your 'config.py' and 'kis_extractor.py' compatibility.")
+        print(f"❌ ERROR: Failed to initialize {target_provider} Extractor.")
         print(f"Details: {e}")
         return
 
-    # 3. KIS 관련 정책 전수 조사 및 출력
-    print(">>> [Step 3] Verifying Collected KIS Policies (Details)")
+    # -----------------------------------------------------
+    # Step 3. Policy Mapping Verification
+    # -----------------------------------------------------
+    print(f"\n>>> [Step 3] Verifying {target_provider} Policies in YAML")
     
-    kis_policies = {
+    # Provider 일치하는 정책 필터링
+    target_policies = {
         k: v for k, v in config.extraction_policy.items() 
-        if v.provider == "KIS"
+        if v.provider == target_provider
     }
 
-    if not kis_policies:
-        print("⚠️ WARNING: No KIS policies found in 'extractor.yml'.")
+    if not target_policies:
+        print(f"⚠️ WARNING: No policies found for provider '{target_provider}'. Check 'extractor.yml'.")
     else:
-        print(f"🔍 Found {len(kis_policies)} KIS Job(s). Printing details...\n")
+        print(f"🔍 Found {len(target_policies)} Job(s). Printing details...\n")
         
-        for job_id, policy in kis_policies.items():
+        for job_id, policy in target_policies.items():
             print(f"🔹 [Job ID] {job_id}")
             print(f"   • Description : {policy.description}")
-            print(f"   • Endpoint    : {config.kis.base_url}{policy.path}")
-            print(f"   • TR_ID       : {policy.tr_id}")
-            print(f"   • Params      : {policy.params}")
             
-            # 도메인 구분 확인 (국내/해외)
-            domain_label = policy.domain if policy.domain else "N/A"
-            print(f"   • Domain      : {domain_label}")
+            # URL 조합 시뮬레이션
+            base_url = config.kis.base_url if target_provider == "KIS" else config.fred.base_url
+            full_path = f"{base_url}{policy.path}"
+            print(f"   • Endpoint    : {full_path}")
+
+            # Provider별 핵심 속성 출력 분기
+            if target_provider == "KIS":
+                print(f"   • TR_ID       : {policy.tr_id}")
+                print(f"   • Domain      : {policy.domain}")
+            
+            elif target_provider == "FRED":
+                # FRED는 params 안에 핵심 정보(series_id)가 있음
+                s_id = policy.params.get('series_id', 'MISSING')
+                freq = policy.params.get('frequency', 'N/A')
+                print(f"   • Series ID   : {s_id}")
+                print(f"   • Frequency   : {freq}")
+
+            print(f"   • Params      : {policy.params}")
             print("   ----------------------------------------------------------------------------")
 
-    print("\n✅ Verification Completed.")
+    print(f"\n✅ [{target_provider}] Verification Completed.")
+    print("\n" + " " * 80 + "\n")
 
 
 if __name__ == "__main__":
-    #config_verification()
-    kis_extractor_verification()
+    #verify_config()
+    #verify_extractor(target_provider="KIS")
+    verify_extractor(target_provider="FRED")
