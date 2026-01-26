@@ -22,6 +22,7 @@ jest.mock('../store/auth', () => ({
 	useAuthStore: jest.fn(),
 }));
 
+// 유닛 테스트 시작
 describe('useLoginLogic 유닛 테스트', () => {
 	const defaultProps = {
 		onClose: jest.fn(),
@@ -61,6 +62,7 @@ describe('useLoginLogic 유닛 테스트', () => {
 	};
 
 	describe('로그인 제출(onSubmit) 프로세스', () => {
+		// 로그인 성공
 		const setupLoginSuccess = () => {
 			mockLoginMutate.mockImplementation((_data, options) => {
 				options.onSuccess({
@@ -70,6 +72,7 @@ describe('useLoginLogic 유닛 테스트', () => {
 			});
 		};
 
+		// 로그인 에러
 		const setupLoginError = (status: number, message?: string) => {
 			mockLoginMutate.mockImplementation((_data, options) => {
 				options.onError({
@@ -124,6 +127,7 @@ describe('useLoginLogic 유닛 테스트', () => {
 		test('로그인 실패(401 Unauthorized) 시 토스트는 없고 비밀번호 필드에 에러를 표시해야 한다', async () => {
 			const { result } = renderLoginHook();
 
+			// [로그인 실패] 폼 입력
 			await act(async () => {
 				result.current.formMethods.register('password');
 				result.current.formMethods.setValue('id', 'test@test.com', {

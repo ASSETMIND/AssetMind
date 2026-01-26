@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { axiosInstance, setAccessToken } from '../../libs/axios';
 import { useAuthStore } from '../../store/auth';
 
+// 로그인 리프레시 토큰에 대한 훅
+// app.tsx에서 렌더링될때 사용
+// **추후 소셜로그인 구현 후 보강 예정**
 export function useRefresh() {
 	const [isInitialized, setIsInitialized] = useState(false);
 	const { login, logout } = useAuthStore();

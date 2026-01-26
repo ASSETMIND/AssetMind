@@ -11,6 +11,7 @@ type Props = {
 	onClose: () => void;
 };
 
+// 전체적인 로그인 비즈니스 로직에 대한 훅
 export function useLoginLogic({ onClose }: Props) {
 	const navigate = useNavigate();
 	const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -26,8 +27,10 @@ export function useLoginLogic({ onClose }: Props) {
 	});
 
 	const { handleSubmit, setError } = formMethods;
+	// 리액트쿼리 뮤테이션
 	const { mutate: loginMutate, isPending: isLoggingIn } = useLogin();
 
+	// 제출 핸들러
 	const onSubmit = handleSubmit((data) => {
 		loginMutate(
 			{ id: data.id, password: data.password },
