@@ -16,7 +16,7 @@ public enum ErrorCode {
     // User Domain 에러
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "존재하지 않는 회원입니다."),
     ALREADY_GET_USER_PERMISSION(HttpStatus.BAD_REQUEST, "U002", "이미 정식 회원입니다."),
-    USER_DUPLICATED_EMAIL(HttpStatus.BAD_REQUEST, "U003", "중복된 이메일입니다."),
+    USER_DUPLICATED_EMAIL(HttpStatus.CONFLICT, "U003", "중복된 이메일입니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "U004", "유효하지 않은 인증 코드입니다."),
 
     // Jwt 토큰 에러
