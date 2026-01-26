@@ -109,13 +109,41 @@ policy:
   # ----------------------------------------------------------------------------
   # [Group 2] FRED (Federal Reserve Economic Data) 관련 작업
   # ----------------------------------------------------------------------------
-  fred_us_gdp:
-    provider: "FRED" # FREDExtractor 사용
-    description: "미국 실질 GDP (분기별)"
+  # 2-1. 미국 국채 2년물
+  fred_us_treasury_2y:
+    provider: "FRED"
+    description: "미국 국채 금리 2년물 (일별)"
     path: "/series/observations"
     params:
-      series_id: "GDPC1"
-      frequency: "q"
+      series_id: "DGS2" # Market Yield on U.S. Treasury Securities at 2-Year Constant Maturity
+      frequency: "d" # 일별 데이터 (Daily)
+
+  # 2-2. 미국 국채 5년물
+  fred_us_treasury_5y:
+    provider: "FRED"
+    description: "미국 국채 금리 5년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS5" # Market Yield on U.S. Treasury Securities at 5-Year Constant Maturity
+      frequency: "d"
+
+  # 2-3. 미국 국채 10년물 (시장 벤치마크)
+  fred_us_treasury_10y:
+    provider: "FRED"
+    description: "미국 국채 금리 10년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS10" # Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity
+      frequency: "d"
+
+  # 2-4. 미국 국채 30년물
+  fred_us_treasury_30y:
+    provider: "FRED"
+    description: "미국 국채 금리 30년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS30" # Market Yield on U.S. Treasury Securities at 30-Year Constant Maturity
+      frequency: "d"
 
   # ----------------------------------------------------------------------------
   # [Group 3] 한국은행 (ECOS) 관련 작업
