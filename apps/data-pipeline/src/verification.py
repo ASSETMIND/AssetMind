@@ -2,6 +2,7 @@ from src.common.config import get_config
 from src.extractor.domain.interfaces import IAuthStrategy, IHttpClient
 from src.extractor.providers.kis_extractor import KISExtractor
 from src.extractor.providers.fred_extractor import FREDExtractor
+from src.extractor.providers.ecos_extractor import ECOSExtractor
 from typing import Any, Dict
 
 class MockHttpClient(IHttpClient):
@@ -111,6 +112,18 @@ def verify_extractor(target_provider: str = "KIS"):
             print(f"✅ FREDExtractor Instantiated.")
             print(f"   - Base URL: {config.fred.base_url}")
             print(f"   - API Key:  {'[PROTECTED]' if is_key_present else '[MISSING]'}")
+
+        elif target_provider == "ECOS":
+            # ECOS는 AuthStrategy 불필요 (Config 내 API Key 사용)
+            extractor = ECOSExtractor(
+                http_client=mock_http,
+                config=config
+            )
+            # ECOS Global Config Check
+            is_key_present = bool(config.ecos.api_key.get_secret_value())
+            print(f"✅ ECOSExtractor Instantiated.")
+            print(f"   - Base URL: {config.ecos.base_url}")
+            print(f"   - API Key:  {'[PROTECTED]' if is_key_present else '[MISSING]'}")
         
         else:
             print(f"❌ ERROR: Unknown provider type '{target_provider}'")
@@ -168,4 +181,5 @@ def verify_extractor(target_provider: str = "KIS"):
 if __name__ == "__main__":
     #verify_config()
     #verify_extractor(target_provider="KIS")
-    verify_extractor(target_provider="FRED")
+    #verify_extractor(target_provider="FRED")
+    verify_extractor(target_provider="ECOS")
