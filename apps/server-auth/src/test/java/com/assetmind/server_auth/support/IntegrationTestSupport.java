@@ -49,7 +49,6 @@ public abstract class IntegrationTestSupport {
     @DynamicPropertySource
     static void overrideProps(DynamicPropertyRegistry registry) {
         // PostgreSQL 설정
-        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
         registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
