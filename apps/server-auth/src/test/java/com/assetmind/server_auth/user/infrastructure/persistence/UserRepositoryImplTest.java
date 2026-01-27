@@ -222,4 +222,40 @@ class UserRepositoryImplTest {
         assertThat(resultTrue).isTrue();
         assertThat(resultFalse).isFalse();
     }
+
+    @Nested
+    @DisplayName("Email를 통해 User 조회 (findByEmail)")
+    class FindByEmail {
+        @Test
+        @DisplayName("성공: 저장된 User를 Email로 성공적으로 조회한다.")
+        void givenSavedUser_whenFindByEmail_thenReturnSavedUser() {
+            // given
+            UUID uuid = UUID.randomUUID();
+            String email = "test@test.com";
+            User testUser = createTestUser(uuid, email, "테스트001", "test1234",
+                    Provider.GOOGLE, "google-123", UserRole.USER);
+            userRepository.save(testUser);
+
+            // when
+            Optional<User> found = userRepository.findByEmail(email);
+
+            // then
+            assertThat(found).isPresent();
+            assertThat(found.get().getId()).isEqualTo(testUser.getId());
+            assertThat(found.get().getUsernameValue()).isEqualTo(testUser.getUsernameValue());
+        }
+
+        @Test
+        @DisplayName("실패: 저장된 User를 잘못된 Email로 조회하면 빈 객체를 반환한다.")
+        void givenInvalidEmail_whenFindById_thenReturnEmpty() {
+            // given
+            String invalidEmail = "invalid@test.com";
+
+            // when
+            Optional<User> found = userRepository.findByEmail(invalidEmail);
+
+            // then
+            assertThat(found).isEmpty();
+        }
+    }
 }

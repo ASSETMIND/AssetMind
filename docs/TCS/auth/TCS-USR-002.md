@@ -2,7 +2,7 @@
 
 | 문서 ID | **TCS-INFRA-USR-001**                              |
 | :--- |:---------------------------------------------------|
-| **문서 버전** | 1.1                                                |
+| **문서 버전** | 1.2                                                |
 | **프로젝트** | AssetMind                                          |
 | **작성자** | 이재석                                                |
 | **작성일** | 2026년 01월 17일                                      |
@@ -39,21 +39,24 @@
 
 ### 2.2. 조회 (Find) 검증
 
-| ID          | 테스트 메서드 / 시나리오                                                                                                 | Given (사전 조건)                    | When (수행 행동)                                             | Then (검증 결과)                                                          |
-|:------------|:---------------------------------------------------------------------------------------------------------------|:---------------------------------|:---------------------------------------------------------|:----------------------------------------------------------------------|
-| **INF-005** | `givenValidUserId_`<br>`whenFindById_thenReturnSavedUser`<br>👉 **저장된 ID(UUID)로 유저를 조회한다.**                    | **유저 저장 완료**<br>(UUID: id_A)     | **`userRepository.findById(id_A)`**                      | 1. `Optional`이 비어있지 않다(`isPresent`).<br>2. 조회된 유저의 ID 및 필드 값이 일치한다.   |
-| **INF-006** | `givenInvalidUserId_`<br>`whenFindById_thenReturnEmpty`<br>👉 **존재하지 않는 ID로 조회 시 빈 결과를 반환한다.**                 | **랜덤 UUID 생성**<br>(DB에 없음)       | **`userRepository.findById(randomId)`**                  | 1. `Optional`이 비어있다(`isEmpty`).                                       |
-| **INF-007** | `givenValidSocialId_`<br>`whenFindBySocialId_thenReturnSavedUser`<br>👉 **일치하는 소셜 정보(Provider+ID)로 유저를 조회한다.** | **유저 저장 완료**<br>(KAKAO, id_123)  | **`userRepository.findBySocialId`**<br>`(KAKAO, id_123)` | 1. `Optional`이 비어있지 않다.<br>2. 조회된 유저의 `socialID` 값이 일치한다.             |
-| **INF-008** | `givenInvalidSocialId_`<br>`whenFindBySocialId_thenReturnEmpty`<br>👉 **소셜 정보가 일치하지 않으면 빈 결과를 반환한다.**          | **유저 저장 완료**<br>(GOOGLE, id_999) | **`userRepository.findBySocialId`**<br>`(KAKAO, id_999)` | 1. `Optional`이 비어있다(`isEmpty`).<br>(Provider 불일치 케이스 등)               |
-| **INF-009** | `givenEmail_`<br>`whenExistsByEmail_thenReturnBoolean`<br>👉 **해당 이메일이 존재하는지 조회한다. 존재하면 True를, 존재하지 않으면 False를 반환한다.**                   | **유저 저장 완료 및 타겟 이메일**            | **`userRepository.existsByEamil`**<br>`(email)`          | 1. 해당 이메일이 존재하면 `True`를 반환한다. <br> 2. 해당 이메일이 존재하지 않으면 `False`를 반환한다. |
+| ID          | 테스트 메서드 / 시나리오                                                                                                            | Given (사전 조건)                    | When (수행 행동)                                             | Then (검증 결과)                                                                 |
+|:------------|:--------------------------------------------------------------------------------------------------------------------------|:---------------------------------|:---------------------------------------------------------|:-----------------------------------------------------------------------------|
+| **INF-005** | `givenValidUserId_`<br>`whenFindById_thenReturnSavedUser`<br>👉 **저장된 ID(UUID)로 유저를 조회한다.**                               | **유저 저장 완료**<br>(UUID: id_A)     | **`userRepository.findById(id_A)`**                      | 1. `Optional`이 비어있지 않다(`isPresent`).<br>2. 조회된 유저의 ID 및 필드 값이 일치한다.          |
+| **INF-006** | `givenInvalidUserId_`<br>`whenFindById_thenReturnEmpty`<br>👉 **존재하지 않는 ID로 조회 시 빈 결과를 반환한다.**                            | **랜덤 UUID 생성**<br>(DB에 없음)       | **`userRepository.findById(randomId)`**                  | 1. `Optional`이 비어있다(`isEmpty`).                                              |
+| **INF-007** | `givenValidSocialId_`<br>`whenFindBySocialId_thenReturnSavedUser`<br>👉 **일치하는 소셜 정보(Provider+ID)로 유저를 조회한다.**            | **유저 저장 완료**<br>(KAKAO, id_123)  | **`userRepository.findBySocialId`**<br>`(KAKAO, id_123)` | 1. `Optional`이 비어있지 않다.<br>2. 조회된 유저의 `socialID` 값이 일치한다.                    |
+| **INF-008** | `givenInvalidSocialId_`<br>`whenFindBySocialId_thenReturnEmpty`<br>👉 **소셜 정보가 일치하지 않으면 빈 결과를 반환한다.**                     | **유저 저장 완료**<br>(GOOGLE, id_999) | **`userRepository.findBySocialId`**<br>`(KAKAO, id_999)` | 1. `Optional`이 비어있다(`isEmpty`).<br>(Provider 불일치 케이스 등)                      |
+| **INF-009** | `givenEmail_`<br>`whenExistsByEmail_thenReturnBoolean`<br>👉 **해당 이메일이 존재하는지 조회한다. 존재하면 True를, 존재하지 않으면 False를 반환한다.**    | **유저 저장 완료 및 타겟 이메일**            | **`userRepository.existsByEamil`**<br>`(email)`          | 1. 해당 이메일이 존재하면 `True`를 반환한다. <br> 2. 해당 이메일이 존재하지 않으면 `False`를 반환한다.        |
+| **INF-009** | `givenSavedUser_`<br>`whenFindByEmail_thenReturnSavedUser`<br>👉 **저장된 User를 Email로 성공적으로 조회한다.**                         | **유저 저장 완료**                     | **`userRepository.findByEamil`**<br>`(email)`            | 1. `Optional`이 비어있지 않다(`isPresent`). <br> 2. 조회된 유저의 ID 및 필드 값이 일치한다. |
+| **INF-009** | `givenInvalidEmail_`<br>`whenFindByEmail_thenReturnEmpty`<br>👉 **저장된 User를 잘못된 Email로 조회하면 빈 객체를 반환한다.** | **유효하지 않은 이메일**                  | **`userRepository.findByEamil`**<br>`(email)`            | 1. `Optional`이 비어있다(`isEmpty`).         |
+
 
 ---
 
 ## 3. 테스트 결과 요약
 
 ### 3.1. 수행 결과
-| 구분 | 전체 케이스 | Pass  | Fail | 비고 |
-| :--- |:------:|:-----:| :---: | :--- |
-| **Save (저장)** |   4    |   4   | 0 | Nullable 처리 및 Unique 제약조건 검증 완료 |
-| **Find (조회)** |   5    |   5   | 0 | PK 및 복합 인덱스 조회 검증 완료 |
-| **합계** | **9**  | **9** | **0** | **Pass** ✅ |
+| 구분 | 전체 케이스 |  Pass  | Fail | 비고 |
+| :--- |:------:|:------:| :---: | :--- |
+| **Save (저장)** |   4    |   4    | 0 | Nullable 처리 및 Unique 제약조건 검증 완료 |
+| **Find (조회)** |   7    |   7    | 0 | PK 및 복합 인덱스 조회 검증 완료 |
+| **합계** | **11** | **11** | **0** | **Pass** ✅ |
