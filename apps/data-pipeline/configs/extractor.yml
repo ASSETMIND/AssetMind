@@ -146,10 +146,55 @@ policy:
       frequency: "d"
 
   # ----------------------------------------------------------------------------
-  # [Group 3] 한국은행 (ECOS) 관련 작업
+  # [Group 3 Extension] 한국 국채(KTB) 및 환율 데이터 (ECOS Source)
   # ----------------------------------------------------------------------------
-  ecos_base_rate:
-    provider: "ECOS" # ECOSExtractor 사용
-    description: "한국은행 기준금리 추이"
-    path: "/StatisticSearch/200Y001/D/20230101/20231231"
-    params: {}
+
+  # 3-1. 한국 국채 3년물 (KTB 3Y)
+  ecos_ktb_3y:
+    provider: "ECOS"
+    description: "국고채 3년 금리 (일별)"
+    path: "/StatisticSearch"
+    params:
+      stat_code: "817Y002"
+      item_code1: "010200000"
+      cycle: "D"
+
+  # 3-2. 한국 국채 5년물 (KTB 5Y)
+  ecos_ktb_5y:
+    provider: "ECOS"
+    description: "국고채 5년 금리 (일별)"
+    path: "/StatisticSearch"
+    params:
+      stat_code: "817Y002"
+      item_code1: "010200001" # 국고채(5년)
+      cycle: "D"
+
+  # 3-3. 한국 국채 10년물 (KTB 10Y)
+  ecos_ktb_10y:
+    provider: "ECOS"
+    description: "국고채 10년 금리 (일별)"
+    path: "/StatisticSearch"
+    params:
+      stat_code: "817Y002"
+      item_code1: "010210000"
+      cycle: "D"
+
+  # 3-4. 한국 국채 30년물 (KTB 30Y)
+  ecos_ktb_30y:
+    provider: "ECOS"
+    description: "국고채 30년 금리 (일별)"
+    path: "/StatisticSearch"
+    params:
+      stat_code: "817Y002"
+      item_code1: "010230000"
+      cycle: "D"
+
+  # 3-5. 원/달러 환율 (KRW/USD)
+  ecos_exchange_rate_usd:
+    provider: "ECOS"
+    description: "원/달러 환율 (종가, 일별)"
+    path: "/StatisticSearch"
+    params:
+      stat_code: "731Y001"
+      item_code1: "0000001"
+      cycle: "D"
