@@ -1,6 +1,10 @@
 package com.assetmind.server_auth.user.presentation;
 
 import static org.mockito.BDDMockito.*;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.*;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.*;
+import static org.springframework.restdocs.payload.PayloadDocumentation.*;
+import static org.springframework.restdocs.request.RequestDocumentation.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -15,6 +19,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -29,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @WebMvcTest(UserRegisterController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@AutoConfigureRestDocs
 class UserRegisterControllerTest {
 
     @Autowired
@@ -55,7 +61,21 @@ class UserRegisterControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").isEmpty())
-                .andExpect(jsonPath("$.data").value(false));
+                .andExpect(jsonPath("$.data").value(false))
+
+                // API 문서화 로직
+                .andDo(document("auth-check-email",
+                        preprocessRequest(prettyPrint()),
+                        preprocessResponse(prettyPrint()),
+                        queryParameters(
+                                parameterWithName("email").description("중복 확인 할 이메일")
+                        ),
+                        responseFields(
+                                fieldWithPath("success").description("API 성공 여부"),
+                                fieldWithPath("message").description("API 응답 메시지").optional(),
+                                fieldWithPath("data").description("이메일 중복 여부 (true: 중복, false: 사용 가능)")
+                        )
+                ));
 
     }
 
@@ -90,7 +110,23 @@ class UserRegisterControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("인증 코드 전송 성공"))
-                .andExpect(jsonPath("$.data").isEmpty());
+                .andExpect(jsonPath("$.data").isEmpty())
+
+                // API 문서화 로직
+                .andDo(document("auth-send-code",
+                        preprocessRequest(prettyPrint()),
+                        preprocessResponse(prettyPrint()),
+
+                        requestFields(
+                                fieldWithPath("email").description("인증 코드를 전송할 이메일")
+                        ),
+
+                        responseFields(
+                                fieldWithPath("success").description("API 성공 여부"),
+                                fieldWithPath("message").description("API 응답 메시지").optional(),
+                                fieldWithPath("data").description("데이터 없음 (null)").optional()
+                        )
+                ));
 
         verify(userRegisterUseCase).sendVerificationCode(request.email());
     }
@@ -148,7 +184,24 @@ class UserRegisterControllerTest {
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").isEmpty());
+                .andExpect(jsonPath("$.message").isEmpty())
+
+                // API 문서화 로직
+                .andDo(document("auth-verify-code",
+                        preprocessRequest(prettyPrint()),
+                        preprocessResponse(prettyPrint()),
+
+                        requestFields(
+                                fieldWithPath("email").description("유저의 이메일"),
+                                fieldWithPath("code").description("전송된 6자리 인증 코드")
+                        ),
+
+                        responseFields(
+                                fieldWithPath("success").description("API 성공 여부"),
+                                fieldWithPath("message").description("API 응답 메시지").optional(),
+                                fieldWithPath("data.sign_up_token").description("회원가입용 임시 JWT 토큰")
+                        )
+                ));
     }
 
     @Test
@@ -205,7 +258,26 @@ class UserRegisterControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").isEmpty())
-                .andExpect(jsonPath("$.data").value(willCreatedUserId.toString()));
+                .andExpect(jsonPath("$.data").value(willCreatedUserId.toString()))
+
+                // API 문서화 로직
+                .andDo(document("auth-register",
+                        preprocessRequest(prettyPrint()),
+                        preprocessResponse(prettyPrint()),
+
+                        requestFields(
+                                fieldWithPath("email").description("이메일"),
+                                fieldWithPath("password").description("비밀번호"),
+                                fieldWithPath("user_name").description("서비스에서 사용할 유저 이름"),
+                                fieldWithPath("sign_up_token").description("인증 검증 시 발급 받은 임시 토큰")
+                        ),
+
+                        responseFields(
+                                fieldWithPath("success").description("API 성공 여부"),
+                                fieldWithPath("message").description("API 응답 메시지").optional(),
+                                fieldWithPath("data").description("회원 가입 된 사용자 UUID").optional()
+                        )
+                ));
     }
 
     @Test

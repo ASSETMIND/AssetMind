@@ -1,0 +1,55 @@
+= AssetMind API 문서
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+:toc: left
+:toclevels: 2
+:sectlinks:
+
+== 회원가입 (Auth)
+
+=== 1. 이메일 중복 확인
+회원가입 전 이메일 중복 여부를 확인합니다.
+
+==== 요청 (Request)
+include::{snippets}/auth-check-email/http-request.adoc[]
+include::{snippets}/auth-check-email/query-parameters.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-check-email/http-response.adoc[]
+include::{snippets}/auth-check-email/response-fields.adoc[]
+
+
+=== 2. 인증 코드 전송
+이메일로 6자리 인증 코드를 전송합니다.
+
+==== 요청 (Request)
+include::{snippets}/auth-send-code/http-request.adoc[]
+include::{snippets}/auth-send-code/request-fields.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-send-code/http-response.adoc[]
+include::{snippets}/auth-send-code/response-fields.adoc[]
+
+=== 3. 인증 코드 검증
+유저가 입력한 인증 코드를 검증합니다.
+
+=== 요청 (Request)
+include::{snippets}/auth-verify-code/http-request.adoc[]
+include::{snippets}/auth-verify-code/request-fields.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-verify-code/http-response.adoc[]
+include::{snippets}/auth-verify-code/response-fields.adoc[]
+
+
+=== 4. 회원가입
+최종 회원가입을 요청합니다.
+
+==== 요청 (Request)
+include::{snippets}/auth-register/http-request.adoc[]
+include::{snippets}/auth-register/request-fields.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-register/http-response.adoc[]
+include::{snippets}/auth-register/response-fields.adoc[]

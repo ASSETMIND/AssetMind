@@ -6,10 +6,15 @@ plugins {
     // apply false : 해당 루트 프로젝트 자체는 Spring Boot 앱이 아니므로 apply false로 설정
     id 'org.springframework.boot' version '3.5.9' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'org.asciidoctor.jvm.convert' version '3.3.2' apply false // REST Docs용 플러그인
+    id 'jacoco' // 테스트 커버리지 체크 라이브러리
 }
 
 // 하위 모듈들에 대한 설정
 subprojects {
+    ext {
+        jacocoVersion = '0.8.14'
+    }
     // 1주차 스프린트안에 buildSrc 또는 build-logic 폴더를 생성하여 spring boot 플러그인 정의 예정
     // 우선 이름 기반 제어를 사용 (로딩 시점 문제 해결 방안을 찾는중..)
     if (it.name.startsWith('server-')) {
@@ -17,6 +22,8 @@ subprojects {
         apply plugin: 'java'
         apply plugin: 'org.springframework.boot'
         apply plugin: 'io.spring.dependency-management'
+        apply plugin: 'org.asciidoctor.jvm.convert'
+        apply plugin: 'jacoco'
 
         // 공통 정보 설정
         group = 'com.assetmind'
@@ -34,8 +41,15 @@ subprojects {
             mavenCentral()
         }
 
+        // Asciidoctor 확장 설정
+        configurations {
+            asciidoctorExt
+        }
+
         ext {
-            set('springCloudVersion', "2025.0.1")
+            // 스니펫 저장 위치 설정
+            // 스니펫: 테스트가 성공했을 때 자동으로 만들어지는 문서 조각 파일들
+            set('snippetsDir', file("build/generated-snippets"))
         }
 
 
@@ -49,10 +63,58 @@ subprojects {
             testImplementation 'org.springframework.boot:spring-boot-starter-test'
             testImplementation 'io.projectreactor:reactor-test'
             testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+            // Spring REST Docs 의존성
+            testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+            asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+        }
+
+        jacoco {
+            toolVersion = jacocoVersion
         }
 
         tasks.named('test') {
             useJUnitPlatform()
+            outputs.dir snippetsDir // 테스트가 끝난 후 스니펫을 출력할 디렉토리 지정
+            finalizedBy 'jacocoTestReport' // 테스트가 끝난 후 리프토 생성
+        }
+
+        // jacoco 테스트 리포트 상세 설정
+        tasks.named('jacocoTestReport') {
+            dependsOn tasks.named('test')
+            reports {
+                html.required = true
+            }
+
+
+            classDirectories.setFrom(files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: [
+                        "**/ServerAuthApplication.class", // 메인 클래스
+                        "**/ServerStockApplication.class",
+                        "**/config/**",                   // 설정 파일
+                        "**/dto/**",                      // DTO
+                        "**/entity/**",                   // 엔티티 (선택사항)
+                        "**/exception/**",                // 예외
+                        "**/Q*",                          // QueryDSL Q클래스
+                        "**/*Builder*"                    // 빌더 패턴
+                ])
+            }))
+
+        }
+
+        // 문서 생성 Task 설정
+        tasks.named('asciidoctor') {
+            inputs.dir snippetsDir // 스니펫 위치를 입력으로 받음
+            configurations 'asciidoctorExt'
+            dependsOn tasks.named('test') // 문서 만들기 전 테스트 실행 필수
+        }
+
+        // 생성된 문서를 정적 리소스로 복사하여 서버에서 바로 볼 수 있게 함
+        tasks.named('bootJar') {
+            dependsOn tasks.named('asciidoctor')
+            from ("${tasks.named('asciidoctor').get().outputDir}") {
+                into 'static/docs'
+            }
         }
     }
 }

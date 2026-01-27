@@ -41,4 +41,11 @@ public interface UserRepository {
      * @return true(존재 o) / false(존재 x)
      */
     boolean existsByEmail(String email);
+
+    /**
+     * User 도메인 객체를 DB에서 Email로 조회
+     * @param email - User 도메인 객체의 email
+     * @return Ussr 도메인 객체
+     */
+    Optional<User> findByEmail(String email);
 }
