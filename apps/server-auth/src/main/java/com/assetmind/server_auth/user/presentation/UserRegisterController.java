@@ -2,6 +2,7 @@ package com.assetmind.server_auth.user.presentation;
 
 import com.assetmind.server_auth.global.common.ApiResponse;
 import com.assetmind.server_auth.user.application.UserRegisterUseCase;
+import com.assetmind.server_auth.user.presentation.dto.CheckEmailDuplicateRequest;
 import com.assetmind.server_auth.user.presentation.dto.SendVerificationCodeRequest;
 import com.assetmind.server_auth.user.presentation.dto.UserRegisterRequest;
 import com.assetmind.server_auth.user.presentation.dto.VerifyCodeRequest;
@@ -11,6 +12,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,8 +28,8 @@ public class UserRegisterController {
     private final UserRegisterUseCase userRegisterUseCase;
 
     @GetMapping("/check-email")
-    public ApiResponse<Boolean> checkEmailDuplicate(@RequestParam String email) {
-        boolean isDuplicated = userRegisterUseCase.checkEmailDuplicate(email);
+    public ApiResponse<Boolean> checkEmailDuplicate(@ModelAttribute @Valid CheckEmailDuplicateRequest request) {
+        boolean isDuplicated = userRegisterUseCase.checkEmailDuplicate(request.email());
 
         return ApiResponse.success(isDuplicated);
     }

@@ -16,8 +16,8 @@ import org.springframework.stereotype.Component;
 public class UserEntityMapper {
 
     public UserEntity toEntity(User user) {
-        Provider provider = (user.getSocialID().provider() != null) ? user.getSocialID().provider() : null;
-        String socialId = (user.getSocialID().providerID() != null) ? user.getSocialID().providerID() : null;
+        Provider provider = (user.getSocialID() != null) ? user.getSocialID().provider() : null;
+        String socialId = (user.getSocialID() != null) ? user.getSocialID().providerID() : null;
 
         return new UserEntity(
                 user.getId(),
