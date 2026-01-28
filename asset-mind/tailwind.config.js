@@ -14,12 +14,7 @@ export default {
       // 2. 타이포그래피 토큰 (Desktop 기준)
       // 형식: [fontSize, { lineHeight, letterSpacing, fontWeight }]
       fontSize: {
-        // Headline (H)
-        'h1': ['48px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
-        
-        // Title (T)
-        't1': ['48px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '500' }],
-        
+
         // Body (B)
         'b1': ['16px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
         'b2': ['14px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
