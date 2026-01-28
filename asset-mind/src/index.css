@@ -41,7 +41,8 @@
   /* 배경 오버레이: 화면 전체를 덮고 내용을 중앙 정렬 */
   .modal-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center;
-    @apply bg-black/60 backdrop-blur-[2px]; /* 배경을 살짝 어둡고 흐리게 처리 */
+    /* [수정] 디자인 시스템 토큰 적용 (bg-black/60 -> bg-background-overlay) */
+    @apply bg-background-overlay backdrop-blur-[2px]; 
   }
 
   /* 모달 컨테이너: 둥근 모서리, 배경색(#1C1D21), 내부 패딩 */
@@ -68,4 +69,6 @@
   .btn-full {
     @apply w-full flex items-center justify-center rounded-lg transition-colors font-medium;
   }
+
+  
 }

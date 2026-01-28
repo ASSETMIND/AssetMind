@@ -8,34 +8,47 @@ import { Modal } from './components/common/Modal';
 import { Button } from './components/common/Button';
 import { Input } from './components/common/Input';
 
+// [추가] 만든 훅 가져오기
+import { useToast } from './context/ToastContext'; 
+
 function App() {
-  const [isModalOpen, setIsModalOpen] = useState(true); // 모달 상태 관리
+  const [isModalOpen, setIsModalOpen] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [userId, setUserId] = useState("");
+  
+  // [추가] 토스트 훅 사용
+  const { showToast } = useToast(); 
 
   const isError = userId === 'error';
 
+  // [기능 추가] 로그인 버튼 클릭 핸들러
+  const handleLogin = () => {
+    if (!userId) {
+      // 실패 케이스 (Variant: error)
+      showToast('error', '로그인에 실패했습니다.', '아이디를 입력해 주세요.');
+      return;
+    }
+    // 성공 케이스 (Variant: success)
+    showToast('success', '로그인 성공', '메인 페이지로 이동합니다.');
+  };
+
   return (
     <>
-      {/* (테스트용) 모달이 닫혔을 때 여는 버튼 */}
       {!isModalOpen && (
-        <div className="flex h-screen items-center justify-center">
+        <div className="flex h-screen items-center justify-center bg-background-primary">
           <Button onClick={() => setIsModalOpen(true)}>로그인 열기</Button>
         </div>
       )}
 
-      {/* div 래퍼 대신 Modal 컴포넌트 사용 */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)}
       >
-        {/* 1. 헤더 영역 */}
         <div className="text-center mb-10">
           <h1 className="text-h1 text-text-primary mb-2">LOGIN</h1>
           <p className="text-t1 text-text-secondary">AssetMind에 오신 것을 환영합니다.</p>
         </div>
 
-        {/* 2. 폼 영역 */}
         <div className="flex flex-col gap-6">
           <Input 
             label="아이디"
@@ -53,11 +66,19 @@ function App() {
             onIconClick={() => setShowPassword(!showPassword)}
           />
 
-          <Button fullWidth size="lg" className="mt-2 py-4">
+          {/* [수정] 기존 이상한 점선 박스 삭제함 */}
+          
+          <Button 
+            fullWidth 
+            size="lg" 
+            className="mt-2 py-4"
+            onClick={handleLogin} 
+          >
             로그인
           </Button>
 
-          <div className="flex justify-center items-center gap-4 text-l4 text-text-secondary mt-2">
+          {/* ... (소셜 로그인 등 하단 코드는 그대로 유지) ... */}
+           <div className="flex justify-center items-center gap-4 text-l4 text-text-secondary mt-2">
             <button className="hover:text-text-primary transition-colors">아이디 찾기</button>
             <span className="w-[1px] h-3 bg-border-divider"></span>
             <button className="hover:text-text-primary transition-colors">비밀번호 찾기</button>
@@ -79,6 +100,7 @@ function App() {
               <KakaoIcon className="w-10 h-10 text-social-kakao-icon" />
             </Button>
           </div>
+
         </div>
       </Modal>
     </>
