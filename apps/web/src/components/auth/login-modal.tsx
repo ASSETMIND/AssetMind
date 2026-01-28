@@ -5,10 +5,10 @@ import GoogleIcon from '../icon/google';
 import KakaoIcon from '../icon/kakao';
 import Toast from '../common/toast';
 import { useLoginLogic } from '../../hooks/auth/use-login-logic';
+import { useSocialLoginLogic } from '../../hooks/auth/use-social-login-logic';
 
 /*
   로그인 화면 UI 구성을 담당하는 view 역할의 컴포넌트
-
   실제 로직이나 라우팅은 props로 주입받은 함수에 위임
  */
 
@@ -23,7 +23,15 @@ export default function LoginModal({
 	onClickSignup,
 	onClickFindIdPw,
 }: Props) {
-	const { formMethods, state, actions } = useLoginLogic({ onClose });
+	// 자체적인 일반로그인
+	const {
+		formMethods,
+		state: loginState,
+		actions: loginActions,
+	} = useLoginLogic({ onClose });
+
+	// 소셜 로그인
+	const { state: socialState, actions: socialActions } = useSocialLoginLogic();
 
 	const {
 		register,
@@ -36,7 +44,7 @@ export default function LoginModal({
 				<h2 className='text-4xl font-bold mb-4'>LOGIN</h2>
 				<p className='mb-6'>AssetMind에 오신 것을 환영합니다.</p>
 				<form
-					onSubmit={actions.onSubmit}
+					onSubmit={loginActions.onSubmit}
 					className='w-full flex flex-col gap-6'
 				>
 					{/* 1. 아이디 입력 */}
@@ -69,9 +77,9 @@ export default function LoginModal({
 						className='mt-2'
 						size='lg'
 						type='submit'
-						disabled={state.isLoggingIn}
+						disabled={loginState.isLoggingIn || socialState.isRedirecting}
 					>
-						{state.isLoggingIn ? '로그인 중...' : '로그인'}
+						{loginState.isLoggingIn ? '로그인 중...' : '로그인'}
 					</Button>
 				</form>
 
@@ -96,20 +104,26 @@ export default function LoginModal({
 
 					{/* 소셜 아이콘 버튼들 */}
 					<div className='mt-4 flex justify-center gap-8'>
-						<button>
+						<button
+							onClick={() => socialActions.handleSocialLogin('google')}
+							className='disabled:opacity-50 transition-transform active:scale-95'
+						>
 							<GoogleIcon />
 						</button>
 
-						<button>
+						<button
+							onClick={() => socialActions.handleSocialLogin('kakao')}
+							className='disabled:opacity-50 transition-transform active:scale-95'
+						>
 							<KakaoIcon />
 						</button>
 					</div>
 				</div>
 			</div>
 
-			{state.toastMessage && (
-				<Toast onClose={() => actions.setToastMessage(null)}>
-					{state.toastMessage}
+			{loginState.toastMessage && (
+				<Toast onClose={() => loginActions.setToastMessage(null)}>
+					{loginState.toastMessage}
 				</Toast>
 			)}
 		</Modal>
