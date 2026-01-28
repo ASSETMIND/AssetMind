@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
 import com.assetmind.server_auth.global.common.JwtProcessor;
+import com.assetmind.server_auth.user.application.provider.SignUpTokenProvider;
 import com.assetmind.server_auth.user.exception.InvalidSignUpTokenException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

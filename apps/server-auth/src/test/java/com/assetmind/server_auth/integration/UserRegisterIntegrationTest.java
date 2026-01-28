@@ -1,7 +1,7 @@
 package com.assetmind.server_auth.integration;
 
 import com.assetmind.server_auth.support.IntegrationTestSupport;
-import com.assetmind.server_auth.user.application.SignUpTokenProvider;
+import com.assetmind.server_auth.user.application.provider.SignUpTokenProvider;
 import com.assetmind.server_auth.user.application.port.EmailSendPort;
 import com.assetmind.server_auth.user.domain.type.UserRole;
 import com.assetmind.server_auth.user.infrastructure.persistence.jpa.UserEntity;
