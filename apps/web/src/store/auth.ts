@@ -16,8 +16,8 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-	isLoggedIn: false,
-	user: null,
+	isLoggedIn: false, // `useRefresh` 훅에 의해 초기화 시 업데이트됩니다.
+	user: null, // `useRefresh` 훅에 의해 초기화 시 업데이트됩니다.
 
 	login: (user) => set({ isLoggedIn: true, user }),
 	logout: () => set({ isLoggedIn: false, user: null }),
