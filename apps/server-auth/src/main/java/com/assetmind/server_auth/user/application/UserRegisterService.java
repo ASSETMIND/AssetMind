@@ -42,8 +42,8 @@ public class UserRegisterService implements UserRegisterUseCase {
     // 헬퍼 클래스
     private final SignUpTokenProvider signUpTokenProvider;
 
-    // 인증 코드 유효시간 (3분)
-    private static final long VERIFICATION_CODE_TTL = 180L;
+    // 인증 코드 유효시간 (30분)
+    private static final long VERIFICATION_CODE_TTL = 30 * 60;
 
     /**
      * 이메일 중복 확인
