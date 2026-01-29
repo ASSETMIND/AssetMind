@@ -91,39 +91,46 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 
 	describe('소셜 로그인 리다이렉트 (handleSocialLogin)', () => {
 		test('Kakao provider 전달 시 Kakao 인증 URL로 이동하고 상태를 변경해야 한다', () => {
+			// Given: 훅이 렌더링된 상태
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: 'kakao' provider로 handleSocialLogin 함수를 호출
 			act(() => {
 				result.current.actions.handleSocialLogin('kakao');
 			});
 
+			// Then: isRedirecting 상태가 true가 되고, window.location.href가 카카오 인증 URL로 변경
 			expect(result.current.state.isRedirecting).toBe(true);
-			// 실제 import 대신 Mocking된 URL과 비교
 			expect(window.location.href).toBe(MOCK_KAKAO_URL);
 		});
 
 		test('Google provider 전달 시 Google 인증 URL로 이동하고 상태를 변경해야 한다', () => {
+			// Given: 훅이 렌더링된 상태
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: 'google' provider로 handleSocialLogin 함수를 호출
 			act(() => {
 				result.current.actions.handleSocialLogin('google');
 			});
 
+			// Then: isRedirecting 상태가 true가 되고, window.location.href가 구글 인증 URL로 변경
 			expect(result.current.state.isRedirecting).toBe(true);
 			expect(window.location.href).toBe(MOCK_GOOGLE_URL);
 		});
 	});
 
 	describe('소셜 로그인 콜백 처리 (handleSocialCallback)', () => {
-		test('URL에 code가 없으면 경고창을 띄우고 메인으로 이동해야 한다', () => {
+		test('URL에 code가 없으면 경고 메시지를 설정하고 메인으로 이동해야 한다', () => {
+			// Given: URL 파라미터에 'code'가 없는 상태
 			(useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams('')]);
-
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: handleSocialCallback 함수를 호출
 			act(() => {
 				result.current.actions.handleSocialCallback('kakao');
 			});
 
+			// Then: 토스트 메시지가 설정되고, 메인 페이지로 이동하며, mutate 함수는 호출되지 않음
 			expect(result.current.state.toastMessage).toBe(
 				'인증 정보를 받아오지 못했습니다. 다시 시도해주세요.',
 			);
@@ -131,34 +138,39 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			expect(mockMutate).not.toHaveBeenCalled();
 		});
 
-		test('URL에 error가 있으면 토스트 메시지를 표시하고 로그인 페이지로 이동해야 한다', () => {
+		test('URL에 error가 있으면 에러 메시지를 설정하고 메인으로 이동해야 한다', () => {
+			// Given: URL 파라미터에 'error'가 있는 상태
 			(useSearchParams as jest.Mock).mockReturnValue([
 				new URLSearchParams('error=access_denied'),
 			]);
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: handleSocialCallback 함수를 호출
 			act(() => {
 				result.current.actions.handleSocialCallback('kakao');
 			});
 
+			// Then: 토스트 메시지가 설정되고, 메인 페이지로 이동하며, mutate 함수는 호출되지 않음
 			expect(result.current.state.toastMessage).toBe(
 				'로그인 과정에서 오류가 발생했습니다. 다시 시도해주세요.',
 			);
-			expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
+			expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
 			expect(mockMutate).not.toHaveBeenCalled();
 		});
 
 		test('URL에 code가 있으면 mutation을 실행해야 한다', () => {
+			// Given: URL 파라미터에 'code'가 있는 상태
 			(useSearchParams as jest.Mock).mockReturnValue([
 				new URLSearchParams('code=test-auth-code'),
 			]);
-
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: handleSocialCallback 함수를 호출
 			act(() => {
 				result.current.actions.handleSocialCallback('kakao');
 			});
 
+			// Then: mutate 함수가 올바른 provider와 code로 호출됨
 			expect(mockMutate).toHaveBeenCalledWith({
 				provider: 'kakao',
 				code: 'test-auth-code',
@@ -168,44 +180,56 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 
 	describe('로그인 API 응답 처리 (Mutation Callbacks)', () => {
 		beforeEach(() => {
+			// Given: 훅이 렌더링되어 mutation 콜백이 설정된 상태
 			renderHook(() => useSocialLoginLogic());
 		});
 
 		test('로그인 성공(onSuccess) 시 토큰 저장, 스토어 업데이트, 페이지 이동이 수행되어야 한다', () => {
+			// Given: API 성공 응답 데이터
 			const mockResponse = {
 				accessToken: 'new-access-token',
 				user: { id: 1, email: 'social@test.com' },
 			};
 
+			// When: mutation의 onSuccess 콜백이 호출될 때
 			act(() => {
 				mutationOptions.onSuccess(mockResponse);
 			});
 
+			// Then: 토큰이 저장되고, 로그인 상태가 업데이트되며, 메인 페이지로 이동
 			expect(setAccessToken).toHaveBeenCalledWith('new-access-token');
 			expect(mockLoginAction).toHaveBeenCalledWith(mockResponse.user);
 			expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
 		});
 
 		test('로그인 성공 시 accessToken이 응답에 없으면 토큰 저장을 건너뛰어야 한다', () => {
-			const mockResponse = { user: { id: 1, email: 'social@test.com' } };
+			// Given: accessToken이 없는 API 성공 응답 데이터
+			const mockResponse = {
+				user: { id: 1, email: 'social@test.com' },
+			};
 
+			// When: mutation의 onSuccess 콜백이 호출될 때
 			act(() => {
 				mutationOptions.onSuccess(mockResponse);
 			});
 
+			// Then: 토큰 저장은 호출되지 않고, 로그인 상태 업데이트와 페이지 이동은 수행됨
 			expect(setAccessToken).not.toHaveBeenCalled();
 			expect(mockLoginAction).toHaveBeenCalledWith(mockResponse.user);
 			expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
 		});
 
 		test('로그인 실패(onError) 시 에러 로그, 토스트 메시지, 페이지 이동이 수행되어야 한다', () => {
+			// Given: API 실패를 나타내는 에러 객체
 			const mockError = new Error('API Error');
 			const { result } = renderHook(() => useSocialLoginLogic());
 
+			// When: mutation의 onError 콜백이 호출될 때
 			act(() => {
 				mutationOptions.onError(mockError);
 			});
 
+			// Then: 에러가 콘솔에 기록되고, 토스트 메시지가 설정되며, 메인 페이지로 이동
 			expect(console.error).toHaveBeenCalledWith(
 				'소셜 로그인 실패:',
 				mockError,
@@ -213,7 +237,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			expect(result.current.state.toastMessage).toBe(
 				'로그인에 실패했습니다. 다시 시도해주세요.',
 			);
-			expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
+			expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
 		});
 	});
 });

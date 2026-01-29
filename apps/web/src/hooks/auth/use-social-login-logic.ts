@@ -5,6 +5,7 @@ import { KAKAO_AUTH_URL, GOOGLE_AUTH_URL } from '../../libs/constants/auth';
 import { useAuthStore } from '../../store/auth';
 import { setAccessToken } from '../../libs/axios';
 import { socialLogin } from '../../api/auth';
+import type { AuthResponse } from '../../types/auth';
 
 export type SocialProvider = 'kakao' | 'google';
 
@@ -31,12 +32,13 @@ export function useSocialLoginLogic() {
 
 	const { mutate: processLogin, isPending: isProcessing } = useMutation({
 		mutationFn: ({
+			// AuthResponse를 반환하도록 타입 명시
 			provider,
 			code,
 		}: {
 			provider: SocialProvider;
 			code: string;
-		}) => socialLogin(provider, code),
+		}) => socialLogin(provider, code) as Promise<AuthResponse>,
 		onSuccess: (response) => {
 			// 토큰 저장 및 로그인 처리
 			if (response.accessToken) {
