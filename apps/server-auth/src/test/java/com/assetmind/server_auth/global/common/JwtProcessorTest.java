@@ -3,6 +3,7 @@ package com.assetmind.server_auth.global.common;
 import static org.assertj.core.api.Assertions.*;
 
 import com.assetmind.server_auth.global.config.JwtProperties;
+import com.assetmind.server_auth.global.util.JwtProcessor;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.security.SignatureException;

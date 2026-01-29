@@ -1,6 +1,6 @@
 package com.assetmind.server_auth.user.application.provider;
 
-import com.assetmind.server_auth.global.common.JwtProcessor;
+import com.assetmind.server_auth.global.util.JwtProcessor;
 import com.assetmind.server_auth.user.exception.InvalidSignUpTokenException;
 import io.jsonwebtoken.Claims;
 import java.util.Map;
