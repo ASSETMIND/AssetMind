@@ -42,3 +42,5 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET_KEY}
+  cookie:
+    secure: false # HTTPS 설정
