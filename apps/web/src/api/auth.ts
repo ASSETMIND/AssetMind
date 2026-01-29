@@ -38,3 +38,19 @@ export async function login(data: LoginParams): Promise<LoginResponse> {
 	);
 	return response;
 }
+
+// 소셜 로그인 api 함수
+//  google | kakako
+export const socialLogin = async (provider: string, code: string) => {
+	// 백엔드 API 명세에 따라 url과 body는 달라질 수 있음
+	const { data } = await axiosInstance.post(`/auth/login/${provider}`, {
+		code,
+	});
+	return data;
+};
+
+// 토큰 갱신 API 함수
+export const refreshToken = async (): Promise<LoginResponse> => {
+	const { data } = await axiosInstance.post<LoginResponse>('/auth/refresh');
+	return data;
+};
