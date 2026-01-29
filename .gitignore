@@ -74,3 +74,16 @@ dist-ssr/
 *.sln
 *.sw?
 .vscode/
+
+### Java & Gradle Ignore Rule ###
+.gradle/
+build/
+out/
+bin/
+*.class
+
+### DB & Local Config ###
+db/
+*.db
+*.sqlite
+*.log
