@@ -23,11 +23,8 @@ export const Button = ({
   const baseStyles = "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50";
   
   const variants = {
-    // [복구] 사용자님 기존 커스텀 클래스 적용
     primary: "bg-button-large-primary text-button-large-label hover:bg-button-large-primaryHover",
     secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
-    
-    // 소셜 버튼 배경색
     kakao: "bg-social-kakao-bg hover:opacity-90",
     google: "bg-social-google-bg border border-border-inputNormal hover:bg-gray-50",
   };
@@ -35,8 +32,8 @@ export const Button = ({
   const sizes = {
     sm: "h-9 px-3 text-xs",
     md: "h-[52px] px-6 text-base",
-    lg: "h-14 px-8 text-lg",
-    // [복구] 아이콘이 w-10까지 커질 수 있도록 패딩 제거 및 flex 정렬만 유지
+    // [수정] h-14(56px) -> h-[54px] (사용자 명세 반영)
+    lg: "h-[54px] px-8 text-[16px]", // 폰트 크기도 text-lg 대신 b1(16px) 등 명세에 맞게 조정 필요시 수정
     icon: "w-12 h-12 rounded-full flex items-center justify-center p-0",
   };
 
