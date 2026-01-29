@@ -1,4 +1,4 @@
-package com.assetmind.server_auth.user.application;
+package com.assetmind.server_auth.user.application.provider;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
