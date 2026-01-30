@@ -1,40 +1,50 @@
 import { useState } from 'react';
 import { LoginModal } from './components/auth/LoginModal';
+import { SignUpModal } from './components/auth/SignUpModal'; // 방금 만든 파일
 import { Button } from './components/common/Button';
 import { useToast } from './context/ToastContext';
 
+// 화면 상태 타입 정의
+type AuthView = 'none' | 'login' | 'signup';
+
 function App() {
-  const [isModalOpen, setIsModalOpen] = useState(true);
-  
-  // 1. Hook 가져오기
+  const [currentView, setCurrentView] = useState<AuthView>('login'); // 기본값: 로그인 모달
   const { showToast } = useToast();
 
   const handleLogin = (id: string, pw: string) => {
-    // 2. [로그인 실패 시나리오 예시]
-    // 아이디에 'fail'이라고 입력하면 '로그인 실패' 토스트를 띄웁니다.
     if (id === 'fail') {
-      // [핵심 변경점] 이제 'LOGIN_FAIL'만 넣으면, 아까 설정한 문구가 자동으로 뜹니다.
       showToast('LOGIN_FAIL');
       return;
     }
-
-    // 3. 성공 시 처리 (모달 닫기 등)
     console.log('로그인 성공:', id);
-    setIsModalOpen(false);
+    setCurrentView('none'); // 성공 시 모달 닫기
   };
 
   return (
     <>
-      <div className="flex h-screen items-center justify-center bg-background-primary">
-        {!isModalOpen && (
-          <Button onClick={() => setIsModalOpen(true)}>로그인 모달 열기</Button>
+      <div className="flex h-screen items-center justify-center bg-background-primary gap-4">
+        {/* 모달이 닫혀있을 때 여는 버튼들 */}
+        {currentView === 'none' && (
+          <>
+            <Button onClick={() => setCurrentView('login')}>로그인 모달 열기</Button>
+            <Button variant="secondary" onClick={() => setCurrentView('signup')}>회원가입 모달 열기</Button>
+          </>
         )}
       </div>
 
+      {/* 1. 로그인 모달 */}
       <LoginModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        isOpen={currentView === 'login'} 
+        onClose={() => setCurrentView('none')} 
         onLogin={handleLogin}
+        // 로그인 모달 안에 "회원가입" 버튼이 있다면 이 함수를 연결해줘야 함 (필요 시 LoginModal 수정)
+      />
+
+      {/* 2. 회원가입 모달 */}
+      <SignUpModal 
+        isOpen={currentView === 'signup'}
+        onClose={() => setCurrentView('none')}
+        onSwitchToLogin={() => setCurrentView('login')} // '로그인' 텍스트 클릭 시 전환
       />
     </>
   );

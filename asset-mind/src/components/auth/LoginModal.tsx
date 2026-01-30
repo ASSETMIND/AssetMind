@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Modal } from '../common/Modal';
-import { Input } from '../common/Input';
-import { Button } from '../common/Button';
-import { EyeIcon } from '../icons/EyeIcon';
-import { GoogleIcon } from '../icons/GoogleIcon';
-import { KakaoIcon } from '../icons/KakaoIcon';
+import { useState } from "react";
+import { X } from "lucide-react";
+import { Button } from "../common/Button";
+import { Input } from "../common/Input";
+import { EyeIcon } from "../icons/EyeIcon";
+import { GoogleIcon } from "../icons/GoogleIcon";
+import { KakaoIcon } from "../icons/KakaoIcon";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -13,89 +13,88 @@ interface LoginModalProps {
 }
 
 export const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
-  const [userId, setUserId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
 
-  // 에러 상태 시뮬레이션
-  const isIdError = userId === 'error'; 
+  if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      {/* 1. Header Section */}
-      <div className="text-center mb-10">
-        {/* [복구] text-h1 클래스 원복 (index.css에 정의된 크기 적용) */}
-        <h1 className="text-h1 text-text-primary mb-2">LOGIN</h1>
-        <p className="text-t1 text-text-secondary">
-          AssetMind에 오신 것을 환영합니다.
-        </p>
-      </div>
-
-      {/* 2. Input Form Section */}
-      <div className="flex flex-col gap-6">
-        <Input
-          label="아이디"
-          placeholder="아이디를 입력해 주세요."
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-          error={isIdError ? "존재하지 않는 아이디 입니다." : undefined}
-        />
-
-        <Input
-          label="비밀번호"
-          type={showPassword ? "text" : "password"}
-          placeholder="비밀번호를 입력해 주세요."
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          icon={<EyeIcon isOpen={showPassword} className="w-5 h-5" />}
-          onIconClick={() => setShowPassword(!showPassword)}
-        />
-
-        {/* 3. Main Action Button */}
-        <Button
-          fullWidth
-          size="lg"
-          className="mt-4" 
-          onClick={() => onLogin(userId, password)}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background-overlay backdrop-blur-[2px]">
+      {/* [수정] rounded-[24px] -> rounded-[40px] */}
+      <div className="relative w-[480px] bg-[#1C1D21] rounded-[40px] px-[40px] py-[50px] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        
+        <button 
+          onClick={onClose} 
+          className="absolute top-6 right-6 text-text-secondary hover:text-white transition-colors"
         >
-          로그인
-        </Button>
+          <X size={24} />
+        </button>
 
-        {/* 4. Footer Links */}
-        <div className="flex justify-center items-center gap-4 mt-1">
-          <FooterLink>아이디 찾기</FooterLink>
-          <div className="w-[1px] h-3 bg-border-divider" />
-          <FooterLink>비밀번호 찾기</FooterLink>
-          <div className="w-[1px] h-3 bg-border-divider" />
-          <FooterLink>회원가입</FooterLink>
+        <div className="text-center mb-[40px]">
+          <h2 className="text-h1 text-text-primary mb-2">LOGIN</h2>
+          <p className="text-t1 text-text-primary">
+            AssetMind에 오신 것을 환영합니다.
+          </p>
         </div>
 
-        {/* 5. Social Login Divider */}
-        <div className="relative flex items-center justify-center mt-6 mb-2">
-          <div className="absolute w-full h-[1px] bg-border-divider" />
-          <span className="relative px-4 bg-background-surface text-l4 text-text-secondary">
-            or continue with
-          </span>
-        </div>
+        <div className="flex flex-col gap-5">
+          <Input 
+            label="아이디"
+            placeholder="아이디를 입력해 주세요."
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+          />
 
-        {/* 6. Social Buttons */}
-        <div className="flex justify-center gap-4">
-          <Button variant="google" size="icon">
-            {/* [복구] 아이콘 크기 w-10 h-10 원복 (App.tsx 원본 참조) */}
-            <GoogleIcon className="w-10 h-10" />
+          <Input 
+            label="비밀번호"
+            type={showPw ? "text" : "password"}
+            placeholder="비밀번호를 입력해 주세요."
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            icon={<EyeIcon isOpen={showPw} className="w-6 h-6" />}
+            onIconClick={() => setShowPw(!showPw)}
+          />
+
+          <Button 
+            variant="primary" 
+            size="lg" 
+            fullWidth 
+            className="mt-4"
+            onClick={() => onLogin(id, pw)}
+          >
+            로그인
           </Button>
-          <Button variant="kakao" size="icon">
-             {/* [복구] 아이콘 크기 w-10 h-10 원복 */}
-            <KakaoIcon className="w-10 h-10 text-social-kakao-icon" />
-          </Button>
+
+          <div className="flex items-center justify-center gap-4 text-[13px] text-text-secondary">
+            <button className="hover:text-text-primary">아이디 찾기</button>
+            <div className="w-[1px] h-[12px] bg-border-divider"></div>
+            <button className="hover:text-text-primary">비밀번호 찾기</button>
+            <div className="w-[1px] h-[12px] bg-border-divider"></div>
+            <button className="hover:text-text-primary">회원가입</button>
+          </div>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border-divider"></div>
+            </div>
+            <div className="relative flex justify-center text-[14px] text-text-secondary">
+              <span className="bg-[#1C1D21] px-2">
+                or continue with
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-row items-center justify-center gap-4">
+            <Button variant="google" size="icon" className="w-14 h-14 p-0">
+              <GoogleIcon className="w-15 h-15" />
+            </Button>
+            <Button variant="kakao" size="icon" className="w-14 h-14 p-0">
+              <KakaoIcon className="w-15 h-15" />
+            </Button>
+          </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };
-
-const FooterLink = ({ children }: { children: React.ReactNode }) => (
-  <button className="text-l4 text-text-secondary hover:text-text-primary transition-colors">
-    {children}
-  </button>
-);
