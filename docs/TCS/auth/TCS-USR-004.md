@@ -1,28 +1,30 @@
-# [TCS] 회원가입 컨트롤러 단위 테스트 명세서
+# [TCS] 회원가입 및 인증 컨트롤러 단위 테스트 명세서
 
-| 문서 ID | **TCS-USR-004**          |
-| :--- |:-------------------------|
-| **문서 버전** | 1.0                      |
-| **프로젝트** | AssetMind                |
-| **작성자** | 이재석                      |
-| **작성일** | 2026년 01월 25일            |
-| **대상 모듈** | `UserRegisterController` |
+| 문서 ID | **TCS-USR-004**                               |
+| :--- |:----------------------------------------------|
+| **문서 버전** | 1.1                                           |
+| **프로젝트** | AssetMind                                     |
+| **작성자** | 이재석                                           |
+| **작성일** | 2026년 01월 25일                                 |
+| **대상 모듈** | `UserRegisterController`, `UserAuthController` |
 
 ## 1. 개요 (Overview)
 
-본 문서는 클라이언트의 HTTP 요청을 처리하는 **Web Adapter 계층(`UserRegisterController`)**을 검증하기 위한 단위 테스트 명세이다.
-`@WebMvcTest`를 사용하여 컨트롤러를 슬라이스 테스트하며, **Request DTO 유효성 검증(@Valid)**, **Service 호출 여부**, **GlobalExceptionHandler를 통한 공통 응답 포맷(ApiResponse)을** 중점적으로 확인한다.
+본 문서는 클라이언트의 HTTP 요청을 처리하는 **Web Adapter 계층(`UserRegisterController`, `UserAuthController`)을** 검증하기 위한 단위 테스트 명세이다.
+`@WebMvcTest`를 사용하여 컨트롤러를 슬라이스 테스트하며, **Request DTO 유효성 검증(@Valid)**, **Service 호출 여부**, **GlobalExceptionHandler를 통한 공통 응답 포맷(ApiResponse)을**, **Cookie 처리** 중점적으로 확인한다.
 
 ### 1.1. 테스트 환경
 - **Framework:** JUnit 5, Mockito (`@MockitoBean`), MockMvc
-- **Test Class:** `UserRegisterControllerTest`
-- **Configuration:** `@AutoConfigureMockMvc(addFilters = false)` (Security Filter 비활성화)
+- **Test Class:** `UserRegisterControllerTest`, `UserAuthControllerTest`
+- **Configuration:** `@AutoConfigureMockMvc(addFilters = false)` (Security Filter 비활성화, 필요한 경우 `with(csrf())`, `with(authentication())` 사용)
 - **Mock Objects:**
     - `UserRegisterUseCase`: 비즈니스 로직(Service) 모의
+    - `UserAuthUseCase`: 로그인/로그아웃/재발급 비즈니스 로직 모의
+    - `CookieUtils`: 쿠키 생성 로직 모의
 
 ---
 
-## 2. 테스트 케이스 상세 (Test Cases)
+## 2. 회원가입 컨트롤러 테스트 (`UserRegisterController`)
 
 ### 2.1. 이메일 중복 체크 (Check Email Duplicate)
 **Endpoint:** `GET /api/auth/check-email`
@@ -62,9 +64,40 @@
 
 ---
 
-## 3. 종합 결과
+## 3. 인증 컨트롤러 테스트 (`UserAuthController`)
 
-| 항목 | 전체 케이스 | Pass | Fail | 비고 |
-| :--- | :---: | :---: | :---: | :--- |
-| **Controller Logic** | 12 | 12 | 0 | Validation 및 ExceptionHandler 검증 완료 |
-| **합계** | **12** | **12** | **0** | **Pass** ✅ |
+### 3.1. 로그인 (Login)
+**Endpoint:** `POST /api/auth/login`
+
+| ID | 시나리오 | Given (사전 조건) | When (실행) | Then (기대 결과) |
+| :--- | :--- | :--- | :--- | :--- |
+| **WEB-AUTH-001** | **로그인 성공**<br>(토큰 발급) | 1. Service가 `TokenSetDto` 반환<br>2. `CookieUtils`가 Refresh Cookie 생성 | `POST /login` 호출<br>(body: validLoginReq) | 1. HTTP 상태 코드 **200 OK**<br>2. Body `data.access_token` 존재<br>3. Header `Set-Cookie`에 `refresh_token` 포함 |
+| **WEB-AUTH-002** | **로그인 실패**<br>(입력값 검증 오류) | (Mocking 불필요) | `POST /login` 호출<br>(body: invalidEmail or invalidPw) | 1. HTTP 상태 코드 **400 Bad Request**<br>2. `message`에 유효성 검증 실패 사유 포함 (형식 오류 등) |
+| **WEB-AUTH-003** | **로그인 실패**<br>(존재하지 않는 유저) | Service가 `AuthException` (`USER_NOT_FOUND`) 발생 | `POST /login` 호출<br>(body: notFoundEmail) | 1. HTTP 상태 코드 **404 Not Found**<br>2. `message`에 "유저를 찾을 수 없음" 포함 |
+| **WEB-AUTH-004** | **로그인 실패**<br>(비밀번호 불일치) | Service가 `AuthException` (`INCORRECT_PASSWORD`) 발생 | `POST /login` 호출<br>(body: wrongPassword) | 1. HTTP 상태 코드 **401 Unauthorized**<br>2. `message`에 "비밀번호 불일치" 포함 |
+
+### 3.2. 로그아웃 (Logout)
+**Endpoint:** `POST /api/auth/logout`
+
+| ID | 시나리오 | Given (사전 조건) | When (실행) | Then (기대 결과) |
+| :--- | :--- | :--- | :--- | :--- |
+| **WEB-AUTH-005** | **로그아웃 성공**<br>(쿠키 삭제) | 1. `CookieUtils`가 삭제용 쿠키(Max-Age=0) 생성<br>2. Security Context에 인증 정보 존재 | `POST /logout` 호출 | 1. HTTP 상태 코드 **200 OK**<br>2. Header `Set-Cookie`에 `Max-Age=0` 확인<br>3. Service `logout(userId)` 호출 확인 |
+
+### 3.3. 토큰 재발급 (Reissue)
+**Endpoint:** `POST /api/auth/reissue`
+
+| ID | 시나리오 | Given (사전 조건) | When (실행) | Then (기대 결과) |
+| :--- | :--- | :--- | :--- | :--- |
+| **WEB-AUTH-006** | **재발급 성공**<br>(쿠키 갱신) | 1. Request 쿠키에 유효한 Token 존재<br>2. Service가 새 `TokenSetDto` 반환 | `POST /reissue` 호출<br>(Cookie: refresh_token) | 1. HTTP 상태 코드 **200 OK**<br>2. Body `data.access_token` 갱신 확인<br>3. Header `Set-Cookie`에 새 토큰 값 확인 |
+| **WEB-AUTH-007** | **재발급 실패**<br>(쿠키 누락) | Request에 쿠키 없음 | `POST /reissue` 호출 | 1. HTTP 상태 코드 **401 Unauthorized**<br>2. `message`에 "필수 쿠키 누락" 포함<br>(`@CookieValue` 검증) |
+| **WEB-AUTH-008** | **재발급 실패**<br>(토큰 만료/유효성 X) | Service가 `AuthException` (`INVALID_TOKEN`) 발생 | `POST /reissue` 호출<br>(Cookie: invalidToken) | 1. HTTP 상태 코드 **401 Unauthorized**<br>2. `message`에 "유효하지 않은 토큰" 포함 |
+
+---
+
+## 4. 종합 결과
+
+| 항목                         | 전체 케이스 |  Pass  | Fail | 비고 |
+|:---------------------------|:------:|:------:| :---: | :--- |
+| **UserRegisterController** |   12   |   12   | 0 | Validation 및 ExceptionHandler 검증 완료 |
+| **UserAuthController**     |   8    |   8    | 0 | 로그인/로그아웃/재발급 흐름 검증 완료 |
+| **합계**                     | **20** | **20** | **0** | **Pass** ✅ |
