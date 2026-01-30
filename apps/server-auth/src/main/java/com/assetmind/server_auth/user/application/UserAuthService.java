@@ -79,7 +79,7 @@ public class UserAuthService implements UserAuthUseCase {
         TokenSetDto tokenSet = authTokenProvider.createTokenSet(userId, user.getUserRole());
 
         // refreshToken 저장소에 다시 저장 (덮어쓰기)
-        refreshTokenPort.save(userId, user.getUserRole().toString(), tokenSet.refreshTokenExpire() / 1000);
+        refreshTokenPort.save(userId, tokenSet.refreshToken(), tokenSet.refreshTokenExpire() / 1000);
 
         return tokenSet;
     }

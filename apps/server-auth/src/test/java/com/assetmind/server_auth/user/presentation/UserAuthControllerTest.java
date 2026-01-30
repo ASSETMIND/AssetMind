@@ -1,10 +1,6 @@
 package com.assetmind.server_auth.user.presentation;
 
 import static org.mockito.BDDMockito.*;
-import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.*;
-import static org.springframework.restdocs.operation.preprocess.Preprocessors.*;
-import static org.springframework.restdocs.payload.PayloadDocumentation.*;
-import static org.springframework.restdocs.request.RequestDocumentation.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -20,12 +16,12 @@ import com.assetmind.server_auth.user.application.dto.UserLoginCommand;
 import com.assetmind.server_auth.user.exception.AuthException;
 import com.assetmind.server_auth.user.presentation.dto.LoginRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -202,5 +198,76 @@ class UserAuthControllerTest {
 
         // 서비스 로그아웃 호출 확인
         then(authUseCase).should().logout(eq(userId));
+    }
+
+    @Test
+    @DisplayName("성공: [POST] 유효한 Refresh Token 쿠키로 재발급 요청 시, 새 토큰을 발급하고 쿠키를 갱신한다.")
+    void givenValidRefreshTokenCookie_whenReissue_thenRespondNewTokenSet200() throws Exception {
+        // given
+        String oldRefreshToken = "old-refresh-token";
+        String newAccessToken = "new-access-token";
+        String newRefreshToken = "new-refresh-token";
+
+        TokenSetDto newTokenSet = new TokenSetDto(newAccessToken, newRefreshToken, 10000L);
+
+        // 1. Mocking: 서비스 로직
+        given(authUseCase.reissueToken(eq(oldRefreshToken))).willReturn(newTokenSet);
+
+        // 2. Mocking: 응답용 새 쿠키 생성
+        ResponseCookie newCookie = ResponseCookie.from("refresh_token", newRefreshToken)
+                .httpOnly(true)
+                .path("/")
+                .maxAge(10)
+                .build();
+        given(cookieUtils.createRefreshTokenCookie(eq(newRefreshToken), eq(10L))).willReturn(newCookie);
+
+        // when & then
+        mockMvc.perform(post("/api/auth/reissue")
+                        .with(csrf())
+                        .cookie(new Cookie("refresh_token", oldRefreshToken)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").isEmpty())
+                .andExpect(jsonPath("$.data.access_token").value(newAccessToken))
+                .andExpect(header().exists("Set-Cookie"))
+                .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("refresh_token=" + newRefreshToken)));
+    }
+
+    @Test
+    @DisplayName("실패: [POST] 요청에 Refresh Token 쿠키가 없다면 401 Unauthorized 응답한다.")
+    void givenNoRefreshTokenCookie_whenReissue_thenRespond401() throws Exception {
+        // given
+        // 쿠키를 넣지 않고 요청
+
+        // when & then
+        mockMvc.perform(post("/api/auth/reissue")
+                        .with(csrf()))
+                .andDo(print())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("필수 쿠키가 누락되었습니다."))
+                .andExpect(jsonPath("$.data").isEmpty())
+                .andExpect(status().isUnauthorized()); // @CookieValue(required=true)에 의해 401 발생
+    }
+
+    @Test
+    @DisplayName("실패: [POST] 만료되거나 유효하지 않은 Refresh Token으로 요청 시 401 응답한다.")
+    void givenInvalidRefreshToken_whenReissue_thenRespond401() throws Exception {
+        // given
+        String invalidToken = "invalid-token";
+
+        // Mocking: 서비스에서 예외 발생
+        given(authUseCase.reissueToken(eq(invalidToken)))
+                .willThrow(new AuthException(ErrorCode.INVALID_TOKEN));
+
+        // when & then
+        mockMvc.perform(post("/api/auth/reissue")
+                        .with(csrf())
+                        .cookie(new jakarta.servlet.http.Cookie("refresh_token", invalidToken)))
+                .andDo(print())
+                .andExpect(status().isUnauthorized()) // 401
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(ErrorCode.INVALID_TOKEN.getMessage()))
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 }

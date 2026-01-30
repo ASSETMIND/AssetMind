@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * UserAuthService 단위 테스트
  * 로그인 로직 확인
  * 로그아웃 로직 확인
+ * 토큰 재발급 로직 확인
  */
 @ExtendWith(MockitoExtension.class)
 class UserAuthServiceTest {
@@ -129,5 +130,99 @@ class UserAuthServiceTest {
 
         // then
         then(refreshTokenPort).should().delete(USER_ID);
+    }
+
+    @Test
+    @DisplayName("성공: 유효한 리프레시 토큰으로 재발급 요청 시, 토큰을 갱신하고 Redis를 업데이트한다.")
+    void givenValidRefreshToken_whenReissueRefreshToken_thenReturnNewTokenSet() {
+        // given
+        String requestRefreshToken = "valid-old-refresh-token";
+
+        // 새로 발급될 토큰 정보
+        String newAccessToken = "new-access-token";
+        String newRefreshToken = "new-refresh-token";
+        TokenSetDto newTokenSet = new TokenSetDto(newAccessToken, newRefreshToken, 10000L);
+
+        // 토큰 자체 유효성 검증 (Provider)
+        willDoNothing().given(authTokenProvider).validateToken(requestRefreshToken);
+
+        // 토큰에서 사용자 ID 및 Role 추출
+        given(authTokenProvider.getUserIdFromToken(requestRefreshToken)).willReturn(USER_ID);
+
+        // 유저 정보 최신화
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+        // Redis에 저장된 토큰 조회 및 일치 확인
+        given(refreshTokenPort.getRefreshToken(USER_ID)).willReturn(requestRefreshToken);
+
+        given(user.getUserRole()).willReturn(UserRole.GUEST);
+
+        // 새 토큰 생성
+        given(authTokenProvider.createTokenSet(USER_ID, UserRole.GUEST)).willReturn(newTokenSet);
+
+        // when
+        TokenSetDto result = authService.reissueToken(requestRefreshToken);
+
+        // then
+        assertThat(result).isEqualTo(newTokenSet);
+
+        // 검증: Redis에 새로운 리프레시 토큰이 저장되었는지 (RTR: Refresh Token Rotation)
+        then(refreshTokenPort).should().save(eq(USER_ID), eq(newRefreshToken), eq(10L));
+    }
+
+    @Test
+    @DisplayName("실패: 요청한 리프레시 토큰이 유효하지 않은 형식(혹은 만료)이라면 예외를 발생시킨다.")
+    void givenInvalidRefreshTokenFormat_whenReissueRefreshToken_thenThrowException() {
+        // given
+        String invalidToken = "invalid-format-token";
+
+        // Provider 검증 실패
+        willThrow(new AuthException(ErrorCode.INVALID_TOKEN))
+                .given(authTokenProvider).validateToken(invalidToken);
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissueToken(invalidToken))
+                .isInstanceOf(AuthException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TOKEN);
+
+        // Redis 조회나 저장 로직이 동작하지 않음을 검증
+        then(refreshTokenPort).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("실패: Redis에 저장된 리프레시 토큰이 없다면(만료됨/로그아웃됨) 예외를 발생시킨다.")
+    void givenRefreshTokenNotFoundInRedis_whenReissueRefreshToken_thenThrowException() {
+        // given
+        String requestRefreshToken = "valid-format-but-not-in-redis";
+
+        willDoNothing().given(authTokenProvider).validateToken(requestRefreshToken);
+        given(authTokenProvider.getUserIdFromToken(requestRefreshToken)).willReturn(USER_ID);
+
+        // Redis 조회 결과 없음 (TTL 만료 등)
+        given(refreshTokenPort.getRefreshToken(USER_ID)).willReturn(isNull());
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissueToken(requestRefreshToken))
+                .isInstanceOf(AuthException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    @DisplayName("실패: 요청한 토큰과 Redis에 저장된 토큰이 일치하지 않는다면 예외를 발생시킨다.")
+    void givenTokenMismatch_whenReissueRefreshToken_thenThrowException() {
+        // given
+        String requestRefreshToken = "request-refresh-token";
+        String storedRefreshToken = "latest-valid-refresh-token";
+
+        willDoNothing().given(authTokenProvider).validateToken(requestRefreshToken);
+        given(authTokenProvider.getUserIdFromToken(requestRefreshToken)).willReturn(USER_ID);
+
+        // Redis에는 다른 토큰이 저장되어 있음 (이미 다른 기기에서 갱신했거나 공격 시도) requestRefreshToken != storedRefreshToken
+        given(refreshTokenPort.getRefreshToken(USER_ID)).willReturn(storedRefreshToken);
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissueToken(requestRefreshToken))
+                .isInstanceOf(AuthException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TOKEN); // 혹은 TOKEN_MISMATCH
     }
 }
