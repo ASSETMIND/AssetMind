@@ -1,6 +1,7 @@
 package com.assetmind.server_auth.global.error;
 
 import com.assetmind.server_auth.global.common.ApiResponse;
+import com.assetmind.server_auth.user.exception.AuthException;
 import com.assetmind.server_auth.user.exception.InvalidSignUpTokenException;
 import com.assetmind.server_auth.user.exception.InvalidVerificationCode;
 import com.assetmind.server_auth.user.exception.UserDuplicatedEmail;
@@ -74,6 +75,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.fail("유효하지 않거나 만료된 가입 토큰입니다."));
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthException(AuthException e) {
+        log.error("Auth Exception: {}", e.getMessage());
+
+        ErrorCode errorCode = e.getErrorCode();
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ApiResponse.fail(e.getMessage()));
     }
 
     /**
