@@ -7,11 +7,10 @@ const meta: Meta<typeof Input> = {
   component: Input,
   parameters: {
     layout: 'centered',
-    backgrounds: { default: 'surface' },
-    controls: { disable: true },
-    actions: { disable: true },
+    backgrounds: { default: 'surface' }, // 원본 설정 유지
+    // [수정] 속성 탭(Controls)을 사용하기 위해 disable 옵션 제거
   },
-  // 인풋도 451px 너비 기준
+  // [원본 유지] 인풋 너비 451px 기준
   decorators: [
     (Story) => (
       <div style={{ width: '451px' }}>
@@ -19,35 +18,105 @@ const meta: Meta<typeof Input> = {
       </div>
     ),
   ],
+  // [추가] 속성 탭에서 에러/상태를 조작할 수 있도록 설정
+  argTypes: {
+    state: {
+      description: '인풋 상태 (default / error / success)',
+      control: 'radio',
+      options: ['default', 'error', 'success'],
+    },
+    error: {
+      description: '에러 메시지 (state가 error일 때 표시됨)',
+      control: 'text',
+    },
+    value: { control: 'text' },
+    placeholder: { control: 'text' },
+    disabled: { control: 'boolean' },
+  },
 };
 
 export default meta;
 type Story = StoryObj<typeof Input>;
 
-// 1. 기본 상태
-export const Default: Story = {
+// =============================================================================
+// 1. 로그인 (Login) UI
+// =============================================================================
+
+export const Login_ID: Story = {
+  name: '로그인 - 아이디',
   args: {
     label: '아이디',
     placeholder: '아이디를 입력해 주세요.',
+    state: 'default',
+    value: '',
   },
 };
 
-// 2. 에러 상태
-export const With_Error: Story = {
-  args: {
-    label: '아이디',
-    value: 'wrong_id',
-    error: '존재하지 않는 아이디 입니다.',
-    placeholder: '아이디를 입력해 주세요.',
-  },
-};
-
-// 3. 비밀번호
-export const Password: Story = {
+export const Login_Password: Story = {
+  name: '로그인 - 비밀번호',
   args: {
     label: '비밀번호',
     type: 'password',
     placeholder: '비밀번호를 입력해 주세요.',
+    icon: <EyeIcon isOpen={false} className="w-5 h-5" />, // 원본 아이콘 사이즈 유지
+  },
+};
+
+// =============================================================================
+// 2. 회원가입 (Sign Up) UI
+// =============================================================================
+
+export const Signup_ID: Story = {
+  name: '회원가입 - 아이디',
+  args: {
+    label: '아이디',
+    placeholder: '영문 소문자, 숫자 포함 4~20자',
+    // 회원가입용 보라색 버튼 (중복 확인)
+    rightSection: (
+      <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[100px] h-[38px] flex items-center justify-center transition-colors">
+        중복 확인
+      </button>
+    ),
+    rightSectionWidth: 'pr-[115px]',
+  },
+};
+
+export const Signup_Password: Story = {
+  name: '회원가입 - 비밀번호',
+  args: {
+    label: '비밀번호',
+    type: 'password',
+    placeholder: '영문, 숫자, 특수문자 포함 8자 이상',
     icon: <EyeIcon isOpen={false} className="w-5 h-5" />,
+  },
+};
+
+export const Signup_Phone: Story = {
+  name: '회원가입 - 휴대폰번호',
+  args: {
+    label: '휴대폰 번호',
+    placeholder: '010-0000-0000',
+    // 회원가입용 보라색 버튼 (인증번호 전송 - 너비 김)
+    rightSection: (
+      <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[121px] h-[38px] flex items-center justify-center transition-colors">
+        인증번호 전송
+      </button>
+    ),
+    rightSectionWidth: 'pr-[136px]',
+  },
+};
+
+export const Signup_AuthCode: Story = {
+  name: '회원가입 - 인증번호 입력',
+  args: {
+    // 라벨 없음
+    placeholder: '인증번호 입력',
+    // 회원가입용 보라색 버튼 (인증 확인)
+    rightSection: (
+      <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[100px] h-[38px] flex items-center justify-center transition-colors">
+        인증 확인
+      </button>
+    ),
+    rightSectionWidth: 'pr-[115px]',
   },
 };
