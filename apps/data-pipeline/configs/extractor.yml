@@ -198,3 +198,24 @@ policy:
       stat_code: "731Y001"
       item_code1: "0000001"
       cycle: "D"
+
+  # ----------------------------------------------------------------------------
+  # [Group 4 Extension] 업비트 (Upbit) 암호화폐 데이터
+  # ----------------------------------------------------------------------------
+  # 4-1. 비트코인 (BTC) 일봉 - KRW 마켓
+  upbit_btc_daily:
+    provider: "UPBIT"
+    description: "비트코인(BTC) 일봉 (KRW 마켓)"
+    path: "/v1/candles/days"
+    params:
+      market: "KRW-BTC"
+      count: 200 # 1회 요청 시 최대 반환 개수 (API 제한)
+
+  # 4-2. 이더리움 (ETH) 일봉 - KRW 마켓
+  upbit_eth_daily:
+    provider: "UPBIT"
+    description: "이더리움(ETH) 일봉 (KRW 마켓)"
+    path: "/v1/candles/days"
+    params:
+      market: "KRW-ETH"
+      count: 200

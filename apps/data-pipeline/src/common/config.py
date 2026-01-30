@@ -69,6 +69,16 @@ class ECOSSettings(BaseSettings):
         extra="ignore"
     )
 
+class UPBITSettings(BaseSettings):
+    """업비트(UPBIT) API 전용 설정 모델."""
+    api_key: SecretStr = Field(alias="UPBIT_API_KEY")
+    base_url: str = Field(alias="UPBIT_BASE_URL")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8", 
+        extra="ignore"
+    )
+
 # ==============================================================================
 # 2. 정책(Job) 검증 모델 (Validation Model)
 # ==============================================================================
@@ -81,7 +91,7 @@ class JobPolicy(BaseModel):
         path (str): API 경로.
         params (Dict): 요청 파라미터.
     """
-    provider: Literal["KIS", "FRED", "ECOS"]
+    provider: Literal["KIS", "FRED", "ECOS", "UPBIT"]
     description: str
     path: str
     
@@ -101,6 +111,7 @@ class AppConfig(BaseSettings):
         kis (KISSettings): KIS 관련 설정 그룹.
         fred (FREDSettings): FRED 관련 설정 그룹.
         ecos (ECOSSettings): ECOS 관련 설정 그룹.
+        upbit (UPBITSettings): UPBIT 관련 설정 그룹.
         extraction_policy (Dict[str, JobPolicy]): 검증된 수집 정책 목록.
     """
     task_name: str = "default_task"
@@ -109,6 +120,7 @@ class AppConfig(BaseSettings):
     kis: KISSettings = Field(default_factory=KISSettings)
     fred: FREDSettings = Field(default_factory=FREDSettings)
     ecos: ECOSSettings = Field(default_factory=ECOSSettings)
+    upbit: UPBITSettings = Field(default_factory=UPBITSettings)
 
     # YAML에서 로드된 정책 (Job ID -> Policy Model)
     extraction_policy: Dict[str, JobPolicy] = Field(default_factory=dict)
