@@ -35,10 +35,12 @@ export function useLoginLogic({ onClose }: Props) {
 		loginMutate(
 			{ id: data.id, password: data.password },
 			{
-				onSuccess: (response: any) => {
+				onSuccess: (response) => {
+					// response 타입은 AuthResponse (LoginResponse)
 					if (response.accessToken) {
 						setAccessToken(response.accessToken);
 					}
+					// Refresh Token은 백엔드에서 HttpOnly 쿠키로 설정하므로 클라이언트에서 처리하지 않음
 					login(response.user || { id: 0, email: data.id });
 
 					// [성공 메시지]

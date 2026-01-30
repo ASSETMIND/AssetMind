@@ -133,8 +133,8 @@ const socialLoginResolver: HttpResponseResolver = async ({
 // 토큰 갱신 Resolver
 const refreshTokenResolver: HttpResponseResolver = async () => {
 	console.log('[MSW] 토큰 갱신 요청 받음');
-	// 실제 백엔드에서는 리프레시 토큰을 사용하여 새 액세스 토큰을 발급합니다.
-	// 여기서는 간단히 새로운 가짜 액세스 토큰과 사용자 정보를 반환합니다.
+	// 실제 백엔드에서는 리프레시 토큰을 사용하여 새 액세스 토큰을 발급
+	// 여기서는 간단히 새로운 가짜 액세스 토큰과 사용자 정보를 반환
 	return HttpResponse.json(
 		{
 			accessToken: 'mock-new-access-token-' + Date.now(), // 매번 다른 토큰 반환
@@ -146,6 +146,14 @@ const refreshTokenResolver: HttpResponseResolver = async () => {
 		},
 		{ status: 200 },
 	);
+};
+
+// 로그아웃 Resolver
+const logoutResolver: HttpResponseResolver = async () => {
+	console.log('[MSW] 로그아웃 요청 받음');
+	// 클라이언트에서 토큰을 삭제하는 것이 주 목적이므로,
+	// 서버에서는 성공 응답만 보내주면 됨
+	return HttpResponse.json({ message: '로그아웃 성공' }, { status: 200 });
 };
 
 /*
@@ -173,4 +181,7 @@ export const handlers = [
 
 	// 토큰 갱신 (POST)
 	http.post('*/auth/refresh', refreshTokenResolver),
+
+	// 로그아웃 (POST)
+	http.post('*/auth/logout', logoutResolver),
 ];
