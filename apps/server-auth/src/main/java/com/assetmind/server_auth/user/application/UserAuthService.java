@@ -8,6 +8,7 @@ import com.assetmind.server_auth.user.application.port.RefreshTokenPort;
 import com.assetmind.server_auth.user.application.port.UserRepository;
 import com.assetmind.server_auth.user.application.provider.AuthTokenProvider;
 import com.assetmind.server_auth.user.domain.User;
+import com.assetmind.server_auth.user.domain.type.UserRole;
 import com.assetmind.server_auth.user.exception.AuthException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -53,5 +54,33 @@ public class UserAuthService implements UserAuthUseCase {
     @Transactional
     public void logout(UUID userId) {
         refreshTokenPort.delete(userId);
+    }
+
+    @Override
+    public TokenSetDto reissueToken(String refreshToken) {
+        // 토큰 유효성 검증
+        authTokenProvider.validateToken(refreshToken);
+
+        // 토큰에서 유저 정보 추출 (userId)
+        UUID userId = authTokenProvider.getUserIdFromToken(refreshToken);
+
+        String storedRefreshToken = refreshTokenPort.getRefreshToken(userId);
+        // 저장소에 토큰이 없거나 요청한 토큰과 다른 토큰이라면 제거
+        if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
+            refreshTokenPort.delete(userId);
+            throw new AuthException(ErrorCode.INVALID_TOKEN);
+        }
+
+        // role이 변경되었을 수도 있으니, 유저 정보 최신화
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AuthException(ErrorCode.USER_NOT_FOUND));
+
+        // 새 토큰 발급
+        TokenSetDto tokenSet = authTokenProvider.createTokenSet(userId, user.getUserRole());
+
+        // refreshToken 저장소에 다시 저장 (덮어쓰기)
+        refreshTokenPort.save(userId, tokenSet.refreshToken(), tokenSet.refreshTokenExpire() / 1000);
+
+        return tokenSet;
     }
 }

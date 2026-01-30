@@ -18,7 +18,7 @@ public enum ErrorCode {
     ALREADY_GET_USER_PERMISSION(HttpStatus.BAD_REQUEST, "U002", "이미 정식 회원입니다."),
     USER_DUPLICATED_EMAIL(HttpStatus.CONFLICT, "U003", "중복된 이메일입니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "U004", "유효하지 않은 인증 코드입니다."),
-    INCORRECT_PASSWORD(HttpStatus.BAD_REQUEST, "U005", "비밀번호가 맞지 않습니다."),
+    INCORRECT_PASSWORD(HttpStatus.UNAUTHORIZED, "U005", "비밀번호가 맞지 않습니다."),
 
     // Jwt 토큰 에러
     INVALID_SIGN_UP_TOKEN(HttpStatus.BAD_REQUEST, "T001", "유효하지 않거나 용도가 잘못된 회원가입 토큰입니다."),

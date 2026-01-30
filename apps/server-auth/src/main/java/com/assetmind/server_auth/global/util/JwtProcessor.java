@@ -1,13 +1,11 @@
-package com.assetmind.server_auth.global.common;
+package com.assetmind.server_auth.global.util;
 
 import com.assetmind.server_auth.global.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.Jwts.SIG;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.util.Date;
 import java.util.Map;
 import javax.crypto.SecretKey;

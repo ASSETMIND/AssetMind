@@ -3,7 +3,7 @@ package com.assetmind.server_auth.user.application.provider;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
-import com.assetmind.server_auth.global.common.JwtProcessor;
+import com.assetmind.server_auth.global.util.JwtProcessor;
 import com.assetmind.server_auth.global.error.ErrorCode;
 import com.assetmind.server_auth.user.application.dto.TokenSetDto;
 import com.assetmind.server_auth.user.domain.type.UserRole;
@@ -11,7 +11,6 @@ import com.assetmind.server_auth.user.exception.AuthException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.security.SignatureException;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
