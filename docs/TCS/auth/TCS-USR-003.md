@@ -2,7 +2,7 @@
 
 | 문서 ID | **TCS-USR-003**                          |
 | :--- |:-----------------------------------------|
-| **문서 버전** | 1.1                                      |
+| **문서 버전** | 1.2                                      |
 | **프로젝트** | AssetMind                                |
 | **작성자** | 이재석                                      |
 | **작성일** | 2026년 01월 22일                            |
@@ -77,6 +77,14 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **SVC-AUTH-004** | **로그아웃 성공**<br>(Redis 토큰 삭제) | (별도 사전 조건 없음) | `logout(userId)` 호출 | 1. `refreshTokenPort.delete(userId)`가 1회 호출된다.<br>2. 이를 통해 해당 유저의 리프레시 토큰이 영구 삭제된다. |
 
+### 3.3. 토큰 재발급 (Reissue)
+
+| ID | 시나리오 | Given (사전 조건) | When (실행) | Then (기대 결과) |
+| :--- | :--- | :--- | :--- | :--- |
+| **SVC-AUTH-005** | **재발급 성공**<br>(유효 토큰 + Redis 일치) | 1. `validateToken`: 통과<br>2. `refreshTokenPort.get`: 요청 토큰과 일치<br>3. `userRepository`: 유저 조회 & Role 정보 존재 | `reissueToken(token)` 호출 | 1. 새로운 Access/Refresh Token Set이 반환된다.<br>2. **RTR(Rotation)**을 위해 `refreshTokenPort.save()`가 호출되어 토큰이 교체된다. |
+| **SVC-AUTH-006** | **재발급 실패**<br>(형식 오류/만료) | 1. `validateToken`: **예외 발생** (유효하지 않음) | `reissueToken(token)` 호출 | 1. **`AuthException`** (`INVALID_TOKEN`) 발생.<br>2. Redis 조회 및 저장 로직은 실행되지 않는다. |
+| **SVC-AUTH-007** | **재발급 실패**<br>(Redis 불일치/없음) | 1. `validateToken`: 통과<br>2. `refreshTokenPort.get`: `Empty` or 불일치 | `reissueToken(token)` 호출 | 1. **`AuthException`** (`REFRESH_TOKEN_EXPIRED`) 발생.<br>2. 토큰 탈취 가능성을 고려하여 재발급이 거부된다. |
+
 ---
 
 ## 4. 종합 결과
@@ -84,5 +92,5 @@
 | 항목 | 전체 케이스 |  Pass  | Fail | 비고                       |
 | :--- |:------:|:------:| :---: |:-------------------------|
 | **Service Logic** |   9    |   9    | 0 | Happy/Unhappy Path 검증 완료 |
-| **Auth Service** |   4    |   4    | 0 | 로그인/로그아웃 로직 검증 완료        |
-| **합계** | **13** | **13** | **0** | **Pass** ✅               |
+| **Auth Service** |   7    |   7    | 0 | 로그인/로그아웃/토큰 재발급 로직 검증 완료 |
+| **합계** | **16** | **16** | **0** | **Pass** ✅               |
