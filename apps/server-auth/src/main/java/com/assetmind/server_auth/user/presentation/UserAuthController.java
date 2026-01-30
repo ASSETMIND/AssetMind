@@ -5,7 +5,7 @@ import com.assetmind.server_auth.global.util.CookieUtils;
 import com.assetmind.server_auth.user.application.UserAuthUseCase;
 import com.assetmind.server_auth.user.application.dto.TokenSetDto;
 import com.assetmind.server_auth.user.presentation.dto.LoginRequest;
-import com.assetmind.server_auth.user.presentation.dto.LoginResponse;
+import com.assetmind.server_auth.user.presentation.dto.TokenResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,7 +36,7 @@ public class UserAuthController {
      * POST /api/auth/login
      */
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@RequestBody @Valid LoginRequest request, HttpServletResponse response) {
+    public ApiResponse<TokenResponse> login(@RequestBody @Valid LoginRequest request, HttpServletResponse response) {
         TokenSetDto tokenSet = userAuthUseCase.login(request.toCommand());
 
         // 쿠키 생성
@@ -45,7 +46,7 @@ public class UserAuthController {
         // 응답 헤더에 쿠키 추가
         response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
 
-        return ApiResponse.success(new LoginResponse(tokenSet.accessToken()));
+        return ApiResponse.success(new TokenResponse(tokenSet.accessToken()));
     }
 
     /**
@@ -61,5 +62,25 @@ public class UserAuthController {
         response.addHeader(HttpHeaders.SET_COOKIE, deletedCookie.toString());
 
         return ApiResponse.success("로그아웃 성공");
+    }
+
+    /**
+     * 토큰 재발급 API
+     * @CookieValue를 통해서 Cookie에 있는 값을 입력받음
+     * null이면 스프링에서 자체적으로 예외를 던짐
+     */
+    @PostMapping("/reissue")
+    public ApiResponse<TokenResponse> reissueRefreshToken(
+            @CookieValue(name = "refresh_token") String refreshToken,
+            HttpServletResponse response
+    ) {
+        TokenSetDto tokenSet = userAuthUseCase.reissueToken(refreshToken);
+
+        ResponseCookie refreshTokenCookie = cookieUtils.createRefreshTokenCookie(
+                tokenSet.refreshToken(), tokenSet.refreshTokenExpire() / 1000);
+
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
+
+        return ApiResponse.success(new TokenResponse(tokenSet.accessToken()));
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestCookieException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -71,7 +72,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(InvalidSignUpTokenException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidSignUpToken(InvalidSignUpTokenException e) {
-        log.error("Invalid SignUp Token: {}", e.getMessage());
+        log.warn("Invalid SignUp Token: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.fail("유효하지 않거나 만료된 가입 토큰입니다."));
@@ -79,7 +80,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthException(AuthException e) {
-        log.error("Auth Exception: {}", e.getMessage());
+        log.warn("Auth Exception: {}", e.getMessage());
 
         ErrorCode errorCode = e.getErrorCode();
 
@@ -111,6 +112,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.fail("요청하신 URL을 찾을 수 없습니다."));
+    }
+
+    @ExceptionHandler(MissingRequestCookieException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingRequestCookie(MissingRequestCookieException e) {
+        log.warn("Missing Request Cookie: {}", e.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail("필수 쿠키가 누락되었습니다."));
     }
 
     /**
