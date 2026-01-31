@@ -1,0 +1,28 @@
+# ==============================================================================
+# Decorator Demo Configuration
+# 데코레이터(Logging, Retry) 기능 검증을 위한 전용 설정 및 테스트 데이터입니다.
+# ==============================================================================
+
+# [System Settings]
+task_name: "decorator_demo"
+log_level: "DEBUG"
+log_dir: "logs/decorator_test" # 별도 폴더에 로그 저장
+
+# [Test Scenarios]
+# 파이썬 코드(examples/decorator_demo.py)에서 이 데이터를 읽어 동작을 제어합니다.
+experiments:
+  # Case 1: 동기 함수 재시도 및 복구 테스트
+  sync_retry:
+    fail_threshold: 3 # 3번 실패 후 성공 (Retry=3 설정 시 성공해야 함)
+    input_payload: "Sync_Data"
+
+  # Case 2: 비동기 함수 재시도 초과(실패) 테스트
+  async_exhaust:
+    trigger_timeout: true # 타임아웃 강제 유발
+    input_payload: "Async_Data"
+
+  # Case 3: 민감 정보 마스킹 테스트
+  security_masking:
+    username: "test_admin"
+    password: "super_secret_password_123!" # 로그에서 ***** 로 보여야 함
+    token: "eyJhbGciOiJIUzI1NiJ9..." # 로그에서 ***** 로 보여야 함
