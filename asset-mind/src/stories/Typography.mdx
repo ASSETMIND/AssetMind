@@ -4,62 +4,111 @@ export const meta = {
 
 # Typography
 
-**Font Family:** Pretendard, Pretendard Variable, sans-serif
+**Font Family:** Pretendard, Pretendard Variable, sans-serif  
 
-## Headings & Body
+---
 
-tailwind.config.js에 정의된 텍스트 스타일입니다.
+## Headline (H)
 
-<br/>
-
-## Label (L) - Medium (500)
-
-강조된 라벨이나 버튼 텍스트에 사용합니다.
+페이지에서 가장 중요한 단 하나의 주제에 사용되는 최상위 텍스트입니다.
 
 <table>
   <thead>
     <tr>
       <th>Class</th>
+      <th>Device</th>
       <th>Size</th>
       <th>Weight</th>
       <th>Line Height</th>
+      <th>Letter Spacing</th>
       <th>Usage</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code>.text-l1</code></td>
-      <td>18px</td>
+      <td><code>.text-h1</code></td>
+      <td>Desktop</td>
+      <td>48px</td>
       <td>500</td>
-      <td>150%</td>
-      <td>큰 라벨</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>메인 화면 타이틀</td>
     </tr>
     <tr>
-      <td><code>.text-l3</code></td>
-      <td>14px</td>
+      <td><code>.text-h1-t</code></td>
+      <td>Tablet</td>
+      <td>32px</td>
       <td>500</td>
-      <td>150%</td>
-      <td>중간 라벨</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>태블릿 메인 타이틀</td>
+    </tr>
+    <tr>
+      <td><code>.text-h1-m</code></td>
+      <td>Mobile</td>
+      <td>24px</td>
+      <td>500</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>모바일 메인 타이틀</td>
     </tr>
   </tbody>
 </table>
 
-### 예시
+---
 
-<div style={{ fontFamily: 'Pretendard, sans-serif', marginTop: '24px', marginBottom: '24px', padding: '20px', backgroundColor: '#0F1014', borderRadius: '8px', border: '1px solid #2D2E33' }}>
-  <div style={{ fontSize: '18px', fontWeight: 500, marginBottom: '16px', lineHeight: '150%', color: 'white' }}>
-    AssetMind Typography System (L1 - 18px Medium)
-  </div>
-  <div style={{ fontSize: '14px', fontWeight: 500, lineHeight: '150%', color: 'white' }}>
-    AssetMind Typography System (L3 - 14px Medium)
-  </div>
-</div>
+## Title (T)
 
-<br/>
+섹션 구분용 중간 타이틀입니다.
 
-## Body (B) & Label (L) - Regular (400)
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Device</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.text-t1</code></td>
+      <td>Desktop</td>
+      <td>20px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>섹션 제목</td>
+    </tr>
+    <tr>
+      <td><code>.text-t1-t</code></td>
+      <td>Tablet</td>
+      <td>16px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>태블릿 섹션 제목</td>
+    </tr>
+    <tr>
+      <td><code>.text-t1-m</code></td>
+      <td>Mobile</td>
+      <td>14px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>모바일 섹션 제목</td>
+    </tr>
+  </tbody>
+</table>
 
-본문 및 일반적인 정보 전달에 사용합니다.
+---
+
+## Body (B)
+
+본문 텍스트용입니다.
 
 <table>
   <thead>
@@ -68,6 +117,7 @@ tailwind.config.js에 정의된 텍스트 스타일입니다.
       <th>Size</th>
       <th>Weight</th>
       <th>Line Height</th>
+      <th>Letter Spacing</th>
       <th>Usage</th>
     </tr>
   </thead>
@@ -77,90 +127,80 @@ tailwind.config.js에 정의된 텍스트 스타일입니다.
       <td>16px</td>
       <td>400</td>
       <td>150%</td>
-      <td>본문 텍스트</td>
+      <td>0%</td>
+      <td>일반 본문</td>
     </tr>
     <tr>
       <td><code>.text-b2</code></td>
       <td>14px</td>
       <td>400</td>
       <td>150%</td>
+      <td>0%</td>
       <td>작은 본문</td>
-    </tr>
-    <tr>
-      <td><code>.text-l2</code></td>
-      <td>16px</td>
-      <td>400</td>
-      <td>150%</td>
-      <td>일반 라벨</td>
-    </tr>
-    <tr>
-      <td><code>.text-l4</code></td>
-      <td>12px</td>
-      <td>400</td>
-      <td>150%</td>
-      <td>작은 보조 텍스트</td>
     </tr>
   </tbody>
 </table>
 
-### 예시
+---
 
-<div style={{ fontFamily: 'Pretendard, sans-serif', marginTop: '24px', marginBottom: '24px', padding: '20px', backgroundColor: '#0F1014', borderRadius: '8px', border: '1px solid #2D2E33' }}>
-  <div style={{ fontSize: '16px', fontWeight: 400, marginBottom: '16px', lineHeight: '150%', color: 'white' }}>
-    자산을 관리하는 가장 스마트한 방법 (B1, L2 - 16px Regular)
-  </div>
-  <div style={{ fontSize: '14px', fontWeight: 400, marginBottom: '16px', lineHeight: '150%', color: 'white' }}>
-    자산을 관리하는 가장 스마트한 방법 (B2 - 14px Regular)
-  </div>
-  <div style={{ fontSize: '12px', fontWeight: 400, lineHeight: '150%', color: 'white' }}>
-    자산을 관리하는 가장 스마트한 방법 (L4 - 12px Regular)
-  </div>
-</div>
+## Label (L)
 
-<br/>
-
-## 사용 예시
-
-```tsx
-// Tailwind 클래스 사용
-<h1 className="text-l1">큰 제목</h1>
-<p className="text-b1">본문 텍스트입니다.</p>
-<span className="text-l4">작은 보조 텍스트</span>
-```
-
-<br/>
-
-## Color Tokens
-
-타이포그래피와 함께 사용되는 색상 토큰입니다.
+UI 요소 내 텍스트입니다.
 
 <table>
   <thead>
     <tr>
-      <th>Token</th>
+      <th>Class</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
       <th>Usage</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code>text-text-primary</code></td>
-      <td>기본 텍스트 (흰색)</td>
+      <td><code>.text-l1</code></td>
+      <td>18px</td>
+      <td>500</td>
+      <td>100%</td>
+      <td>5%</td>
+      <td>메인 버튼</td>
     </tr>
     <tr>
-      <td><code>text-text-secondary</code></td>
-      <td>보조 텍스트 (회색)</td>
+      <td><code>.text-l2</code></td>
+      <td>16px</td>
+      <td>400</td>
+      <td>130%</td>
+      <td>0%</td>
+      <td>입력 필드 라벨</td>
     </tr>
     <tr>
-      <td><code>text-text-placeholder</code></td>
-      <td>placeholder 텍스트</td>
+      <td><code>.text-l3</code></td>
+      <td>14px</td>
+      <td>500</td>
+      <td>100%</td>
+      <td>5%</td>
+      <td>작은 버튼</td>
     </tr>
     <tr>
-      <td><code>text-text-error</code></td>
-      <td>에러 메시지</td>
-    </tr>
-    <tr>
-      <td><code>text-text-success</code></td>
-      <td>성공 메시지</td>
+      <td><code>.text-l4</code></td>
+      <td>14px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>보조 텍스트</td>
     </tr>
   </tbody>
 </table>
+
+---
+
+## Usage Example
+
+```tsx
+<h1 className="text-h1">AssetMind</h1>
+<h2 className="text-t1">Dashboard</h2>
+<p className="text-b1">자산을 관리하는 가장 스마트한 방법</p>
+<button className="text-l1">로그인</button>
+<span className="text-l4">보조 설명</span>
