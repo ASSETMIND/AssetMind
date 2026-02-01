@@ -1,7 +1,3 @@
-// 임시로 api 주소를 만들고 생성해서 각각 201요청과 200요청을 받게 만듦
-// json-server로 테스트 완료
-// 최상위 폴더의 db.json, routes.json 파일에 목업서버 정의 > 테스트 진행
-
 import { axiosInstance } from '../libs/axios';
 import type { LoginParams, LoginResponse, SignupParams } from '../types/auth';
 
@@ -38,3 +34,28 @@ export async function login(data: LoginParams): Promise<LoginResponse> {
 	);
 	return response;
 }
+
+// 소셜 로그인 api 함수
+//  google | kakako
+export const socialLogin = async (provider: string, code: string) => {
+	// 백엔드 API 명세에 따라 url과 body는 달라질 수 있음
+	const { data } = await axiosInstance.post(`/auth/login/${provider}`, {
+		code,
+	});
+	return data;
+};
+
+// 토큰 갱신 API 함수 (AuthResponse 반환)
+export const refreshToken = async (): Promise<LoginResponse> => {
+	// LoginResponse가 AuthResponse를 확장하도록 변경됨
+	const { data } = await axiosInstance.post<LoginResponse>('/auth/refresh'); // Refresh Token은 인터셉터에서 처리
+	return data;
+};
+
+// 로그아웃 API 함수 (서버에 Refresh Token 무효화 요청)
+export const logout = async (): Promise<void> => {
+	// 클라이언트가 가지고 있는 리프레시 토큰을 서버에 보내 무효화하도록 요청합니다.
+	// 리프레시 토큰은 HttpOnly Cookie로 관리되는 경우 서버가 자동으로 파싱합니다.
+	// 그렇지 않은 경우, 요청 바디나 헤더에 명시적으로 포함해야 합니다.
+	await axiosInstance.post('/auth/logout');
+};

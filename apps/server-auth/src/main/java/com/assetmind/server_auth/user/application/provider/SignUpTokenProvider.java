@@ -1,12 +1,16 @@
-package com.assetmind.server_auth.user.application;
+package com.assetmind.server_auth.user.application.provider;
 
-import com.assetmind.server_auth.global.common.JwtProcessor;
+import com.assetmind.server_auth.global.util.JwtProcessor;
 import com.assetmind.server_auth.user.exception.InvalidSignUpTokenException;
 import io.jsonwebtoken.Claims;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * 회원가입 도중 이메일 인증에 성공을 증명하는
+ * 회원가입용 임시 토큰 발행 헬퍼 클래스
+ */
 @Component
 @RequiredArgsConstructor
 public class SignUpTokenProvider {

@@ -1,82 +1,70 @@
-import axios, {
-	AxiosError,
-	type AxiosResponse,
-	type InternalAxiosRequestConfig,
-} from 'axios';
+import axios from 'axios';
 
-/*
-  [토큰 관리 전략]
-  Access Token 이 파일 내부 변수(accessToken)에 저장 (메모리)
-  Refresh Token 브라우저 쿠키(httpOnly)에 저장 (자동 전송됨)
-*/
+const ACCESS_TOKEN_KEY = 'accessToken';
 
-const BASE_URL = 'http://localhost:4000';
+export const getAccessToken = (): string | null => {
+	return localStorage.getItem(ACCESS_TOKEN_KEY);
+};
 
-//  Axios 인스턴스 생성
+export const setAccessToken = (token: string | null) => {
+	// Access Token은 Authorization 헤더에 항상 포함
+	if (token) {
+		localStorage.setItem(ACCESS_TOKEN_KEY, token);
+		axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+	} else {
+		localStorage.removeItem(ACCESS_TOKEN_KEY);
+		delete axiosInstance.defaults.headers.common['Authorization'];
+	}
+};
+
+// Access Token과 Refresh Token 모두 제거하는 함수
+export const removeAuthTokens = () => {
+	localStorage.removeItem(ACCESS_TOKEN_KEY);
+	delete axiosInstance.defaults.headers.common['Authorization'];
+	// HttpOnly 쿠키로 관리되는 Refresh Token은 서버 측 로그아웃 엔드포인트 호출을 통해 제거
+};
+
 export const axiosInstance = axios.create({
-	baseURL: BASE_URL,
-	headers: { 'Content-Type': 'application/json' },
-	withCredentials: true, // 쿠키 자동 전송 설정
+	baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+	headers: {
+		'Content-Type': 'application/json',
+	},
+	withCredentials: true, // CORS 요청 시 쿠키를 주고받기 위해 필요 (HttpOnly Cookie 사용 시)
 });
 
-// Access Token을 저장할 변수 (메모리)
-let accessToken: string | null = null;
+// 요청 인터셉터: Access Token을 Authorization 헤더에 추가
+axiosInstance.interceptors.request.use((config) => {
+	const token = getAccessToken();
+	if (token) {
+		config.headers.Authorization = `Bearer ${token}`;
+	}
+	return config;
+});
 
-// 외부(로그인 로직 등)에서 토큰을 설정하는 함수
-export const setAccessToken = (token: string | null) => {
-	accessToken = token;
-};
-
-// 로그아웃 함수
-export const removeAccessToken = () => {
-	accessToken = null;
-};
-
-// [요청 인터셉터] 모든 요청 헤더에 Access Token 주입
-axiosInstance.interceptors.request.use(
-	(config: InternalAxiosRequestConfig) => {
-		if (accessToken && config.headers) {
-			config.headers.Authorization = `Bearer ${accessToken}`;
-		}
-		return config;
-	},
-	(error) => Promise.reject(error),
-);
-
-// [응답 인터셉터] 401 에러(토큰 만료) 처리
+// 응답 인터셉터: 401 에러 발생 시 토큰 갱신 시도
 axiosInstance.interceptors.response.use(
-	(response: AxiosResponse) => response,
-	async (error: AxiosError) => {
-		const originalRequest = error.config as InternalAxiosRequestConfig & {
-			_retry?: boolean;
-		};
-
-		// 401 에러이고, 아직 재시도를 안 했다면
+	(response) => response,
+	async (error) => {
+		const originalRequest = error.config;
+		// 401 에러이고, 이전에 재시도하지 않은 요청인 경우
 		if (error.response?.status === 401 && !originalRequest._retry) {
-			originalRequest._retry = true; // 재시도 플래그 설정 (무한 루프 방지)
+			originalRequest._retry = true; // 재시도 플래그 설정
 
 			try {
-				// 토큰 재발급 요청 (Refresh Token은 쿠키에 있어서 자동 전송됨)
-				const { data } = await axiosInstance.post<{ accessToken: string }>(
-					'/api/auth/refresh',
-				);
-
-				//  새 토큰 저장
+				// 토큰 갱신 API 호출 (Refresh Token은 서버에서 HttpOnly Cookie 등으로 관리,
+				// 필요시 요청 바디/헤더에 명시적으로 포함하여 전송)
+				const { data } = await axiosInstance.post('/auth/refresh'); // api/auth.ts의 refreshToken 함수 호출
 				setAccessToken(data.accessToken);
-
-				//  실패했던 원래 요청의 헤더 업데이트 후 재요청
-				if (originalRequest.headers) {
-					originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-				}
-				return axiosInstance(originalRequest);
+				originalRequest.headers.Authorization = `Bearer ${data.accessToken}`; // 원래 요청 헤더 업데이트
+				return axiosInstance(originalRequest); // 원래 요청 재시도
 			} catch (refreshError) {
-				console.error('Refresh token expired');
-				setAccessToken(null);
-
+				console.error('Token refresh failed:', refreshError);
+				removeAuthTokens(); // 갱신 실패 시 모든 토큰 삭제
+				// useAuthStore().logout()은 React 컴포넌트/훅 외부에서 직접 호출하기 어려움
+				// useRefresh 훅에서 이 상태를 감지하고 처리하도록 설계
 				return Promise.reject(refreshError);
 			}
 		}
-
 		return Promise.reject(error);
 	},
 );

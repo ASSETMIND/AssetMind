@@ -5,7 +5,7 @@ import { http, HttpResponse, type HttpResponseResolver } from 'msw';
   실제 요청을 처리하고 응답을 생성하는 로직 함수
 */
 
-// 1. 회원가입 Resolver
+// 회원가입 Resolver
 const signupResolver: HttpResponseResolver = async ({ request }) => {
 	const requestBody = (await request.json()) as {
 		id?: string;
@@ -32,7 +32,7 @@ const signupResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
-// 2. 이메일 중복 확인 Resolver
+// 이메일 중복 확인 Resolver
 const checkIdResolver: HttpResponseResolver = ({ request }) => {
 	const url = new URL(request.url);
 	const email = url.searchParams.get('email');
@@ -48,7 +48,7 @@ const checkIdResolver: HttpResponseResolver = ({ request }) => {
 	return HttpResponse.json([]);
 };
 
-// 3. 인증번호 전송 Resolver
+// 인증번호 전송 Resolver
 const sendCodeResolver: HttpResponseResolver = async ({ request }) => {
 	const body = (await request.json()) as { email: string };
 	console.log(`[MSW] 인증코드 발송 요청: ${body.email}`);
@@ -60,7 +60,7 @@ const sendCodeResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
-// 4. 인증번호 검증 Resolver
+// 인증번호 검증 Resolver
 const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 	const body = (await request.json()) as { email: string; code: string };
 	console.log(`[MSW] 코드 검증 요청: ${body.code} (email: ${body.email})`);
@@ -77,7 +77,7 @@ const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
-// 5. 로그인 Resolver
+// 일반 로그인 Resolver
 const loginResolver: HttpResponseResolver = async ({ request }) => {
 	const body = (await request.json()) as { id: string; password: string };
 	console.log(`[MSW] 로그인 요청: ${body.id}`);
@@ -104,6 +104,58 @@ const loginResolver: HttpResponseResolver = async ({ request }) => {
 	);
 };
 
+// 소셜 로그인 Resolver (Kakao, Google 공통)
+const socialLoginResolver: HttpResponseResolver = async ({
+	request,
+	params,
+}) => {
+	// URL 파라미터에서 provider 추출 (예: /auth/login/kakao -> params.provider = 'kakao')
+	const { provider } = params;
+	const body = (await request.json()) as { code: string };
+
+	console.log(`[MSW] 소셜 로그인 요청 (${provider}):`, body.code);
+
+	// 성공 시나리오
+	return HttpResponse.json(
+		{
+			accessToken: `mock-access-token-${provider}`,
+			user: {
+				id: provider === 'kakao' ? 200 : 300,
+				email: `${provider}_user@test.com`,
+				name: `${provider} 사용자`,
+				loginType: provider,
+			},
+		},
+		{ status: 200 },
+	);
+};
+
+// 토큰 갱신 Resolver
+const refreshTokenResolver: HttpResponseResolver = async () => {
+	console.log('[MSW] 토큰 갱신 요청 받음');
+	// 실제 백엔드에서는 리프레시 토큰을 사용하여 새 액세스 토큰을 발급
+	// 여기서는 간단히 새로운 가짜 액세스 토큰과 사용자 정보를 반환
+	return HttpResponse.json(
+		{
+			accessToken: 'mock-new-access-token-' + Date.now(), // 매번 다른 토큰 반환
+			user: {
+				id: 1,
+				email: 'refreshed@test.com',
+				name: '갱신된유저',
+			},
+		},
+		{ status: 200 },
+	);
+};
+
+// 로그아웃 Resolver
+const logoutResolver: HttpResponseResolver = async () => {
+	console.log('[MSW] 로그아웃 요청 받음');
+	// 클라이언트에서 토큰을 삭제하는 것이 주 목적이므로,
+	// 서버에서는 성공 응답만 보내주면 됨
+	return HttpResponse.json({ message: '로그아웃 성공' }, { status: 200 });
+};
+
 /*
   [Handlers]
   URL 경로와 HTTP 메서드를 Resolver 함수와 매핑
@@ -121,6 +173,15 @@ export const handlers = [
 	// 인증번호 검증 (POST)
 	http.post('*/api/auth/verify-code', verifyCodeResolver),
 
-	// 로그인 (POST)
+	// 일반 로그인 (POST)
 	http.post('*/api/auth/login', loginResolver),
+
+	// 소셜 로그인 (POST)
+	http.post('*/auth/login/:provider', socialLoginResolver),
+
+	// 토큰 갱신 (POST)
+	http.post('*/auth/refresh', refreshTokenResolver),
+
+	// 로그아웃 (POST)
+	http.post('*/auth/logout', logoutResolver),
 ];

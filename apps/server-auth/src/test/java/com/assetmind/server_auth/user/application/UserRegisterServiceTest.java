@@ -10,6 +10,7 @@ import com.assetmind.server_auth.user.application.port.UserIdGenerator;
 import com.assetmind.server_auth.user.application.port.UserRepository;
 import com.assetmind.server_auth.user.application.port.VerificationCodeGenerator;
 import com.assetmind.server_auth.user.application.port.VerificationCodePort;
+import com.assetmind.server_auth.user.application.provider.SignUpTokenProvider;
 import com.assetmind.server_auth.user.domain.User;
 import com.assetmind.server_auth.user.domain.type.UserRole;
 import com.assetmind.server_auth.user.domain.vo.Email;

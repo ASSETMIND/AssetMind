@@ -1,9 +1,9 @@
-package com.assetmind.server_auth.user.application;
+package com.assetmind.server_auth.user.application.provider;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
-import com.assetmind.server_auth.global.common.JwtProcessor;
+import com.assetmind.server_auth.global.util.JwtProcessor;
 import com.assetmind.server_auth.user.exception.InvalidSignUpTokenException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
