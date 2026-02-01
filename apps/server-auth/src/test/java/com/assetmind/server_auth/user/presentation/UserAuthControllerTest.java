@@ -9,10 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.assetmind.server_auth.global.config.SecurityConfig;
 import com.assetmind.server_auth.global.error.ErrorCode;
+import com.assetmind.server_auth.global.security.exception.JwtAccessDeniedHandler;
+import com.assetmind.server_auth.global.security.exception.JwtAuthenticationEntryPoint;
 import com.assetmind.server_auth.global.util.CookieUtils;
 import com.assetmind.server_auth.user.application.UserAuthUseCase;
 import com.assetmind.server_auth.user.application.dto.TokenSetDto;
 import com.assetmind.server_auth.user.application.dto.UserLoginCommand;
+import com.assetmind.server_auth.user.application.provider.AuthTokenProvider;
 import com.assetmind.server_auth.user.exception.AuthException;
 import com.assetmind.server_auth.user.presentation.dto.LoginRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,6 +58,15 @@ class UserAuthControllerTest {
 
     @MockitoBean
     private CookieUtils cookieUtils;
+
+    @MockitoBean
+    AuthTokenProvider authTokenProvider;
+
+    @MockitoBean
+    JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    @MockitoBean
+    JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
     @Test
     @DisplayName("성공: [POST] 유효한 로그인 정보로 로그인에 성공하면 accessToken은 body로, refreshToken은 cookie에 넣어서 응답한다.")
