@@ -29,7 +29,7 @@ const meta: Meta<typeof Button> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof Button>;
+type Story = StoryObj<typeof Button & { status?: string }>;
 
 // =============================================================================
 // 1. 메인 로그인 버튼
@@ -173,7 +173,7 @@ export const Verify_Auth: Story = {
     if (status === 'loading') {
        return <Button className={`${smallBase} bg-[#6D4AE6] text-white`}><Loader2 className="w-5 h-5 animate-spin" /></Button>;
     }
-    return null;
+    return <></>;;
   },
 };
 

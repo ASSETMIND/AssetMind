@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
@@ -25,8 +25,8 @@
     "@storybook/addon-vitest": "^10.2.3",
     "@storybook/react-vite": "^10.2.3",
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/browser-playwright": "^4.0.17",
     "@vitest/coverage-v8": "^4.0.17",
