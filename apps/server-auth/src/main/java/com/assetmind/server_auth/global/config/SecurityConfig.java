@@ -54,7 +54,12 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/check-email",
+                                "/api/auth/code/**",
+                                "/api/auth/reissue" // 재발급은 AccessToken 만료 시에도 접근 가능해야 하므로 허용
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
 

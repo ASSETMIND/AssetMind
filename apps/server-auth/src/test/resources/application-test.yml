@@ -42,3 +42,5 @@ spring:
 
 jwt:
   secret: "test-secret-key-least-32-bytes-size"
+  cookie:
+    secure: false # HTTPS 설정
