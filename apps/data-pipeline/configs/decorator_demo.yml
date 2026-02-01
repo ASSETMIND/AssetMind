@@ -26,3 +26,15 @@ experiments:
     username: "test_admin"
     password: "super_secret_password_123!" # 로그에서 ***** 로 보여야 함
     token: "eyJhbGciOiJIUzI1NiJ9..." # 로그에서 ***** 로 보여야 함
+
+  # Case 4: 동기 함수 속도 제한(Rate Limiting) 테스트
+  rate_limit_sync:
+    limit: 5
+    period: 1.0
+    iterations: 10
+
+  # Case 5: 비동기 함수 속도 제한(Rate Limiting) 테스트
+  rate_limit_async:
+    limit: 5
+    period: 1.0
+    iterations: 10

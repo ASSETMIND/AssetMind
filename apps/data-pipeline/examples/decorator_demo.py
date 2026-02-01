@@ -11,6 +11,7 @@ Usage:
 import sys
 import asyncio
 import logging
+import time
 import yaml
 from pathlib import Path
 from typing import Dict, Any
@@ -19,7 +20,7 @@ from typing import Dict, Any
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
-from src.common.decorators import retry, log_decorator
+from src.common.decorators import retry, log_decorator, rate_limit
 from src.common.config import get_config
 from src.common.log import LogManager
 
@@ -103,6 +104,23 @@ class DemoService:
             await asyncio.sleep(0.1) # 비동기 대기 시뮬레이션
             raise TimeoutError("Async Timeout")
         return "Success"
+    
+    # --------------------------------------------------------------------------
+    # Part 3. Rate Limit Demo Methods
+    # --------------------------------------------------------------------------
+    # [Sync] 동기 함수 제한 테스트
+    @rate_limit(limit=5, period=1.0, bucket_key="sync_bucket")
+    @log_decorator(logger_name="decorator_demo")
+    def rate_limited_sync_task(self, index: int):
+        return f"SyncAck({index})"
+
+    # [Async] 비동기 함수 제한 테스트 
+    @rate_limit(limit=5, period=1.0, bucket_key="async_bucket")
+    @log_decorator(logger_name="decorator_demo")
+    async def rate_limited_async_task(self, index: int):
+        # 비동기 로직 시뮬레이션 (약간의 지연)
+        await asyncio.sleep(0.01) 
+        return f"AsyncAck({index})"
 
 
 # ==============================================================================
@@ -168,6 +186,65 @@ def run_retry_demo(service: DemoService, experiments: Dict[str, Any]):
     except Exception as e:
         print(f"   => Wrong Exception: {e}")
 
+def run_rate_limit_demo(service: DemoService, experiments: Dict[str, Any]):
+    """[Demo 3] 속도 제한 데코레이터 검증 (동기 & 비동기)"""
+    print("\n" + "="*60)
+    print(" >>> [Demo 3] Rate Limiting Verification")
+    print("="*60)
+
+    # 3-1. Sync Throttling Test
+    print("\n[Case 1] Synchronous Rate Limiting")
+    config = experiments.get("rate_limit_sync", {"limit": 5, "period": 1.0, "iterations": 10})
+    limit, period, iterations = config["limit"], config["period"], config["iterations"]
+    
+    print(f"      Settings: {limit} calls / {period} sec (Total: {iterations})")
+
+    start_time = time.perf_counter()
+    for i in range(1, iterations + 1):
+        try:
+            req_start = time.perf_counter()
+            result = service.rate_limited_sync_task(index=i)
+            elapsed = time.perf_counter() - req_start
+            
+            status = "⚡ Fast" if elapsed < 0.1 else f"🐢 Throttled ({elapsed:.2f}s)"
+            print(f"   Sync Request #{i:02d} | {status} | Result: {result}")
+        except Exception as e:
+            print(f"   Sync Request #{i:02d} | ❌ Failed: {e}")
+
+    total_time = time.perf_counter() - start_time
+    print(f"   => Sync Total Time: {total_time:.4f}s")
+
+    # 3-2. Async Throttling Test
+    print("\n[Case 2] Asynchronous Rate Limiting")
+    config = experiments.get("rate_limit_async", {"limit": 5, "period": 1.0, "iterations": 10})
+    limit, period, iterations = config["limit"], config["period"], config["iterations"]
+    
+    print(f"      Settings: {limit} calls / {period} sec (Total: {iterations})")
+
+    # 비동기 요청을 순차적으로 보내며 Throttling 확인
+    async def _async_runner():
+        start_t = time.perf_counter()
+        for i in range(1, iterations + 1):
+            try:
+                req_start = time.perf_counter()
+                result = await service.rate_limited_async_task(index=i)
+                elapsed = time.perf_counter() - req_start
+                
+                status = "⚡ Fast" if elapsed < 0.1 else f"🐢 Throttled ({elapsed:.2f}s)"
+                print(f"   Async Request #{i:02d} | {status} | Result: {result}")
+            except Exception as e:
+                print(f"   Async Request #{i:02d} | ❌ Failed: {e}")
+        return time.perf_counter() - start_t
+
+    # asyncio.run으로 비동기 러너 실행
+    total_time = asyncio.run(_async_runner())
+    print(f"   => Async Total Time: {total_time:.4f}s")
+    
+    if total_time >= period:
+        print("   => Success: Throttling Logic Activated for both Sync/Async.")
+    else:
+        print("   => Warning: Too fast! Throttling might not have worked.")
+
 
 # ==============================================================================
 # [Main Entry Point]
@@ -176,25 +253,22 @@ if __name__ == "__main__":
     task_name = "decorator_demo"
     print(f" >>> Initializing System for '{task_name}'...")
 
-    # 1. Configuration Init (Must be called FIRST)
+    # 1. Config & Logger Init
     try:
         get_config(task_name=task_name)
+        LogManager()
+        # setup_human_readable_logging(task_name) # 필요 시 해제
+        print(f" [Init] System initialized successfully.\n")
     except Exception as e:
-        print(f" [Critical Error] Config load failed: {e}")
+        print(f" [Critical Error] {e}")
         sys.exit(1)
 
-    # 2. Logger Init
-    LogManager()
-    setup_human_readable_logging(task_name)
-    print(f" [Init] System initialized successfully.\n")
-
-    # 3. Load Experiment Data
+    # 2. Load YAML
     try:
         with open("configs/decorator_demo.yml", "r") as f:
             yaml_data = yaml.safe_load(f)
             experiments = yaml_data.get("experiments", {})
     except Exception:
-        print(" [Warn] Failed to load 'configs/decorator_demo.yml'. Using defaults.")
         experiments = {}
 
     service = DemoService()
@@ -203,10 +277,10 @@ if __name__ == "__main__":
     # [Select Demo] Uncomment the function you want to run
     # --------------------------------------------------------------------------
     
-    run_logging_demo(service)
-    
-    run_retry_demo(service, experiments)
-    
+    #run_logging_demo(service)
+    #run_retry_demo(service, experiments)
+    run_rate_limit_demo(service, experiments)
+
     print("\n" + "="*60)
     print(" ✅ All Demonstrations Completed.")
     print("="*60 + "\n")
