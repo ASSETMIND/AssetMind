@@ -8,9 +8,8 @@ const meta: Meta<typeof Input> = {
   parameters: {
     layout: 'centered',
     backgrounds: { default: 'surface' }, // 원본 설정 유지
-    // [수정] 속성 탭(Controls)을 사용하기 위해 disable 옵션 제거
   },
-  // [원본 유지] 인풋 너비 451px 기준
+  // 인풋 너비 451px 기준
   decorators: [
     (Story) => (
       <div style={{ width: '451px' }}>
@@ -18,7 +17,7 @@ const meta: Meta<typeof Input> = {
       </div>
     ),
   ],
-  // [추가] 속성 탭에서 에러/상태를 조작할 수 있도록 설정
+  // 속성 탭에서 에러/상태를 조작할 수 있도록 설정
   argTypes: {
     state: {
       description: '인풋 상태 (default / error / success)',
@@ -43,7 +42,7 @@ type Story = StoryObj<typeof Input>;
 // =============================================================================
 
 export const Login_ID: Story = {
-  name: '로그인 - 아이디',
+  name: 'Login - ID',
   args: {
     label: '아이디',
     placeholder: '아이디를 입력해 주세요.',
@@ -53,7 +52,7 @@ export const Login_ID: Story = {
 };
 
 export const Login_Password: Story = {
-  name: '로그인 - 비밀번호',
+  name: 'Login - Password',
   args: {
     label: '비밀번호',
     type: 'password',
@@ -67,7 +66,7 @@ export const Login_Password: Story = {
 // =============================================================================
 
 export const Signup_ID: Story = {
-  name: '회원가입 - 아이디',
+  name: 'Signup - ID',
   args: {
     label: '아이디',
     placeholder: '영문 소문자, 숫자 포함 4~20자',
@@ -82,7 +81,7 @@ export const Signup_ID: Story = {
 };
 
 export const Signup_Password: Story = {
-  name: '회원가입 - 비밀번호',
+  name: 'Singup - Password',
   args: {
     label: '비밀번호',
     type: 'password',
@@ -92,7 +91,7 @@ export const Signup_Password: Story = {
 };
 
 export const Signup_Phone: Story = {
-  name: '회원가입 - 휴대폰번호',
+  name: 'Signup - Phone Number',
   args: {
     label: '휴대폰 번호',
     placeholder: '010-0000-0000',
@@ -107,7 +106,7 @@ export const Signup_Phone: Story = {
 };
 
 export const Signup_AuthCode: Story = {
-  name: '회원가입 - 인증번호 입력',
+  name: 'Signup - Auth Code',
   args: {
     // 라벨 없음
     placeholder: '인증번호 입력',

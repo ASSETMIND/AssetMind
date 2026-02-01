@@ -36,7 +36,7 @@ type Story = StoryObj<typeof Button & { status?: string }>;
 // [수정] Loading 상태: 배경 #1C1D21 (비활성) + 아이콘 흰색 (White)
 // =============================================================================
 export const Main_Login_Button: Story = {
-  name: '메인 로그인 버튼',
+  name: 'Main Login Button',
   args: {
     ...({ status: 'default' } as any),
   },
@@ -87,7 +87,7 @@ export const Main_Login_Button: Story = {
 // 2. 메인 가입하기 버튼
 // =============================================================================
 export const Main_SignUp_Button: Story = {
-  name: '메인 가입하기 버튼',
+  name: 'Main SignUp Button',
   args: {
     ...({ status: 'default' } as any),
   },
@@ -129,7 +129,7 @@ export const Main_SignUp_Button: Story = {
 // 3. 중복 확인
 // =============================================================================
 export const Duplicate_Check: Story = {
-  name: '중복 확인 버튼',
+  name: 'Duplicate Check Button',
   render: () => (
     <Button 
       className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[100px] h-[38px] whitespace-nowrap"
@@ -143,7 +143,7 @@ export const Duplicate_Check: Story = {
 // 4. 인증 확인
 // =============================================================================
 export const Verify_Auth: Story = {
-  name: '인증 확인 버튼',
+  name: 'Verify Auth Button',
   args: {
     ...({ status: 'default' } as any),
   },
@@ -181,7 +181,7 @@ export const Verify_Auth: Story = {
 // 5. 인증번호 전송
 // =============================================================================
 export const Send_Auth_Code: Story = {
-  name: '인증번호 전송 버튼',
+  name: 'Send Auth Code Button',
   args: {
     isResend: false,
   },
@@ -204,7 +204,7 @@ export const Send_Auth_Code: Story = {
 // 6. 소셜 로그인 아이콘
 // =============================================================================
 export const Social_Icons: Story = {
-  name: '소셜 로그인 아이콘',
+  name: 'Social Icons',
   render: () => (
     <div className="flex gap-4">
       <Button variant="google" size="icon" className="w-[56px] h-[56px] p-0 rounded-full bg-white">

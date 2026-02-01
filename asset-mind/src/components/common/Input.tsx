@@ -48,7 +48,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               "w-full h-[57px] px-[25px] rounded-lg border outline-none transition-all duration-200",
               
               // 2. [Typography] B2 수정 (14px 강제 적용)
-              // text-b2 클래스 대신 text-[14px]를 직접 사용하여 16px로 뜨는 현상 원천 차단
               "text-[14px] leading-[150%] font-normal",
               "text-text-primary placeholder:text-text-placeholder",
               
@@ -61,8 +60,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               // 5. [Padding] 우측 여백
               (icon || rightSection) && rightSectionWidth,
               
-              // 6. [State Styles]
-              finalState === 'error' && "border-border-inputError focus:border-border-inputError text-text-error placeholder:text-text-error/50",
+              // 6. [State Styles] - 텍스트 색상 관련 부분 제거
+              finalState === 'error' && "border-border-inputError focus:border-border-inputError placeholder:text-text-error/50",
               finalState === 'success' && "border-border-inputSuccess focus:border-border-inputSuccess", 
               
               className
