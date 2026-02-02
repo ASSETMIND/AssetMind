@@ -99,7 +99,7 @@ class UserRegisterServiceTest {
 
         // then
         // Redis 저장 메서드가 잘 실행되었는지 확인
-        verify(verificationCodePort).save(eq(validEmail), eq(code), eq(180L));
+        verify(verificationCodePort).save(eq(validEmail), eq(code), eq(1800L));
         // 메일 발송 메서드가 잘 실행되었는지 확인
         verify(emailSendPort).sendEmail(eq(validEmail), eq("인증 코드 발송"), eq(code));
     }

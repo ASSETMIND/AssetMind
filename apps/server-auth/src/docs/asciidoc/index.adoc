@@ -6,9 +6,9 @@
 :toclevels: 2
 :sectlinks:
 
-== 회원가입 (Auth)
+== 1. 회원가입 (Register)
 
-=== 1. 이메일 중복 확인
+=== 1-1. 이메일 중복 확인
 회원가입 전 이메일 중복 여부를 확인합니다.
 
 ==== 요청 (Request)
@@ -20,7 +20,7 @@ include::{snippets}/auth-check-email/http-response.adoc[]
 include::{snippets}/auth-check-email/response-fields.adoc[]
 
 
-=== 2. 인증 코드 전송
+=== 1-2. 인증 코드 전송
 이메일로 6자리 인증 코드를 전송합니다.
 
 ==== 요청 (Request)
@@ -31,10 +31,11 @@ include::{snippets}/auth-send-code/request-fields.adoc[]
 include::{snippets}/auth-send-code/http-response.adoc[]
 include::{snippets}/auth-send-code/response-fields.adoc[]
 
-=== 3. 인증 코드 검증
+
+=== 1-3. 인증 코드 검증
 유저가 입력한 인증 코드를 검증합니다.
 
-=== 요청 (Request)
+==== 요청 (Request)
 include::{snippets}/auth-verify-code/http-request.adoc[]
 include::{snippets}/auth-verify-code/request-fields.adoc[]
 
@@ -43,7 +44,7 @@ include::{snippets}/auth-verify-code/http-response.adoc[]
 include::{snippets}/auth-verify-code/response-fields.adoc[]
 
 
-=== 4. 회원가입
+=== 1-4. 회원가입
 최종 회원가입을 요청합니다.
 
 ==== 요청 (Request)
@@ -53,3 +54,44 @@ include::{snippets}/auth-register/request-fields.adoc[]
 ==== 응답 (Response)
 include::{snippets}/auth-register/http-response.adoc[]
 include::{snippets}/auth-register/response-fields.adoc[]
+
+
+== 2. 인증 및 토큰 관리 (Authentication)
+
+=== 2-1. 로그인
+이메일과 비밀번호로 로그인하여 Access Token과 Refresh Token(Cookie)을 발급받습니다.
+
+==== 요청 (Request)
+include::{snippets}/auth-login/http-request.adoc[]
+include::{snippets}/auth-login/request-fields.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-login/http-response.adoc[]
+include::{snippets}/auth-login/response-cookies.adoc[]
+include::{snippets}/auth-login/response-fields.adoc[]
+
+
+=== 2-2. 로그아웃
+Refresh Token 쿠키를 만료시키고, Redis에 저장된 토큰 정보를 삭제합니다.
+
+==== 요청 (Request)
+include::{snippets}/auth-logout/http-request.adoc[]
+include::{snippets}/auth-logout/request-headers.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-logout/http-response.adoc[]
+include::{snippets}/auth-logout/response-cookies.adoc[]
+include::{snippets}/auth-logout/response-fields.adoc[]
+
+
+=== 2-3. 토큰 재발급 (Reissue)
+만료된 Access Token을 대신하여, Refresh Token 쿠키를 이용해 새로운 토큰을 발급받습니다. (RTR 적용)
+
+==== 요청 (Request)
+include::{snippets}/auth-reissue/http-request.adoc[]
+include::{snippets}/auth-reissue/request-cookies.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/auth-reissue/http-response.adoc[]
+include::{snippets}/auth-reissue/response-cookies.adoc[]
+include::{snippets}/auth-reissue/response-fields.adoc[]

@@ -11,6 +11,7 @@ public enum ErrorCode {
     // Common 에러
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "C001", "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "C002", "잘못된 입력값입니다."),
+    FORBIDDEN_ACCESS(HttpStatus.FORBIDDEN, "C003", "접근 권한이 없습니다."),
 
 
     // User Domain 에러
