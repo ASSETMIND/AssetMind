@@ -1,3 +1,6 @@
+.env
+.coverage
+
 # Logs
 logs
 *.log
@@ -81,6 +84,12 @@ build/
 out/
 bin/
 *.class
+
+# --- Spring Boot & Java ---
+**/logs/
+*.log
+*.pid
+**/db
 
 ### DB & Local Config ###
 db/

@@ -116,6 +116,9 @@ class AppConfig(BaseSettings):
     """
     task_name: str = "default_task"
 
+    log_level: str = "INFO"
+    log_dir: str = "logs"
+
     # Rationale: Composition(합성) 패턴을 사용하여 설정을 계층화함.
     kis: KISSettings = Field(default_factory=KISSettings)
     fred: FREDSettings = Field(default_factory=FREDSettings)
@@ -147,8 +150,13 @@ class AppConfig(BaseSettings):
         if yaml_path.exists():
             with open(yaml_path, "r", encoding="utf-8") as f:
                 raw_data = yaml.safe_load(f) or {}
-                raw_policies = raw_data.get("policy", {})
                 
+                if "log_level" in raw_data:
+                    config.log_level = raw_data["log_level"]
+                if "log_dir" in raw_data:
+                    config.log_dir = raw_data["log_dir"]
+                
+                raw_policies = raw_data.get("policy", {})
                 validated_policies = {}
                 for job_id, policy_data in raw_policies.items():
                     try:
