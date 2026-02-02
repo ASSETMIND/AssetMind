@@ -1,15 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Input } from './Input';
 import { EyeIcon } from '../icons/EyeIcon';
+import { useState } from 'react';
 
 const meta: Meta<typeof Input> = {
   title: 'UI_KIT/Input',
   component: Input,
   parameters: {
     layout: 'centered',
-    backgrounds: { default: 'surface' }, // 원본 설정 유지
+    backgrounds: { default: 'surface' },
   },
-  // 인풋 너비 451px 기준
   decorators: [
     (Story) => (
       <div style={{ width: '451px' }}>
@@ -17,7 +17,6 @@ const meta: Meta<typeof Input> = {
       </div>
     ),
   ],
-  // 속성 탭에서 에러/상태를 조작할 수 있도록 설정
   argTypes: {
     state: {
       description: '인풋 상태 (default / error / success)',
@@ -37,6 +36,27 @@ const meta: Meta<typeof Input> = {
 export default meta;
 type Story = StoryObj<typeof Input>;
 
+// Password Toggle 컴포넌트 (재사용 가능)
+const PasswordInputWithToggle = (args: any) => {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  return (
+    <Input
+      {...args}
+      type={isPasswordVisible ? 'text' : 'password'}
+      icon={
+        <button
+          type="button"
+          onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+          className="cursor-pointer"
+        >
+          <EyeIcon isOpen={isPasswordVisible} className="w-5 h-5" />
+        </button>
+      }
+    />
+  );
+};
+
 // =============================================================================
 // 1. 로그인 (Login) UI
 // =============================================================================
@@ -53,11 +73,10 @@ export const Login_ID: Story = {
 
 export const Login_Password: Story = {
   name: 'Login - Password',
+  render: (args) => <PasswordInputWithToggle {...args} />,
   args: {
     label: '비밀번호',
-    type: 'password',
     placeholder: '비밀번호를 입력해 주세요.',
-    icon: <EyeIcon isOpen={false} className="w-5 h-5" />, // 원본 아이콘 사이즈 유지
   },
 };
 
@@ -70,7 +89,6 @@ export const Signup_ID: Story = {
   args: {
     label: '아이디',
     placeholder: '영문 소문자, 숫자 포함 4~20자',
-    // 회원가입용 보라색 버튼 (중복 확인)
     rightSection: (
       <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[100px] h-[38px] flex items-center justify-center transition-colors">
         중복 확인
@@ -81,12 +99,11 @@ export const Signup_ID: Story = {
 };
 
 export const Signup_Password: Story = {
-  name: 'Singup - Password',
+  name: 'Signup - Password',
+  render: (args) => <PasswordInputWithToggle {...args} />,
   args: {
     label: '비밀번호',
-    type: 'password',
     placeholder: '영문, 숫자, 특수문자 포함 8자 이상',
-    icon: <EyeIcon isOpen={false} className="w-5 h-5" />,
   },
 };
 
@@ -95,7 +112,6 @@ export const Signup_Phone: Story = {
   args: {
     label: '휴대폰 번호',
     placeholder: '010-0000-0000',
-    // 회원가입용 보라색 버튼 (인증번호 전송 - 너비 김)
     rightSection: (
       <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[121px] h-[38px] flex items-center justify-center transition-colors">
         인증번호 전송
@@ -108,9 +124,7 @@ export const Signup_Phone: Story = {
 export const Signup_AuthCode: Story = {
   name: 'Signup - Auth Code',
   args: {
-    // 라벨 없음
     placeholder: '인증번호 입력',
-    // 회원가입용 보라색 버튼 (인증 확인)
     rightSection: (
       <button className="bg-[#6D4AE6] hover:bg-[#5b3dc2] text-white text-[14px] font-normal rounded-[9px] w-[100px] h-[38px] flex items-center justify-center transition-colors">
         인증 확인
