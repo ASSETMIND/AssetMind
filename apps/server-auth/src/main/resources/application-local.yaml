@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: server-auth
+
+  jpa:
+    hibernate:
+      ddl-auto: create # 테스트 시작 시 생성, 끝나면 삭제
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${POSTGRES_DB:assetmind}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true                # 구글 로그인 필수
+          starttls:
+            enable: true            # 통신 내용 암호화
+            required: true          # 내용 암호화 안되면 전송 금지
+          connectiontimeout: 5000   # 5초안에 연결 안되면 포기
+          timeout: 5000             # 5초 동안 응답 없으면 포기
+          writetimeout: 5000        # 5초 동안 전송 안되면 포기
+
+jwt:
+  secret: ${JWT_SECRET_KEY}
+  cookie:
+    secure: false # HTTPS 설정

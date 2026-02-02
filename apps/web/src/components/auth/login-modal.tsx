@@ -3,12 +3,13 @@ import Button from '../common/button';
 import AuthInput from '../auth/auth-input';
 import GoogleIcon from '../icon/google';
 import KakaoIcon from '../icon/kakao';
+import Toast from '../common/toast';
+import { useLoginLogic } from '../../hooks/auth/use-login-logic';
+import { useSocialLoginLogic } from '../../hooks/auth/use-social-login-logic';
 
 /*
-	로그인 화면 UI 구성을 담당하는 view 역할의 컴포넌트
-
-	실제 로직이나 라우팅은 props로 주입받은 함수에 위임
-	이 컴포넌트는 UI 렌더링에만 집중하도록 설계
+  로그인 화면 UI 구성을 담당하는 view 역할의 컴포넌트
+  실제 로직이나 라우팅은 props로 주입받은 함수에 위임
  */
 
 type Props = {
@@ -22,33 +23,66 @@ export default function LoginModal({
 	onClickSignup,
 	onClickFindIdPw,
 }: Props) {
+	// 자체적인 일반로그인
+	const {
+		formMethods,
+		state: loginState,
+		actions: loginActions,
+	} = useLoginLogic({ onClose });
+
+	// 소셜 로그인
+	const { state: socialState, actions: socialActions } = useSocialLoginLogic();
+
+	const {
+		register,
+		formState: { errors },
+	} = formMethods;
+
 	return (
 		<Modal onClose={onClose}>
-			<div className='flex flex-col items-center'>
-				<h2 className='text-4xl font-bold'>LOGIN</h2>
+			<div className='flex flex-col items-center w-full px-2'>
+				<h2 className='text-4xl font-bold mb-4'>LOGIN</h2>
 				<p className='mb-6'>AssetMind에 오신 것을 환영합니다.</p>
-
-				{/* 입력 폼 */}
-				<form className='w-full flex flex-col gap-8'>
-					<div className='flex flex-col gap-4'>
-						<label className=' font-medium'>아이디</label>
-						<AuthInput type='email' placeholder='아이디를 입력해 주세요.' />
+				<form
+					onSubmit={loginActions.onSubmit}
+					className='w-full flex flex-col gap-6'
+				>
+					{/* 1. 아이디 입력 */}
+					<div className='flex flex-col gap-2'>
+						<label className='font-medium'>아이디</label>
+						<AuthInput
+							type='email'
+							placeholder='아이디를 입력해 주세요.'
+							// 에러 메시지 전달
+							errorMessage={errors.id?.message}
+							className={errors.id ? 'border-red-500' : ''}
+							{...register('id')}
+						/>
 					</div>
-					<div className='flex flex-col gap-4'>
+
+					{/* 2. 비밀번호 입력 */}
+					<div className='flex flex-col gap-2'>
 						<label className='font-medium'>비밀번호</label>
 						<AuthInput
 							type='password'
 							placeholder='비밀번호를 입력해 주세요.'
+							errorMessage={errors.password?.message}
+							className={errors.password ? 'border-red-500' : ''}
+							{...register('password')}
 						/>
 					</div>
-					{/*
-            Submit 버튼
-            type='submit'으로 명시해 엔터키 입력 시 폼 제출 동작을 지원해야 함
-          */}
-					<Button className='mt-2' size='lg' type='submit'>
-						로그인
+
+					{/* Submit 버튼 */}
+					<Button
+						className='mt-2'
+						size='lg'
+						type='submit'
+						disabled={loginState.isLoggingIn || socialState.isRedirecting}
+					>
+						{loginState.isLoggingIn ? '로그인 중...' : '로그인'}
 					</Button>
 				</form>
+
 				{/* 하단 바로가기 버튼들 */}
 				<div className='mt-4 flex gap-4'>
 					<button className='cursor-pointer' onClick={onClickFindIdPw}>
@@ -59,6 +93,7 @@ export default function LoginModal({
 						회원가입
 					</button>
 				</div>
+
 				<div className='mt-4 w-full'>
 					<div className='relative flex w-full items-center justify-center'>
 						<div className='absolute w-full border-t' />
@@ -69,16 +104,28 @@ export default function LoginModal({
 
 					{/* 소셜 아이콘 버튼들 */}
 					<div className='mt-4 flex justify-center gap-8'>
-						<button>
+						<button
+							onClick={() => socialActions.handleSocialLogin('google')}
+							className='disabled:opacity-50 transition-transform active:scale-95'
+						>
 							<GoogleIcon />
 						</button>
 
-						<button>
+						<button
+							onClick={() => socialActions.handleSocialLogin('kakao')}
+							className='disabled:opacity-50 transition-transform active:scale-95'
+						>
 							<KakaoIcon />
 						</button>
 					</div>
 				</div>
 			</div>
+
+			{loginState.toastMessage && (
+				<Toast onClose={() => loginActions.setToastMessage(null)}>
+					{loginState.toastMessage}
+				</Toast>
+			)}
 		</Modal>
 	);
 }
