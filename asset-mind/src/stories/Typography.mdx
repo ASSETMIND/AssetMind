@@ -1,0 +1,206 @@
+export const meta = {
+  title: 'Foundation/Typography',
+};
+
+# Typography
+
+**Font Family:** Pretendard, Pretendard Variable, sans-serif  
+
+---
+
+## Headline (H)
+
+페이지에서 가장 중요한 단 하나의 주제에 사용되는 최상위 텍스트입니다.
+
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Device</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.text-h1</code></td>
+      <td>Desktop</td>
+      <td>48px</td>
+      <td>500</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>메인 화면 타이틀</td>
+    </tr>
+    <tr>
+      <td><code>.text-h1-t</code></td>
+      <td>Tablet</td>
+      <td>32px</td>
+      <td>500</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>태블릿 메인 타이틀</td>
+    </tr>
+    <tr>
+      <td><code>.text-h1-m</code></td>
+      <td>Mobile</td>
+      <td>24px</td>
+      <td>500</td>
+      <td>120%</td>
+      <td>-5%</td>
+      <td>모바일 메인 타이틀</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+## Title (T)
+
+섹션 구분용 중간 타이틀입니다.
+
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Device</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.text-t1</code></td>
+      <td>Desktop</td>
+      <td>20px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>섹션 제목</td>
+    </tr>
+    <tr>
+      <td><code>.text-t1-t</code></td>
+      <td>Tablet</td>
+      <td>16px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>태블릿 섹션 제목</td>
+    </tr>
+    <tr>
+      <td><code>.text-t1-m</code></td>
+      <td>Mobile</td>
+      <td>14px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>모바일 섹션 제목</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+## Body (B)
+
+본문 텍스트용입니다.
+
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.text-b1</code></td>
+      <td>16px</td>
+      <td>400</td>
+      <td>150%</td>
+      <td>0%</td>
+      <td>일반 본문</td>
+    </tr>
+    <tr>
+      <td><code>.text-b2</code></td>
+      <td>14px</td>
+      <td>400</td>
+      <td>150%</td>
+      <td>0%</td>
+      <td>작은 본문</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+## Label (L)
+
+UI 요소 내 텍스트입니다.
+
+<table>
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Size</th>
+      <th>Weight</th>
+      <th>Line Height</th>
+      <th>Letter Spacing</th>
+      <th>Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.text-l1</code></td>
+      <td>18px</td>
+      <td>500</td>
+      <td>100%</td>
+      <td>5%</td>
+      <td>메인 버튼</td>
+    </tr>
+    <tr>
+      <td><code>.text-l2</code></td>
+      <td>16px</td>
+      <td>400</td>
+      <td>130%</td>
+      <td>0%</td>
+      <td>입력 필드 라벨</td>
+    </tr>
+    <tr>
+      <td><code>.text-l3</code></td>
+      <td>14px</td>
+      <td>500</td>
+      <td>100%</td>
+      <td>5%</td>
+      <td>작은 버튼</td>
+    </tr>
+    <tr>
+      <td><code>.text-l4</code></td>
+      <td>14px</td>
+      <td>400</td>
+      <td>140%</td>
+      <td>0%</td>
+      <td>보조 텍스트</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+## Usage Example
+
+```tsx
+<h1 className="text-h1">AssetMind</h1>
+<h2 className="text-t1">Dashboard</h2>
+<p className="text-b1">자산을 관리하는 가장 스마트한 방법</p>
+<button className="text-l1">로그인</button>
+<span className="text-l4">보조 설명</span>

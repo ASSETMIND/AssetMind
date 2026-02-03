@@ -67,6 +67,7 @@ typings/
 # production build output
 dist/
 dist-ssr/
+storybook-static/
 
 # Editor directories and files
 .idea

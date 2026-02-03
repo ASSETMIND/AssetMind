@@ -1,108 +1,51 @@
-// src/App.tsx
 import { useState } from 'react';
-import { GoogleIcon } from './components/icons/GoogleIcon';
-import { KakaoIcon } from './components/icons/KakaoIcon';
-import { EyeIcon } from './components/icons/EyeIcon';
-
-import { Modal } from './components/common/Modal';
+import { LoginModal } from './components/auth/LoginModal';
+import { SignUpModal } from './components/auth/SignUpModal'; // 방금 만든 파일
 import { Button } from './components/common/Button';
-import { Input } from './components/common/Input';
+import { useToast } from './context/ToastContext';
 
-// [추가] 만든 훅 가져오기
-import { useToast } from './context/ToastContext'; 
+// 화면 상태 타입 정의
+type AuthView = 'none' | 'login' | 'signup';
 
 function App() {
-  const [isModalOpen, setIsModalOpen] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [userId, setUserId] = useState("");
-  
-  // [추가] 토스트 훅 사용
-  const { showToast } = useToast(); 
+  const [currentView, setCurrentView] = useState<AuthView>('login'); // 기본값: 로그인 모달
+  const { showToast } = useToast();
 
-  const isError = userId === 'error';
-
-  // [기능 추가] 로그인 버튼 클릭 핸들러
-  const handleLogin = () => {
-    if (!userId) {
-      // 실패 케이스 (Variant: error)
-      showToast('error', '로그인에 실패했습니다.', '아이디를 입력해 주세요.');
+  const handleLogin = (id: string, pw: string) => {
+    if (id === 'fail') {
+      showToast('LOGIN_FAIL');
       return;
     }
-    // 성공 케이스 (Variant: success)
-    showToast('success', '로그인 성공', '메인 페이지로 이동합니다.');
+    console.log('로그인 성공:', id);
+    setCurrentView('none'); // 성공 시 모달 닫기
   };
 
   return (
     <>
-      {!isModalOpen && (
-        <div className="flex h-screen items-center justify-center bg-background-primary">
-          <Button onClick={() => setIsModalOpen(true)}>로그인 열기</Button>
-        </div>
-      )}
+      <div className="flex h-screen items-center justify-center bg-background-primary gap-4">
+        {/* 모달이 닫혀있을 때 여는 버튼들 */}
+        {currentView === 'none' && (
+          <>
+            <Button onClick={() => setCurrentView('login')}>로그인 모달 열기</Button>
+            <Button variant="secondary" onClick={() => setCurrentView('signup')}>회원가입 모달 열기</Button>
+          </>
+        )}
+      </div>
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-      >
-        <div className="text-center mb-10">
-          <h1 className="text-h1 text-text-primary mb-2">LOGIN</h1>
-          <p className="text-t1 text-text-secondary">AssetMind에 오신 것을 환영합니다.</p>
-        </div>
+      {/* 1. 로그인 모달 */}
+      <LoginModal 
+        isOpen={currentView === 'login'} 
+        onClose={() => setCurrentView('none')} 
+        onLogin={handleLogin}
+        // 로그인 모달 안에 "회원가입" 버튼이 있다면 이 함수를 연결해줘야 함 (필요 시 LoginModal 수정)
+      />
 
-        <div className="flex flex-col gap-6">
-          <Input 
-            label="아이디"
-            placeholder="아이디를 입력해 주세요."
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            error={isError ? "존재하지 않는 아이디 입니다." : undefined}
-          />
-
-          <Input 
-            label="비밀번호"
-            type={showPassword ? "text" : "password"}
-            placeholder="비밀번호를 입력해 주세요."
-            icon={<EyeIcon isOpen={!showPassword} className="w-5 h-5" />}
-            onIconClick={() => setShowPassword(!showPassword)}
-          />
-
-          {/* [수정] 기존 이상한 점선 박스 삭제함 */}
-          
-          <Button 
-            fullWidth 
-            size="lg" 
-            className="mt-2 py-4"
-            onClick={handleLogin} 
-          >
-            로그인
-          </Button>
-
-          {/* ... (소셜 로그인 등 하단 코드는 그대로 유지) ... */}
-           <div className="flex justify-center items-center gap-4 text-l4 text-text-secondary mt-2">
-            <button className="hover:text-text-primary transition-colors">아이디 찾기</button>
-            <span className="w-[1px] h-3 bg-border-divider"></span>
-            <button className="hover:text-text-primary transition-colors">비밀번호 찾기</button>
-            <span className="w-[1px] h-3 bg-border-divider"></span>
-            <button className="hover:text-text-primary transition-colors">회원가입</button>
-          </div>
-
-          <div className="relative flex items-center justify-center my-2">
-            <div className="absolute w-full h-[1px] bg-border-divider"></div>
-            <span className="relative px-4 bg-background-surface text-l4 text-text-secondary">or continue with</span>
-          </div>
-
-          <div className="flex justify-center gap-4">
-            <Button variant="google" size="icon">
-              <GoogleIcon className="w-10 h-10" />
-            </Button>
-            
-            <Button variant="kakao" size="icon">
-              <KakaoIcon className="w-10 h-10 text-social-kakao-icon" />
-            </Button>
-          </div>
-
-        </div>
-      </Modal>
+      {/* 2. 회원가입 모달 */}
+      <SignUpModal 
+        isOpen={currentView === 'signup'}
+        onClose={() => setCurrentView('none')}
+        onSwitchToLogin={() => setCurrentView('login')} // '로그인' 텍스트 클릭 시 전환
+      />
     </>
   );
 }

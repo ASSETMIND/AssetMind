@@ -8,7 +8,7 @@ export default {
     extend: {
       // 1. 폰트 패밀리 설정 (Pretendard)
       fontFamily: {
-        sans: ['Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ["Pretendard", "Pretendard Variable", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
       },
       
       // 2. 타이포그래피 토큰 (Desktop 기준)

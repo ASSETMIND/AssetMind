@@ -1,20 +1,20 @@
-import type { Preview } from '@storybook/react-vite'
+import type { Preview } from "@storybook/react";
+import "../src/index.css"; 
 
 const preview: Preview = {
   parameters: {
-    controls: {
-      matchers: {
-       color: /(background|color)$/i,
-       date: /Date$/i,
-      },
+    backgrounds: {
+      // [중요] 'default'를 surface로 설정하여 버튼(#131316)과 구분되게 함
+      default: 'surface', 
+      values: [
+        { name: 'surface', value: '#1C1D21' }, // 모달 배경색 (이 위에서 버튼이 보임)
+        { name: 'dark', value: '#131316' },    // 메인 배경색
+        { name: 'light', value: '#ffffff' },
+      ],
     },
-
-    a11y: {
-      // 'todo' - show a11y violations in the test UI only
-      // 'error' - fail CI on a11y violations
-      // 'off' - skip a11y checks entirely
-      test: 'todo'
-    }
+    layout: 'centered',
+    // 불필요한 자동 컨트롤 제거
+    controls: { hideNoControlsWarning: true }, 
   },
 };
 

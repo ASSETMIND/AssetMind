@@ -1,19 +1,41 @@
-import  { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../../lib/utils";
+
+type InputState = 'default' | 'error' | 'success';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  message?: string;
+  state?: InputState;
   icon?: ReactNode;
   onIconClick?: () => void;
+  rightSection?: ReactNode;
+  rightSectionWidth?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, icon, onIconClick, ...props }, ref) => {
+  ({ 
+    className, 
+    label, 
+    error, 
+    message, 
+    state = 'default',
+    icon, 
+    onIconClick, 
+    rightSection,
+    rightSectionWidth = "pr-[50px]", 
+    ...props 
+  }, ref) => {
+    
+    const finalState = error ? 'error' : state;
+    const finalMessage = error || message;
+
     return (
       <div className="w-full flex flex-col gap-2">
+        {/* Label: L2(16px) Regular */}
         {label && (
-          <label className="text-l2 text-text-secondary">
+          <label className="text-l2 font-normal text-text-primary">
             {label}
           </label>
         )}
@@ -22,31 +44,60 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             className={cn(
-              "input-base", 
-              // [수정] 커서는 무조건 흰색, 입력 중 배경색 변경 방지
-              "caret-white focus:bg-transparent",
-              icon && "pr-10",
-              // 에러 시 테두리는 빨갛게(input-error), 하지만 입력 글자는 흰색 유지(text-white)
-              error && "input-error text-white",
+              // 1. [Layout] 높이 57px, 좌측 패딩 25px
+              "w-full h-[57px] px-[25px] rounded-lg border outline-none transition-all duration-200",
+              
+              // 2. [Typography] B2 수정 (14px 강제 적용)
+              "text-[14px] leading-[150%] font-normal",
+              "text-text-primary placeholder:text-text-placeholder",
+              
+              // 3. [Colors] 배경색 #1C1D21
+              "bg-[#1C1D21] border-border-inputNormal",
+              
+              // 4. [Interaction]
+              "focus:border-border-inputFocus focus:bg-[#1C1D21]",
+              
+              // 5. [Padding] 우측 여백
+              (icon || rightSection) && rightSectionWidth,
+              
+              // 6. [State Styles] - 텍스트 색상 관련 부분 제거
+              finalState === 'error' && "border-border-inputError focus:border-border-inputError placeholder:text-text-error/50",
+              finalState === 'success' && "border-border-inputSuccess focus:border-border-inputSuccess", 
+              
               className
             )}
             {...props}
           />
           
-          {icon && (
+          {/* 아이콘 */}
+          {icon && !rightSection && (
             <button
               type="button"
               onClick={onIconClick}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+              className="absolute right-[20px] top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary flex items-center justify-center"
             >
               {icon}
             </button>
           )}
+
+          {/* 우측 버튼 슬롯 */}
+          {rightSection && (
+            <div className="absolute right-[10px] top-1/2 -translate-y-1/2">
+              {rightSection}
+            </div>
+          )}
         </div>
 
-        {/* 에러 메시지는 빨간색 유지 */}
-        {error && (
-          <p className="text-l4 text-text-error">{error}</p>
+        {/* 하단 메시지 */}
+        {finalMessage && (
+          <p className={cn(
+            "text-l4 mt-1",
+            finalState === 'error' ? "text-text-error" : 
+            finalState === 'success' ? "text-text-success" : 
+            "text-text-secondary"
+          )}>
+            {finalMessage}
+          </p>
         )}
       </div>
     );
