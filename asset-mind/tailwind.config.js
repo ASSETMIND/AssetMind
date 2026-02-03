@@ -12,9 +12,7 @@ export default {
       },
       
       // 2. 타이포그래피 토큰 (Desktop 기준)
-      // 형식: [fontSize, { lineHeight, letterSpacing, fontWeight }]
       fontSize: {
-
         // Body (B)
         'b1': ['16px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
         'b2': ['14px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
@@ -36,7 +34,7 @@ export default {
           elevated: "#21242C",   // 토스트
           hover:    "#2C2C30",
           overlay:  "rgba(19,19,22,0.7)",
-          surfaceError:   "rgba(236, 26, 19, 0.1)",   // Hex+Alpha 변환
+          surfaceError:   "rgba(236, 26, 19, 0.1)",
           surfaceWarning: "rgba(245, 158, 11, 0.1)",
         },
         text: {
@@ -71,7 +69,7 @@ export default {
           onPrimary:    "#FFFFFF",
         },
 
-        // Button (구조 단순화: 실제 사용 시 bg-button-large-primary 형태로 사용)
+        // Button
         button: {
           large: {
             primary:       "#131316",
@@ -117,7 +115,19 @@ export default {
           google: { bg: "#FFFFFF", red: "#EB4335" },
           kakao:  { bg: "#FEE500", icon: "#000000" }
         }
+      }, // <<< [중요] colors 객체는 여기서 끝나야 합니다.
+
+      // 4. 애니메이션 설정 (colors 바깥, extend 안쪽)
+      keyframes: {
+        'toast-in': {
+          '0%': { transform: 'translateY(-100%)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
       },
+      animation: {
+        'toast-in': 'toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      },
+
     },
   },
   plugins: [],
