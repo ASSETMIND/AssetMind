@@ -3,8 +3,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signupSchema, type SignupSchemaType } from '../../libs/schema/auth';
 import { useSignup } from './use-signup';
-import { useCheckID } from './use-check-ID';
-import { useSendEmailCode, useVerifyEmailCode } from './use-email-verification';
+import {
+	useSendEmailCode,
+	useVerifyEmailCode,
+	useCheckEmail,
+} from './use-email-verification';
 
 type Props = {
 	onClose: () => void;
@@ -40,7 +43,8 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	} = formMethods;
 
 	const { mutate: signupMutate, isPending: isSignupPending } = useSignup();
-	const { mutateAsync: checkIDMutate, isPending: isCheckingID } = useCheckID();
+	const { mutateAsync: checkEmailMutate, isPending: isCheckingEmail } =
+		useCheckEmail();
 
 	// 이메일 발송 및 검증 Mutation
 	const { mutateAsync: sendEmailMutate, isPending: isSendingEmail } =
@@ -64,7 +68,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		if (!isValidFormat) return;
 
 		// 중복 확인 요청
-		const isAvailable = await checkIDMutate(email);
+		const isAvailable = await checkEmailMutate(email);
 
 		if (isAvailable) {
 			setToastMessage('사용 가능한 아이디입니다. 인증번호를 전송해주세요.');
@@ -144,7 +148,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 		signupMutate(
 			{
-				id: data.id,
+				email: data.id,
 				password: data.password,
 			},
 			{
@@ -173,7 +177,6 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	return {
 		formMethods,
 		state: {
-			// [삭제됨] isVerified 제거
 			isIDChecked, // 중복 확인 상태
 			isEmailSent, // 전송 상태
 			isEmailVerified, // 인증 완료 상태
@@ -181,7 +184,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 			toastMessage,
 			isSignupPending,
 			isPasswordMatch,
-			isCheckingID: isCheckingID || isSendingEmail || isVerifyingCode,
+			isCheckingID: isCheckingEmail || isSendingEmail || isVerifyingCode,
 		},
 		actions: {
 			setToastMessage,

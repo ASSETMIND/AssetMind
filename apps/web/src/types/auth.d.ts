@@ -12,7 +12,7 @@ export interface SocialLoginParams {
 
 // 회원가입
 export interface SignupParams {
-	id: string;
+	email: string;
 	password: string;
 }
 
