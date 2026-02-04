@@ -1,137 +1,72 @@
-import { Meta } from '@storybook/react';
+﻿export const meta = {
+  title: 'Docs/Component Template',
+};
 
-<Meta
-  title="Docs/Component Template"
-  parameters={{
-    docs: {
-      description: {
-        text: '컴포넌트 문서의 표준 템플릿입니다. 새 컴포넌트를 문서화할 때 이 파일을 복사하여 사용하세요.',
-      },
-    },
-  }}
-/>
+# Component Template
 
-# Component Name
-
-컴포넌트의 역할과 언제 사용하는지를 한 문장으로 설명합니다.
+컴포넌트 문서화를 위한 템플릿입니다.
 
 ---
 
 ## Overview
 
-컴포넌트의 목적과 주요 특징을 간략히 설명합니다.
-다음과 같은 내용을 포함합니다.:
-
-- **목적**: 이 컴포넌트가 해결하는 문제 / 제공하는 기능
-- **특징**: 주요 기능 포인트 (최대 3가지)
+이 컴포넌트의 목적과 주요 기능을 설명합니다.
 
 ---
 
 ## Usage
 
 ### 기본 사용법
-
-컴포넌트를 가장 간단한 형태로 사용하는 예시입니다.
 ```jsx
 import { ComponentName } from '@/components/ComponentName';
 
 <ComponentName />
 ```
 
-### 주요 변형 (Variants)
-
-상황에 따라 달라지는 사용 예시입니다..
-```jsx
-// 예: size, variant 등의 조합
-<ComponentName variant="primary" size="lg" />
-<ComponentName variant="secondary" size="sm" />
-```
-
 ---
 
 ## Props
 
-컴포넌트가 받는 속성을 정리합니다.
+컴포넌트의 Props를 설명합니다.
 
-| Prop | Type | Default | Required | Description |
-|---|---|---|---|---|
-| `propName` | `string` | `-` | ✓ | 속성 설명 |
-| `variant` | `'primary' \| 'secondary'` | `'primary'` | | 컴포넌트 스타일 변형 |
-| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | | 컴포넌트 크기 |
-| `disabled` | `boolean` | `false` | | 비활성화 상태 |
-| `onClick` | `() => void` | `-` | | 클릭 이벤트 핸들러 |
-
----
-
-## States
-
-컴포넌트가 가질 수 있는 상태입니다.
-
-| State | Description |
-|---|---|
-| Default | 기본 상태 |
-| Hover | 마우스 오버 시 |
-| Focus | 키보드 포커스 시 |
-| Disabled | 비활성화 상태 |
-| Error | 에러 상태 (해당 시) |
-| Loading | 로딩 상태 (해당 시) |
-
----
-
-## Accessibility
-
-컴포넌트의 접근성 가이드라인을 정리합니다.
-
-### ARIA 속성
-
-| Attribute | Value | Purpose |
-|---|---|---|
-| `role` | - | 컴포넌트의 역할 |
-| `aria-label` | - | 접근성 라벨 |
-| `aria-disabled` | `true/false` | 비활성화 상태 전달 |
-
-### 키보드 네비게이션
-
-- `Tab`: 포커스 이동
-- `Enter` / `Space`: 액션 실행 (해당 시)
-- `Escape`: 닫기 (해당 시)
-
-### 체크리스트
-
-- [ ] 색상만으로 정보를 전달하지 않음
-- [ ] 텍스트 대비율 WCAG AA 이상 충족
-- [ ] 키보드로만 사용 가능
-- [ ] 스크린 리더에서 올바르게 읽힘
-- [ ] Focus 상태가 시각적으로 명확
+<table>
+  <thead>
+    <tr>
+      <th>Prop</th>
+      <th>Type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>variant</code></td>
+      <td>string</td>
+      <td>'primary'</td>
+      <td>버튼 스타일</td>
+    </tr>
+    <tr>
+      <td><code>size</code></td>
+      <td>string</td>
+      <td>'medium'</td>
+      <td>버튼 크기</td>
+    </tr>
+    <tr>
+      <td><code>disabled</code></td>
+      <td>boolean</td>
+      <td>false</td>
+      <td>비활성화 여부</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
-## Design Tokens
+## Examples
 
-컴포넌트에 사용된 디자인 토큰 / Tailwind 클래스를 정리합니다.
+### 기본 예제
 
-| Token | Value | Usage |
-|---|---|---|
-| Background | `bg-primary` | 기본 배경색 |
-| Text | `text-white` | 텍스트 색상 |
-| Border Radius | `rounded-md` | 테두리 둘레 |
-| Padding | `px-4 py-2` | 내부 간격 |
-
----
-
-## Do / Don'ts
-
- **Do**
-- 올바르게 사용하는 방법을 설명합니다.
-
- **Don't**
-- 잘못된 사용법이나 피해야 할 경우를 설명합니다.
-
----
-
-## Related
-
-관련 컴포넌트나 참고 문서에 링크를 남깁니다.
-
-- [관련 컴포넌트 이름]()
-- [관련 가이드라인]()
+컴포넌트 사용 예제를 여기에 작성합니다.
+```tsx
+<ComponentName variant="primary" size="large" />
+```
