@@ -44,7 +44,6 @@ type Story = StoryObj<typeof Button & { status?: string }>;
 
 // =============================================================================
 // 1. 메인 로그인 버튼
-// [수정] Loading 상태: 배경 #1C1D21 (비활성) + 아이콘 흰색 (White)
 // =============================================================================
 export const Main_Login_Button: Story = {
   name: 'Main Login Button',
@@ -81,7 +80,6 @@ export const Main_Login_Button: Story = {
         );
       
       case 'loading':
-        // [수정] 배경: #1C1D21 (비활성과 동일), 스피너만 표시 (텍스트 없음)
         return (
           <Button 
             {...baseProps} 
