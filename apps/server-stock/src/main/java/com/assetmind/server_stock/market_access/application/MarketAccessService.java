@@ -50,7 +50,7 @@ public class MarketAccessService {
      * KIS 토큰 유효기간인 24시간 만료 전에 미리 갱신
      * 안전한 시간을 위해 6시간 마다 갱신
      */
-    @Scheduled(fixedRate = 6 * 60 * 60 * 1000)
+    @Scheduled(fixedRate = 6 * 60 * 60 * 1000, initialDelay = 6 * 60 * 60 * 1000)
     public void scheduleTokenRefresh() {
         log.info(">>> 토큰 자동 갱신 스케줄러 실행");
         refreshAccessToken();
