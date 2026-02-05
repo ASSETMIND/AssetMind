@@ -1,6 +1,8 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
@@ -23,19 +24,29 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class KisWebSocketAdapter implements RealTimeStockDataPort {
 
     private final KisWebSocketHandler kisWebSocketHandler;
     private final ThreadPoolTaskScheduler taskScheduler;
-
-    private final WebSocketClient client = new StandardWebSocketClient();
+    private final WebSocketClient client;
 
     @Value("${kis.websocket-url}")
     private String kisWsUrl;
 
     private ScheduledFuture<?> reconnectTask;
-    private ScheduledFuture<?> pingTask;
+
+    public KisWebSocketAdapter(KisWebSocketHandler kisWebSocketHandler, ThreadPoolTaskScheduler taskScheduler) {
+        this.kisWebSocketHandler = kisWebSocketHandler;
+        this.taskScheduler = taskScheduler;
+
+        // 버퍼 사이즈를 늘린 컨테이너 생성
+        WebSocketContainer webSocketContainer = ContainerProvider.getWebSocketContainer();
+        webSocketContainer.setDefaultMaxTextMessageBufferSize(1024 * 1024); // 1MB (텍스트)
+        webSocketContainer.setDefaultMaxBinaryMessageBufferSize(1024 * 1024); // 1MB (바이너리)
+
+        // 설정된 컨테이너로 클라이언트 생성
+        this.client = new StandardWebSocketClient(webSocketContainer);
+    }
 
     @Override
     public void connect(String approvalKey) {
@@ -53,7 +64,6 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
             } else {
                 // [성공] 에러가 없으면 연결 성공
                 log.info("[KIS Adapter] 연결 성공! Session ID: {}", session.getId());
-                startPing(session);
             }
         });
     }
@@ -61,9 +71,6 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
     @Override
     public void disconnect() {
         log.info("[KIS Adapter] 연결 종료 요청");
-
-        // Ping 스케줄러 중지
-        stopPing();
 
         // 재접속 예약된게 있다면 취소
         if (reconnectTask != null && !reconnectTask.isDone()) {
@@ -81,38 +88,10 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
     }
 
     private void scheduleReconnect(String approvalKey) {
-        stopPing();
         log.info("[KIS Adapter] 3초 후 재접속을 시도합니다...");
         this.reconnectTask = taskScheduler.schedule(
                 () -> this.connect(approvalKey),
                 Instant.now().plusSeconds(3)
         );
-    }
-
-    /**
-     * [Heartbeat] 60초마다 서버에 PING 메시지를 전송
-     */
-    private void startPing(WebSocketSession socketSession) {
-        stopPing();
-
-        pingTask = taskScheduler.scheduleAtFixedRate(() -> {
-            try {
-                if (socketSession.isOpen()) {
-                    socketSession.sendMessage(new TextMessage("PING"));
-                }
-            } catch (IOException e) {
-                log.error("[KIS Adapter] PING 전송 실패");
-            }
-        }, Instant.now().plusSeconds(60), Duration.ofSeconds(60));
-    }
-
-    /**
-     * 실행 중인 Ping 스케줄링 중지
-     */
-    private void stopPing() {
-        if (pingTask != null && !pingTask.isCancelled()) {
-            pingTask.cancel(true);
-            pingTask = null;
-        }
     }
 }
