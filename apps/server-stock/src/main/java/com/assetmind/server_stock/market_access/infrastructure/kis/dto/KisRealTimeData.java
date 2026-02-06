@@ -1,16 +1,19 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.dto;
 
+import lombok.Builder;
+
 /**
  * KIS 실시간 체결 데이터 (H0STCNT0) DTO
  * 46개의 모든 필드를 포함하지 않고 핵심 15개 필드를 포함
  */
+@Builder
 public record KisRealTimeData(
         String symbol,              // 종목코드
         String executionTime,       // 체결 시간 (HHmmss)
         Long currentPrice,          // 현재가
         Long changeSign,            // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
         Long priceChange,           // 전일 대비
-        Double ChangeRate,          // 등락률
+        Double changeRate,          // 등락률
         Long openPrice,             // 시가
         Long highPrice,             // 고가
         Long lowPrice,              // 저가
