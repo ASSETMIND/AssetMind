@@ -1,5 +1,7 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
+import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,9 @@ class KisWebSocketHandlerTest {
 
     @Mock
     private WebSocketSession session; // 가짜 세션
+
+    @Mock
+    private KisRealTimeDataParser dataParser;
 
     private final String TEST_KEY = "TEST_APP_KEY";
 
@@ -88,52 +93,25 @@ class KisWebSocketHandlerTest {
     }
 
     @Nested
-    @DisplayName("데이터 파싱 테스트")
-    class AfterConnectionEstablished {
-
-        @BeforeEach
-        void initSession() {
-            // 파싱 테스트를 위해 세션 연결 상태 가정
-            handler.afterConnectionEstablished(session);
-        }
+    @DisplayName("실시간 데이터 처리 테스트")
+    class RealTimeDataHandling {
 
         @Test
-        @DisplayName("성공: 일반적인 주식 체결 데이터(Count=1) 파싱")
-        void givenNormalStockData_whenHandleMessage_thenParsingPayload() {
-            // 0|ID|개수|데이터(종목코드^시간^현재가^...^등락률...)
-            String payload = "0|H0STCNT0|001|005930^123000^80000^1^0^2.5^dummy^dummy^dummy^dummy^dummy^dummy^100";
+        @DisplayName("성공: 실시간 데이터 수신 시 파서를 호출하고 데이터를 처리해야 한다")
+        void givenRealTimePayload_whenHandleMessage_thenInvokeParser() throws Exception {
+            // Given
+            String payload = "0|H0STCNT0|001|005930^123000^80000^1^0^2.5^...^100";
+            // 파서가 결과 리스트를 반환하도록 설정
+            when(dataParser.parse(payload)).thenReturn(List.of(
+                    new KisRealTimeData("005930", "123000", 80000L, 1L, 0L, 2.5,
+                            80000L, 81000L, 79000L, 100L, 1000L, 1000000L, 100.0, "20")
+            ));
 
-            assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(payload)));
-            // 로그가 찍히고 에러가 없으면 통과
-        }
+            // When
+            handler.handleMessage(session, new TextMessage(payload));
 
-        @Test
-        @DisplayName("성공: 멀티 레코드(Count=2) 데이터 파싱")
-        void givenMultiStockData_whenHandleMessage_thenParsingPayload() {
-            // 데이터 2건이 이어서 들어옴
-            String record1 = "005930^123000^80000^1^0^2.5^d^d^d^d^d^d^100";
-            String record2 = "000660^123001^150000^2^0^-1.0^d^d^d^d^d^d^200";
-            String payload = "0|H0STCNT0|002|" + record1 + "^" + record2;
-
-            assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(payload)));
-        }
-
-        @Test
-        @DisplayName("성공: 'H' 에러 데이터 (개수 필드 누락) 방어 처리")
-        void givenErrorStockData_whenHandleMessage_thenParsingPayload() {
-            // 0|ID|데이터 (가운데 개수 필드가 없고 바로 데이터가 옴) -> parts[2]가 숫자가 아님
-            // "H" 에러 유발 케이스
-            String payload = "0|H0STCNT0|005930^123000^80000^1^0^2.5^d^d^d^d^d^d^100";
-
-            assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(payload)));
-            // NumberFormatException 없이 정상 처리되어야 함
-        }
-
-        @Test
-        @DisplayName("성공: JSON 제어 메시지 (PINGPONG 등) 처리")
-        void givenJsonOperatorData_whenHandleMessage_thenParsingPayload() {
-            String jsonPayload = "{\"header\":{\"tr_id\":\"PINGPONG\"}}";
-            assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(jsonPayload)));
+            // Then
+            verify(dataParser, times(1)).parse(payload); // 파서가 1번 호출되었는지 검증
         }
     }
 
