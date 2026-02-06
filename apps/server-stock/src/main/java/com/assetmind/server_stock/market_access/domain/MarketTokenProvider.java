@@ -8,15 +8,21 @@ package com.assetmind.server_stock.market_access.domain;
  * 이를 통해 도메인 로직은 외부 API의 변경에 영향을 받지 않음 (DIP 적용)
  *
  * 요약:
- * 주식 거래 시트템 접근 권한 토큰을 획득하는 명세서(계약서?)
+ * 주식 거래 시스템 접근 권한 토큰을 획득하는 명세서(계약서?)
  * 구현체는 외부 시스템과 관련된 영역인 Infrastructure Layer에 위치
  */
 
 public interface MarketTokenProvider {
 
     /**
-     * 유효한 접근 토큰을 발급받아 반환한다.
+     * 유효한 접근 토큰을 발급받아 반환한다. (REST 용)
      * @return 도메인 전용 AccessToken VO
      */
     ApiAccessToken fetchToken();
+
+    /**
+     * WebSocket 연결 접속를 발급받아 반환한다. (Socket 용)
+     * @return 도메인 전용 ApprovalKey VO
+     */
+    ApiApprovalKey fetchApprovalKey();
 }

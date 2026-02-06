@@ -1,6 +1,7 @@
 package com.assetmind.server_stock.market_access.application;
 
 import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
+import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
 import jakarta.annotation.PostConstruct;
@@ -18,10 +19,12 @@ import org.springframework.stereotype.Service;
 public class MarketAccessService {
     private final MarketTokenProvider marketTokenProvider;
 
-    // API을 사용하는 Http Request 요청을 위한 accessToken 읽기 스레드,
-    // 주기적인 토큰 갱신을 위해 읽기 작업을 하는 스케줄러 스레드
-    // 여러 스레드가 접근하므로 가시성을 보장해주는 즉 각 스레드에 할당된 CPU에 캐싱하는 것이 아닌
-    // 바로 메인 메모리에 접근해서 데이터의 정합성을 지키는 volatile 사용
+    /**
+     * API을 사용하는 Http Request 요청을 위한 accessToken 읽기 스레드,
+     * 주기적인 토큰 갱신을 위해 읽기 작업을 하는 스케줄러 스레드
+     * 여러 스레드가 접근하므로 가시성을 보장해주는 즉 각 스레드에 할당된 CPU에 캐싱하는 것이 아닌
+     * 바로 메인 메모리에 접근해서 데이터의 정합성을 지키는 volatile 사용
+     */
     private volatile String cachedAccessToken;
 
     // 앱 시작 시점에 토큰을 한번 받아옴
@@ -47,7 +50,7 @@ public class MarketAccessService {
      * KIS 토큰 유효기간인 24시간 만료 전에 미리 갱신
      * 안전한 시간을 위해 6시간 마다 갱신
      */
-    @Scheduled(fixedRate = 6 * 60 * 60 * 1000)
+    @Scheduled(fixedRate = 6 * 60 * 60 * 1000, initialDelay = 6 * 60 * 60 * 1000)
     public void scheduleTokenRefresh() {
         log.info(">>> 토큰 자동 갱신 스케줄러 실행");
         refreshAccessToken();
@@ -67,5 +70,15 @@ public class MarketAccessService {
         } catch (MarketAccessFailedException e) {
             log.error(">>> 토큰 갱신 실퍠! (기존 토큰 유지)", e);
         }
+    }
+
+    /**
+     * 웹소켓 연결이 필요할 때 approval_key를 발급 받기위한 메서드
+     * 연결 유지 중에는 approval_key가 필요없어서 최초 연결시에만 발급받아서 사용하면 됨
+     * @return ApiApprovalKey
+     */
+    public ApiApprovalKey getApprovalKey() {
+        log.info(">>> 외부 WebSocket API 연결을 위한 접속키 신규 발급 요청");
+        return marketTokenProvider.fetchApprovalKey();
     }
 }

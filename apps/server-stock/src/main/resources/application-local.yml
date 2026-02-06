@@ -1,4 +1,5 @@
 kis:
-  base-url: "https://openapivts.koreainvestment.com:29443" # 모의 투자 URL
+  base-url: "https://openapivts.koreainvestment.com:29443" # [모의 투자] REST URL
+  websocket-url: "ws://ops.koreainvestment.com:31000" # [모의투자] WebSocket URL
   app-key: ${KIS_APP_KEY}
   app-secret: ${KIS_APP_SECRET_KEY}

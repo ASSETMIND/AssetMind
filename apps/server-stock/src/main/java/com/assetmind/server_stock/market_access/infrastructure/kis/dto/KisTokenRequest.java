@@ -2,11 +2,16 @@ package com.assetmind.server_stock.market_access.infrastructure.kis.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-// 한국투자증권 접근토큰발급 API 요청 DTO
+/**
+ * 한국투자증권 접근토큰발급 API 요청 DTO
+ * @param grantType 기본 값: "client_credentials"
+ * @param appKey 한국투자증권 홈페이지에서 발급받은 appkey
+ * @param appSecret 한국투자증권 홈페이지에서 발급받은 appsecret
+ */
 public record KisTokenRequest(
-        @JsonProperty("grant_type") String grantType, // 권한 부여 Type
-        @JsonProperty("appkey") String appKey, // 한국투자증권 홈페이지에서 발급 받은 앱키
-        @JsonProperty("appsecret") String appSecret // 한국투자증권 홈페이지에서 발급받은 앱시크릿키
+        @JsonProperty("grant_type") String grantType,
+        @JsonProperty("appkey") String appKey,
+        @JsonProperty("appsecret") String appSecret
 ) {
 
     /**
@@ -16,7 +21,7 @@ public record KisTokenRequest(
      * @param appSecret: 앱시크릿키
      * @return KisTokenRequest 객체
      */
-    public static KisTokenRequest createKisTokenReq(String appKey, String appSecret) {
+    public static KisTokenRequest of(String appKey, String appSecret) {
         return new KisTokenRequest("client_credentials", appKey, appSecret);
     }
 }
