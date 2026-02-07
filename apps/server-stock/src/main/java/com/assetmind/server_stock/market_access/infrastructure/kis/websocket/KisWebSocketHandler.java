@@ -1,8 +1,11 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
+import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisSubscriptionRequest;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +33,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 public class KisWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
+    private final KisRealTimeDataParser dataParser;
 
     @Setter
     private String approveKey;
@@ -88,19 +92,17 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
-
         if (payload == null || payload.isEmpty()) return;
 
-        char firstChar = payload.charAt(0);
 
         try {
-            if (firstChar == '{') {
+            if (payload.startsWith("{")) {
                 // '{'로 시작한다면 JSON 포맷 (구독 응답, PINGPONG)
                 processJsonMessage(payload);
             } else {
                 // 텍스트 포맷 (실시간 주식 데이터)
                 // KIS 데이터 포맷: 암호화여부(0/1) | TR_ID | 데이터(^으로 구분)
-                processStockData(payload);
+                handleRealTimeData(payload);
             }
         } catch (Exception e) {
             log.error("[KIS WS] 메시지 처리 중 에러 발생 (Payload: {})", payload, e);
@@ -119,60 +121,14 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     }
 
     // 실시간 주식 데이터 처리
-    private void processStockData(String payload) {
-        String[] parts = payload.split("\\|");
+    private void handleRealTimeData(String payload) {
+        List<KisRealTimeData> dataList = dataParser.parse(payload);
 
-        // 최소 길이 체크
-        if (parts.length < 3) return;
+        dataList.forEach(data -> {
+            log.info("[KIS WS] 실시간 체결 데이터 : {}", data.toString());
+        });
 
-        int count = 1;
-        String rawData;
-
-        // 3번째 항목(parts[2])이 숫자인지 먼저 확인 (Try-Catch 대신 정규식 사용)
-        if (parts[2].matches("\\d+")) {
-            // 숫자다! -> 개수 필드가 존재함
-            try {
-                count = Integer.parseInt(parts[2]);
-            } catch (NumberFormatException e) {
-                count = 1; // 혹시라도 실패하면 1개로 처리
-            }
-            // 데이터는 4번째(인덱스 3)부터 시작
-            rawData = (parts.length > 3) ? parts[3] : "";
-        } else {
-            // 숫자가 아니다 ("H" 등) -> 개수 필드 생략됨, 바로 데이터 시작
-            count = 1;
-            rawData = parts[2];
-        }
-
-        // 데이터가 비어있으면 종료
-        if (rawData == null || rawData.isEmpty()) return;
-
-        // 상세 데이터 파싱
-        String[] details = rawData.split("\\^");
-        final int FIELD_COUNT = 46;
-
-        // 데이터 개수 만큼 반복해서 추출
-        for (int i = 0; i < count; i++) {
-            // 현재 데이터의 시작 인덱스
-            int offset = i * FIELD_COUNT;
-
-            // 배열 범위 체크
-            if (offset + 5 >= details.length) break;
-
-            // 주요 필드 추출
-            String stockCode = details[offset + 0]; // 종목코드
-            String time = details[offset + 1]; // 체결시간
-            String currentPrice = details[offset + 2]; // 현재가
-            String sign = details[offset + 3]; // 전일대비 부호 (1: 상한, 2: 상승, 3:보합, 4:하한, 5:하락)
-            String changeRate = details[offset + 5]; // 등락률
-            String volume = details[offset + 12];
-
-            log.info("[체결] {} | 시간:{} | 현재가: {}원 | 등락률: {}% | 거래량: {}", stockCode, time, currentPrice, changeRate, volume);
-        }
-
-        // log.info(">>> [실시간 데이터 수신] TR_ID: {}, RawData: {}", trId, data);
-
-        // TODO: 나중에 실제 데이터를 더 세분화하여 값을 추출하고 DB에 저장
+        //TODO: 추후 DB 연동 및 Spring Event 연동 예정
     }
 
     @Override
