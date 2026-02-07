@@ -1,3 +1,4 @@
+# 통합 데이터베이스, server-auth와 server-stock이 같이 사용
 version: '3.8'
 
 services:
