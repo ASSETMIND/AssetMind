@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode, useId } from "react";
 import { cn } from "../../lib/utils";
 
 type InputState = 'default' | 'error' | 'success';
@@ -24,9 +24,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     icon, 
     onIconClick, 
     rightSection,
-    rightSectionWidth = "pr-[50px]", 
+    rightSectionWidth = "pr-[50px]",
+    id: providedId,
     ...props 
   }, ref) => {
+    
+    // [접근성] 고유 ID 생성 (label-input 연결용)
+    const generatedId = useId();
+    const inputId = providedId || generatedId;
+    const messageId = `${inputId}-message`;
     
     const finalState = error ? 'error' : state;
     const finalMessage = error || message;
@@ -35,7 +41,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <div className="w-full flex flex-col gap-2">
         {/* Label: L2(16px) Regular */}
         {label && (
-          <label className="text-l2 font-normal text-text-primary">
+          <label 
+            htmlFor={inputId}
+            className="text-l2 font-normal text-text-primary"
+          >
             {label}
           </label>
         )}
@@ -43,24 +52,27 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <div className="relative">
           <input
             ref={ref}
+            id={inputId}
+            aria-describedby={finalMessage ? messageId : undefined}
+            aria-invalid={finalState === 'error' ? true : undefined}
             className={cn(
-              // 1. [Layout] 높이 57px, 좌측 패딩 25px
+              // 1. [Layout] 기본 스타일
               "w-full h-[57px] px-[25px] rounded-lg border outline-none transition-all duration-200",
               
-              // 2. [Typography] B2 수정 (14px 강제 적용)
+              // 2. [Typography] 텍스트 스타일
               "text-[14px] leading-[150%] font-normal",
               "text-text-primary placeholder:text-text-placeholder",
               
-              // 3. [Colors] 배경색 #1C1D21
+              // 3. [Colors] 기본 배경
               "bg-[#1C1D21] border-border-inputNormal",
               
               // 4. [Interaction]
               "focus:border-border-inputFocus focus:bg-[#1C1D21]",
               
-              // 5. [Padding] 우측 여백
+              // 5. [Padding] 아이콘 또는 우측 섹션이 있을 때 패딩 조정
               (icon || rightSection) && rightSectionWidth,
               
-              // 6. [State Styles] - 텍스트 색상 관련 부분 제거
+              // 6. [State Styles] 오류 및 성공 상태 스타일
               finalState === 'error' && "border-border-inputError focus:border-border-inputError placeholder:text-text-error/50",
               finalState === 'success' && "border-border-inputSuccess focus:border-border-inputSuccess", 
               
@@ -74,7 +86,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <button
               type="button"
               onClick={onIconClick}
-              className="absolute right-[20px] top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary flex items-center justify-center"
+              aria-label={props['aria-label'] || "Toggle visibility"}
+              className="absolute right-[20px] top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary focus:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-border-inputFocus focus-visible:ring-offset-2 focus-visible:ring-offset-background-primary rounded transition-colors flex items-center justify-center"
             >
               {icon}
             </button>
@@ -90,12 +103,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
         {/* 하단 메시지 */}
         {finalMessage && (
-          <p className={cn(
-            "text-l4 mt-1",
-            finalState === 'error' ? "text-text-error" : 
-            finalState === 'success' ? "text-text-success" : 
-            "text-text-secondary"
-          )}>
+          <p 
+            id={messageId}
+            aria-live={finalState === 'error' ? 'assertive' : 'polite'}
+            role={finalState === 'error' ? 'alert' : undefined}
+            className={cn(
+              "text-l4 mt-1",
+              finalState === 'error' ? "text-text-error" : 
+              finalState === 'success' ? "text-text-success" : 
+              "text-text-secondary"
+            )}
+          >
             {finalMessage}
           </p>
         )}

@@ -40,12 +40,10 @@
     @apply text-[24px] md:text-[32px] lg:text-[48px] font-medium leading-[120%] tracking-[-0.05em];
   }
   
-  /* T1: Regular(400) */
   .text-t1 {
     @apply text-[14px] md:text-[16px] lg:text-[20px] font-normal leading-[140%] tracking-normal;
   }
 
-  /* [추가] B2: 14px (이게 없어서 16px로 나왔던 것 해결) */
   .text-b2 {
     @apply text-[14px] font-normal leading-[150%];
   }
@@ -70,7 +68,6 @@
 
   /* [Form] 입력 필드 */
   .input-base {
-    /* text-b2 적용됨 -> 이제 14px로 정상 출력 */
     @apply w-full h-[52px] px-4 rounded-lg border bg-transparent text-b2 text-text-primary outline-none transition-all duration-200;
     @apply border-border-inputNormal placeholder-text-placeholder;
     @apply focus:border-border-inputFocus focus:bg-background-elevated;
@@ -84,4 +81,26 @@
   .btn-full {
     @apply w-full flex items-center justify-center rounded-lg transition-colors font-medium;
   }
+}
+
+/* 스크린 리더 전용 콘텐츠 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* 로딩 스피너 애니메이션 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
