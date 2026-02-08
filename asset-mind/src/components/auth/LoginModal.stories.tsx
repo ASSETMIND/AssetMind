@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { LoginModal } from './LoginModal';
 
-// 이 파일을 LoginModal.tsx와 같은 폴더에 넣어주세요!
-
 const meta: Meta<typeof LoginModal> = {
   title: 'UI_KIT/LoginModal',
   component: LoginModal,
