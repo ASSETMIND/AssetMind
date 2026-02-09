@@ -4,7 +4,7 @@ import EyeOnIcon from '../icon/eye-on';
 import Input from '../common/input';
 
 // 안증인풋 관련정의
-type AuthInputType = 'text' | 'password' | 'email';
+type AuthInputType = 'text' | 'password' | 'email' | 'name';
 
 // 기본 인풋 타입을 상속받지만 타입 속성은 인증 인풋으로 제한함
 // 비밀번호 토글을 옵셔널로 정의

@@ -9,6 +9,9 @@ const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).{8,}$/;
 // 회원가입 스키마 정의
 export const signupSchema = z
 	.object({
+		// 이름 입력
+		name: z.string().min(1, '이름을 입력해주세요.'),
+
 		// 이메일 기반 아이디 입력
 		email: z
 			.string()

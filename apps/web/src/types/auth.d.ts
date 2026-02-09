@@ -12,8 +12,18 @@ export interface SocialLoginParams {
 
 // 회원가입
 export interface SignupParams {
+	user_name: string;
 	email: string;
 	password: string;
+	sign_up_token?: string;
+}
+
+export interface VerifyEmailResponse {
+	success: boolean;
+	message: string;
+	data: {
+		sign_up_token: string;
+	};
 }
 
 // 아이디 찾기
@@ -55,6 +65,11 @@ export interface VerifyTokenResponse {
 // 아이디 찾기 응답
 export interface FindIdResponse {
 	email: string;
+}
+
+// 이메일 인증 검증 응답 (회원가입용 임시 토큰)
+export interface EmailVerificationResponse {
+	sign_up_token: string;
 }
 
 // 토큰 갱신 응답

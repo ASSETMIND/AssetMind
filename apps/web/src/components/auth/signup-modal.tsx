@@ -34,11 +34,11 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 	// [UI 로직] 버튼의 텍스트와 클릭 동작을 상태에 따라 결정
 	const getEmailButtonConfig = () => {
 		// 1. 중복 확인 전 -> "중복 확인"
-		if (!state.isIDChecked) {
+		if (!state.isEmailChecked) {
 			return {
-				text: state.isCheckingID ? '확인 중' : '중복 확인',
-				onClick: actions.handleCheckID,
-				disabled: state.isCheckingID,
+				text: state.isCheckingEmail ? '확인 중' : '중복 확인',
+				onClick: actions.handleCheckEmail,
+				disabled: state.isCheckingEmail,
 			};
 		}
 		// 2. 중복 확인 완료 & 전송 전 -> "인증번호 전송"
@@ -65,7 +65,18 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 				<h2 className='mb-4 text-center text-4xl font-bold'>SIGN UP</h2>
 
 				<form onSubmit={actions.onSubmit} className='flex flex-col gap-6'>
-					{/* 1. 아이디 입력 (중복 확인 -> 인증번호 전송) */}
+					{/* 1. 이름 입력 */}
+					<div className='flex flex-col gap-2'>
+						<label className='font-medium'>이름</label>
+						<AuthInput
+							type='text'
+							placeholder='이름을 입력해 주세요'
+							errorMessage={(errors as any).name?.message}
+							{...register('name' as any)}
+						/>
+					</div>
+
+					{/* 2. 아이디 입력 (중복 확인 -> 인증번호 전송) */}
 					<div className='flex flex-col gap-2'>
 						<label className='font-medium'>아이디</label>
 						<div className='relative'>
@@ -75,15 +86,15 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 								readOnly={state.isEmailVerified}
 								// [UI 적용] 상태에 따른 테두리 색상 변경
 								className={`pr-24 ${
-									errors.id
+									errors.email
 										? 'border-red-500'
-										: state.isIDChecked // 중복 확인만 통과해도 파란색 표시
+										: state.isEmailChecked // 중복 확인만 통과해도 파란색 표시
 											? 'border-blue-500'
 											: ''
 								}`}
-								{...register('id', {
+								{...register('email', {
 									// 입력값 변경 시 상태 초기화 위임
-									onChange: actions.handleIdChange,
+									onChange: actions.handleEmailChange,
 								})}
 							/>
 
@@ -99,12 +110,12 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 							</Button>
 
 							{/* 에러 및 성공 메시지 출력 */}
-							{errors.id && errors.id.type !== 'duplicate' && (
+							{errors.email && errors.email.type !== 'duplicate' && (
 								<p className='absolute -bottom-5 left-1 text-xs text-red-500'>
-									{errors.id.message}
+									{errors.email.message}
 								</p>
 							)}
-							{state.successMessage && !errors.id && (
+							{state.successMessage && !errors.email && (
 								<p className='absolute -bottom-5 left-1 text-xs text-blue-500'>
 									{state.successMessage}
 								</p>
@@ -123,7 +134,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 								type='text'
 								placeholder='인증번호 6자리'
 								maxLength={6}
-								// [변경] 전송 전이거나 인증 완료 시 비활성화
 								disabled={!state.isEmailSent || state.isEmailVerified}
 								className={`pr-20 ${
 									errors.authCode
@@ -140,7 +150,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 								size='sm'
 								className='absolute right-2 top-1/2 h-8 w-24 -translate-y-1/2 text-xs'
 								onClick={actions.handleVerifyEmailAuth}
-								// [변경] 전송 전이거나 인증 완료 시 비활성화
 								disabled={!state.isEmailSent || state.isEmailVerified}
 							>
 								{state.isEmailVerified ? '인증완료' : '인증확인'}
@@ -177,10 +186,8 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 							<AuthInput
 								type='password'
 								placeholder='비밀번호를 한 번 더 입력해 주세요.'
-								// 에러 메시지는 Zod Refine 결과(불일치) 출력
 								errorMessage={errors.passwordConfirm?.message}
 								{...register('passwordConfirm')}
-								// [UI 적용] 에러 시 빨강, 일치 성공 시 파랑 테두리
 								className={
 									errors.passwordConfirm
 										? 'border-red-500'
@@ -189,8 +196,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 											: ''
 								}
 							/>
-
-							{/* [UI 적용] 일치 성공 메시지 (파란색) */}
 							{state.isPasswordMatch && (
 								<p className='absolute -bottom-5 left-1 text-xs text-blue-500'>
 									비밀번호가 일치합니다.

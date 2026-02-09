@@ -21,7 +21,7 @@ export function useSendEmailCode() {
 
 // 인증번호 검증 훅
 export function useVerifyEmailCode() {
-	return useMutation({
+	return useMutation<string, Error, { email: string; code: string }>({
 		mutationFn: ({ email, code }: { email: string; code: string }) =>
 			verifyEmailCode(email, code),
 	});

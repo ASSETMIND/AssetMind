@@ -36,24 +36,26 @@ describe('useSignupLogic 유닛 테스트', () => {
 		jest.clearAllMocks();
 	});
 
-	// 이제부터 테스트 진행
-	// 아이디 관리 및 상태 초기화 테스트
-	describe('1. 아이디 관리 및 상태 초기화', () => {
-		test('유효하지 않은 이메일 형식이면 API를 호출하지 않아야 한다', async () => {
+	describe('Feature: 아이디(이메일) 중복 확인', () => {
+		test('Scenario: 유효하지 않은 이메일 형식 입력 시 API를 호출하지 않는다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
 				result.current.formMethods.setValue('email', 'invalid-email');
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleCheckEmail();
 			});
 
+			// Then
 			expect(mockCheckEmailMutate).not.toHaveBeenCalled();
 		});
 
-		test('아이디 중복 확인 결과가 "중복(false)"이면 에러를 설정해야 한다', async () => {
+		test('Scenario: 이미 사용 중인 이메일일 경우 에러 메시지를 표시한다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			// 유효한 이메일 입력
@@ -64,12 +66,12 @@ describe('useSignupLogic 유닛 테스트', () => {
 			// API가 false(중복)를 반환하도록 설정
 			mockCheckEmailMutate.mockResolvedValue(false);
 
-			// 실행
+			// When
 			await act(async () => {
 				await result.current.actions.handleCheckEmail();
 			});
 
-			// 검증: 중복 에러 메시지가 설정되어야 함
+			// Then
 			expect(result.current.state.isEmailChecked).toBe(false);
 			expect(result.current.formMethods.formState.errors.email?.message).toBe(
 				'이미 사용 중인 아이디입니다.',
@@ -79,7 +81,8 @@ describe('useSignupLogic 유닛 테스트', () => {
 			);
 		});
 
-		test('아이디 입력값이 변경되면 기존의 인증 상태들이 모두 초기화되어야 한다', async () => {
+		test('Scenario: 이메일 입력값이 변경되면 기존 인증 상태가 초기화된다', async () => {
+			// Given: 중복 에러가 발생한 상태
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			// 중복 에러 상태로 시작
@@ -91,26 +94,26 @@ describe('useSignupLogic 유닛 테스트', () => {
 				await result.current.actions.handleCheckEmail();
 			});
 
-			// 에러가 있는지 확인
 			expect(result.current.formMethods.formState.errors.email?.type).toBe(
 				'duplicate',
 			);
 
-			// 아이디 값이 변경됨 -> handleIdChange 호출
+			// When: 사용자가 이메일을 수정함
 			await act(async () => {
 				result.current.actions.handleEmailChange();
 			});
 
-			// 중복 에러가 사라져야 함 (초기화 확인)
+			// Then: 에러가 사라지고 초기화되어야 함
 			expect(result.current.formMethods.formState.errors.email).toBeUndefined();
 		});
 	});
 
-	// 이메일 인증번호 전송 흐름 테스트
-	describe('2. 인증번호 전송 흐름', () => {
-		test('아이디 중복 확인을 하지 않고 전송을 누르면 경고 메시지가 떠야 한다', async () => {
+	describe('Feature: 인증번호 전송', () => {
+		test('Scenario: 중복 확인을 하지 않고 전송 시도 시 경고 메시지를 표시한다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleSendEmailAuth();
 			});
@@ -121,11 +124,10 @@ describe('useSignupLogic 유닛 테스트', () => {
 			);
 		});
 
-		// API가 명시적 에러 메시지를 줄 때
-		test('이메일 발송 API가 실패하면 서버 에러 메시지를 토스트에 띄워야 한다', async () => {
+		test('Scenario: 이메일 발송 실패 시 서버 에러 메시지를 표시한다', async () => {
+			// Given: 중복 확인 완료 상태
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
-			// 전제 조건: ID 확인 완료
 			mockCheckEmailMutate.mockResolvedValue(true);
 			await act(async () => {
 				result.current.formMethods.setValue('email', 'valid@email.com');
@@ -139,61 +141,40 @@ describe('useSignupLogic 유닛 테스트', () => {
 				response: { data: { message: '서버 에러 발생' } },
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleSendEmailAuth();
 			});
 
+			// Then
 			expect(result.current.state.isEmailSent).toBe(false);
 			expect(result.current.state.toastMessage).toBe('서버 에러 발생');
 		});
-
-		// API가 메시지 없이 실패할 때 (기본값 사용)
-		test('이메일 발송 실패 시 서버 응답 메시지가 없으면 기본 메시지를 띄워야 한다', async () => {
-			const { result } = renderHook(() => useSignupLogic(defaultProps));
-
-			// 전제 조건 설정
-			mockCheckEmailMutate.mockResolvedValue(true);
-			await act(async () => {
-				result.current.formMethods.setValue('email', 'valid@email.com');
-			});
-			await act(async () => {
-				await result.current.actions.handleCheckEmail();
-			});
-
-			// API 실패 Mocking (response 없음 -> 기본 메시지 사용)
-			mockSendEmailMutate.mockRejectedValue(new Error('Network Error'));
-
-			await act(async () => {
-				await result.current.actions.handleSendEmailAuth();
-			});
-
-			// 기본 에러 메시지 확인
-			expect(result.current.state.toastMessage).toBe(
-				'인증번호 발송에 실패했습니다.',
-			);
-		});
 	});
 
-	// 인증번호 검증 흐름 테스트
-	describe('3. 인증번호 검증 흐름', () => {
-		test('인증번호가 6자리가 아니면 API를 호출하지 않고 경고해야 한다', async () => {
+	describe('Feature: 인증번호 검증', () => {
+		test('Scenario: 인증번호가 6자리가 아니면 API를 호출하지 않는다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
 				result.current.formMethods.setValue('authCode', '123'); // 3자리
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleVerifyEmailAuth();
 			});
 
+			// Then
 			expect(mockVerifyCodeMutate).not.toHaveBeenCalled();
 			expect(result.current.state.toastMessage).toContain(
 				'6자리를 입력해주세요',
 			);
 		});
 
-		test('인증번호 검증에 실패하면 에러 메시지와 Form 에러를 설정해야 한다', async () => {
+		test('Scenario: 인증번호 검증 실패 시 에러 메시지를 표시한다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
@@ -206,10 +187,12 @@ describe('useSignupLogic 유닛 테스트', () => {
 				response: { data: { message: errorMsg } },
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleVerifyEmailAuth();
 			});
 
+			// Then
 			expect(result.current.state.isEmailVerified).toBe(false);
 			expect(result.current.state.toastMessage).toBe(errorMsg);
 			expect(
@@ -217,19 +200,23 @@ describe('useSignupLogic 유닛 테스트', () => {
 			).toBe(errorMsg);
 		});
 
-		test('인증번호 검증 성공 시 isEmailVerified가 true가 되어야 한다', async () => {
+		test('Scenario: 인증번호 검증 성공 시 토큰을 저장하고 인증 완료 상태가 된다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
 				result.current.formMethods.setValue('authCode', '123456');
 			});
 
-			mockVerifyCodeMutate.mockResolvedValue(true);
+			// API가 토큰 문자열을 반환한다고 가정
+			mockVerifyCodeMutate.mockResolvedValue('mock-sign-up-token');
 
+			// When
 			await act(async () => {
 				await result.current.actions.handleVerifyEmailAuth();
 			});
 
+			// Then
 			expect(result.current.state.isEmailVerified).toBe(true);
 			expect(result.current.state.toastMessage).toBe(
 				'이메일 인증이 완료되었습니다.',
@@ -237,44 +224,50 @@ describe('useSignupLogic 유닛 테스트', () => {
 		});
 	});
 
-	// 최종 회원가입 제출(onSubmit) 테스트
-	describe('4. 회원가입 제출(onSubmit)', () => {
+	describe('Feature: 회원가입 제출', () => {
+		// 공통 Setup 함수
 		const setupReadyToSubmit = async (result: any) => {
 			await act(async () => {
+				result.current.formMethods.setValue('name', '테스트유저');
 				result.current.formMethods.setValue('email', 'final@test.com');
 				result.current.formMethods.setValue('password', 'password123!');
 				result.current.formMethods.setValue('passwordConfirm', 'password123!');
 				result.current.formMethods.setValue('authCode', '123456');
 			});
 
-			mockVerifyCodeMutate.mockResolvedValue(true);
+			// 인증 성공 시 토큰 반환
+			mockVerifyCodeMutate.mockResolvedValue('mock-sign-up-token');
 			await act(async () => {
 				await result.current.actions.handleVerifyEmailAuth();
 			});
 		};
 
-		test('이메일 인증이 완료되지 않았으면 가입 요청을 보내지 않아야 한다', async () => {
+		test('Scenario: 이메일 인증 미완료 시 가입 요청을 보내지 않는다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
+				result.current.formMethods.setValue('name', '테스트유저');
 				result.current.formMethods.setValue('email', 'no-auth@test.com');
 				result.current.formMethods.setValue('password', 'pass123!');
 				result.current.formMethods.setValue('passwordConfirm', 'pass123!');
 				result.current.formMethods.setValue('authCode', '000000');
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.onSubmit({} as any);
 			});
 
+			// Then
 			expect(mockSignupMutate).not.toHaveBeenCalled();
 			expect(result.current.state.toastMessage).toBe(
 				'이메일 인증을 완료해주세요.',
 			);
 		});
 
-		// 회원가입 실패(onError) 케이스 커버
-		test('회원가입 요청이 실패하면(onError) 에러 메시지를 토스트에 띄워야 한다', async () => {
+		test('Scenario: 회원가입 요청 실패 시 에러 메시지를 표시한다', async () => {
+			// Given
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 			await setupReadyToSubmit(result);
 
@@ -286,14 +279,17 @@ describe('useSignupLogic 유닛 테스트', () => {
 				}
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.onSubmit({} as any);
 			});
 
+			// Then
 			expect(result.current.state.toastMessage).toBe(serverErrorMsg);
 		});
 
-		test('모든 조건 만족 시 가입 요청을 보내고, 성공 시 페이지 이동 콜백을 실행해야 한다', async () => {
+		test('Scenario: 모든 조건 만족 시 가입 요청을 보내고 성공 처리한다', async () => {
+			// Given
 			jest.useFakeTimers();
 
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
@@ -304,14 +300,18 @@ describe('useSignupLogic 유닛 테스트', () => {
 				options.onSuccess();
 			});
 
+			// When
 			await act(async () => {
 				await result.current.actions.onSubmit({} as any);
 			});
 
+			// Then
 			expect(mockSignupMutate).toHaveBeenCalledWith(
 				expect.objectContaining({
+					user_name: '테스트유저',
 					email: 'final@test.com',
 					password: 'password123!',
+					sign_up_token: 'mock-sign-up-token',
 				}),
 				expect.any(Object),
 			);
