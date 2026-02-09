@@ -10,7 +10,7 @@ const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).{8,}$/;
 export const signupSchema = z
 	.object({
 		// 이메일 기반 아이디 입력
-		id: z
+		email: z
 			.string()
 			.min(1, '이메일을 입력해주세요.')
 			.email('올바른 이메일 형식이 아닙니다.'),

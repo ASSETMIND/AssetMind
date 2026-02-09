@@ -16,7 +16,7 @@ type Props = {
 
 export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	const [toastMessage, setToastMessage] = useState<string | null>(null);
-	const [isIDChecked, setIsIDChecked] = useState(false);
+	const [isEmailChecked, setIsEmailChecked] = useState(false);
 	const [isEmailSent, setIsEmailSent] = useState(false);
 	const [isEmailVerified, setIsEmailVerified] = useState(false);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		resolver: zodResolver(signupSchema),
 		mode: 'onChange',
 		defaultValues: {
-			id: '',
+			email: '',
 			authCode: '',
 			password: '',
 			passwordConfirm: '',
@@ -43,7 +43,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	} = formMethods;
 
 	const { mutate: signupMutate, isPending: isSignupPending } = useSignup();
-	const { mutateAsync: checkEmailMutate, isPending: isCheckingEmail } =
+	const { mutateAsync: checkEmailMutate, isPending: isCheckingAvailability } =
 		useCheckEmail();
 
 	// 이메일 발송 및 검증 Mutation
@@ -53,18 +53,18 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		useVerifyEmailCode();
 
 	// 입력값이 바뀌면 모든 인증 단계 초기화 (처음부터 다시)
-	const handleIdChange = () => {
-		if (isIDChecked) setIsIDChecked(false);
+	const handleEmailChange = () => {
+		if (isEmailChecked) setIsEmailChecked(false);
 		if (isEmailSent) setIsEmailSent(false);
 		if (isEmailVerified) setIsEmailVerified(false);
 		if (successMessage) setSuccessMessage(null);
-		if (errors.id?.type === 'duplicate') clearErrors('id');
+		if (errors.email?.type === 'duplicate') clearErrors('email');
 	};
 
 	// 1단계: 아이디 중복 확인 로직
-	const handleCheckID = async () => {
-		const email = getValues('id');
-		const isValidFormat = await trigger('id');
+	const handleCheckEmail = async () => {
+		const email = getValues('email');
+		const isValidFormat = await trigger('email');
 		if (!isValidFormat) return;
 
 		// 중복 확인 요청
@@ -73,25 +73,25 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		if (isAvailable) {
 			setToastMessage('사용 가능한 아이디입니다. 인증번호를 전송해주세요.');
 			setSuccessMessage('사용 가능한 아이디입니다.');
-			setIsIDChecked(true); // 중복확인 통과
-			clearErrors('id');
+			setIsEmailChecked(true); // 중복확인 통과
+			clearErrors('email');
 		} else {
 			const msg = '이미 사용 중인 아이디입니다.';
-			setError('id', { type: 'duplicate', message: msg });
+			setError('email', { type: 'duplicate', message: msg });
 			setToastMessage(msg);
 			setSuccessMessage(null);
-			setIsIDChecked(false);
+			setIsEmailChecked(false);
 		}
 	};
 
 	// 2단계: 인증번호 전송 로직
 	const handleSendEmailAuth = async () => {
-		if (!isIDChecked) {
+		if (!isEmailChecked) {
 			setToastMessage('먼저 아이디 중복 확인을 진행해주세요.');
 			return;
 		}
 
-		const email = getValues('id');
+		const email = getValues('email');
 
 		try {
 			// 실제 이메일 발송 API 호출
@@ -111,7 +111,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 	// 3단계: 인증번호 확인 로직
 	const handleVerifyEmailAuth = async () => {
-		const email = getValues('id');
+		const email = getValues('email');
 		const code = getValues('authCode');
 
 		if (code.length !== 6) {
@@ -148,7 +148,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 		signupMutate(
 			{
-				email: data.id,
+				email: data.email,
 				password: data.password,
 			},
 			{
@@ -177,19 +177,20 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	return {
 		formMethods,
 		state: {
-			isIDChecked, // 중복 확인 상태
+			isEmailChecked, // 중복 확인 상태
 			isEmailSent, // 전송 상태
 			isEmailVerified, // 인증 완료 상태
 			successMessage,
 			toastMessage,
 			isSignupPending,
 			isPasswordMatch,
-			isCheckingID: isCheckingEmail || isSendingEmail || isVerifyingCode,
+			isCheckingEmail:
+				isCheckingAvailability || isSendingEmail || isVerifyingCode,
 		},
 		actions: {
 			setToastMessage,
-			handleIdChange,
-			handleCheckID, // 중복 확인 함수
+			handleEmailChange,
+			handleCheckEmail, // 중복 확인 함수
 			handleSendEmailAuth, // 전송 함수
 			handleVerifyEmailAuth, // 검증 함수
 			// [삭제됨] handleVerifySuccess, handleVerifyError 제거
