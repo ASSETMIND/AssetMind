@@ -1,0 +1,542 @@
+export const meta = {
+  title: 'Docs/Accessibility/Keyboard Navigation',
+};
+
+# 키보드 네비게이션 명세
+
+AssetMind 디자인 시스템의 모든 컴포넌트는 키보드만으로 완전히 조작 가능해야 합니다.
+
+---
+
+## Overview
+
+**WCAG 2.1 요구사항 2.1.1 (Level A):**  
+> "모든 기능은 키보드 인터페이스를 통해 사용 가능해야 한다."
+
+이 문서는 각 컴포넌트의 키보드 조작 방법과 구현 세부사항을 명세합니다.
+
+---
+
+## 공통 키보드 단축키
+
+### 기본 탐색
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>기능</th>
+      <th>적용 대상</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Tab</td><td>다음 포커스 요소</td><td>모든 인터랙티브 요소</td></tr>
+    <tr><td>Shift + Tab</td><td>이전 포커스 요소</td><td>모든 인터랙티브 요소</td></tr>
+    <tr><td>Enter</td><td>활성화/선택</td><td>버튼, 링크</td></tr>
+    <tr><td>Space</td><td>활성화/선택</td><td>버튼, 체크박스</td></tr>
+    <tr><td>Esc</td><td>닫기/취소</td><td>모달, 드롭다운</td></tr>
+  </tbody>
+</table>
+
+
+### 방향키 (Arrow Keys)
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>기능</th>
+      <th>적용 대상</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>↑ / ↓</td><td>세로 목록 탐색</td><td>드롭다운, 리스트</td></tr>
+    <tr><td>← / →</td><td>가로 목록 탐색</td><td>탭, 슬라이더</td></tr>
+    <tr><td>Home</td><td>첫 항목</td><td>목록</td></tr>
+    <tr><td>End</td><td>마지막 항목</td><td>목록</td></tr>
+  </tbody>
+</table>
+
+
+---
+
+## 컴포넌트별 키보드 명세
+
+## Button
+
+### 포커스 상태
+- **Tab**: 버튼으로 포커스 이동
+- **Shift + Tab**: 이전 요소로 포커스 이동
+
+### 활성화
+- **Enter**: 버튼 클릭
+- **Space**: 버튼 클릭
+
+### 구현 세부사항
+```tsx
+<button
+  onClick={handleClick}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  }}
+>
+  로그인
+</button>
+```
+
+### 비활성 상태
+- **Tab**: 건너뜀 (`disabled` 속성 적용 시)
+- 포커스 불가
+
+### 테스트 시나리오
+```
+1. Tab 키로 버튼에 포커스
+2. Enter 키로 버튼 클릭 → 동작 확인
+3. Space 키로 버튼 클릭 → 동작 확인
+4. disabled 버튼은 Tab으로 건너뛰는지 확인
+```
+
+---
+
+## Input
+
+### 포커스 상태
+- **Tab**: 입력 필드로 포커스 이동
+- **Shift + Tab**: 이전 요소로 포커스 이동
+
+### 입력
+- **텍스트 키**: 문자 입력
+- **Backspace / Delete**: 문자 삭제
+- **Ctrl + A** (Windows) / **Cmd + A** (Mac): 전체 선택
+- **Ctrl + C / V / X**: 복사/붙여넣기/잘라내기
+
+### Label 클릭
+- Label 클릭 시 연결된 Input으로 포커스 이동
+
+### 구현 세부사항
+```tsx
+<label htmlFor="email" onClick={() => inputRef.current?.focus()}>
+  이메일
+</label>
+<input
+  ref={inputRef}
+  id="email"
+  type="email"
+  onFocus={() => console.log('포커스 획득')}
+  onBlur={() => console.log('포커스 상실')}
+/>
+```
+
+### 우측 섹션 버튼
+- **Tab**: Input → 우측 버튼 순서로 이동
+- **Enter**: 우측 버튼 클릭 (Input에서는 폼 제출)
+
+```
+포커스 순서: 
+Label (클릭 가능) → Input → 우측 버튼 (중복 확인 등)
+```
+
+### 테스트 시나리오
+```
+1. Tab 키로 Input에 포커스
+2. 텍스트 입력 가능한지 확인
+3. Tab 키로 우측 버튼으로 이동
+4. Enter 키로 우측 버튼 클릭 → 동작 확인
+5. Label 클릭 시 Input으로 포커스 이동 확인
+```
+
+---
+
+## Modal
+
+### 포커스 상태 (Focus Trap)
+- **모달 열림**: 모달의 첫 번째 포커스 가능 요소(X 버튼)로 자동 이동
+- **Tab**: 모달 내부 요소들만 순환
+- **Shift + Tab**: 역방향 순환
+- **마지막 요소 → Tab**: 첫 번째 요소로 회귀
+- **첫 번째 요소 → Shift + Tab**: 마지막 요소로 회귀
+
+### 닫기
+- **Esc**: 모달 닫기
+- **백드롭 클릭**: 모달 닫기 (선택사항)
+- **X 버튼 클릭**: 모달 닫기
+
+### 포커스 복원
+- **모달 닫힘**: 모달을 연 트리거 요소로 포커스 복원
+
+### 구현 세부사항
+
+#### Focus Trap 구현
+```tsx
+const Modal = ({ isOpen, onClose, children }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // 모달 열릴 때
+  useEffect(() => {
+    if (isOpen) {
+      // 1. 현재 포커스 저장
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      
+      // 2. 모달 내부로 포커스 이동
+      setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 0);
+      
+      // 3. Tab 키 핸들러 등록
+      document.addEventListener('keydown', handleTabKey);
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleTabKey);
+    };
+  }, [isOpen]);
+
+  // Tab 키 핸들러
+  const handleTabKey = (event: KeyboardEvent) => {
+    if (event.key !== 'Tab' || !modalRef.current) return;
+
+    const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey) {
+      // Shift + Tab
+      if (document.activeElement === firstElement) {
+        lastElement?.focus();
+        event.preventDefault();
+      }
+    } else {
+      // Tab
+      if (document.activeElement === lastElement) {
+        firstElement?.focus();
+        event.preventDefault();
+      }
+    }
+  };
+
+  // Esc 키 핸들러
+  const handleEscapeKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  // 모달 닫힐 때 포커스 복원
+  useEffect(() => {
+    if (!isOpen && previousFocusRef.current) {
+      previousFocusRef.current.focus();
+    }
+  }, [isOpen]);
+
+  return (
+    <div ref={modalRef} role="dialog" aria-modal="true">
+      <button ref={closeButtonRef} onClick={onClose} aria-label="모달 닫기">
+        <CloseIcon />
+      </button>
+      {children}
+    </div>
+  );
+};
+```
+
+### 중첩 모달
+```
+포커스 순서 (2개의 모달이 열린 경우):
+1. 첫 번째 모달의 X 버튼
+2. 첫 번째 모달의 버튼 (두 번째 모달 열기)
+3. 두 번째 모달의 X 버튼 ← 현재 포커스
+4. 두 번째 모달의 버튼
+
+Esc 키: 가장 위의 모달(두 번째)만 닫힘
+```
+
+### 테스트 시나리오
+```
+1. 버튼 클릭으로 모달 열기
+2. X 버튼에 자동 포커스 확인
+3. Tab 키로 모달 내부 요소 순환 확인
+4. 마지막 요소 → Tab → 첫 번째 요소 회귀 확인
+5. Esc 키로 모달 닫기
+6. 모달을 연 버튼으로 포커스 복원 확인
+```
+
+---
+
+## Toast
+
+### 포커스 동작
+- **자동 알림**: Toast는 포커스를 받지 않음 (non-intrusive)
+- **aria-live**: 스크린리더가 자동으로 읽어주지만 포커스는 이동하지 않음
+
+### 이유
+Toast는 **비침입적 알림**이므로 사용자의 현재 작업을 방해하지 않아야 함.  
+따라서 키보드 포커스를 Toast로 이동시키지 않음.
+
+### 닫기 버튼 (선택사항)
+Toast에 닫기 버튼이 있는 경우:
+- **Tab**: Toast 닫기 버튼으로 포커스 가능 (선택사항)
+- **Enter**: 닫기 버튼 클릭
+
+하지만 일반적으로 Toast는 자동으로 사라지므로 닫기 버튼 없이 구현하는 것을 권장.
+
+### 구현 세부사항
+```tsx
+<div aria-live="polite" role="status">
+  <ToastItem
+    variant="success"
+    title="비밀번호가 변경되었습니다."
+    message="서비스 이용을 위해 다시 로그인해 주세요."
+  />
+</div>
+```
+
+### 테스트 시나리오
+```
+1. Toast 트리거 (예: 로그인 실패)
+2. 현재 포커스가 유지되는지 확인 (Toast로 이동하지 않음)
+3. 스크린리더가 Toast 내용을 읽는지 확인 (수동 테스트)
+4. Toast가 5초 후 자동으로 사라지는지 확인
+```
+
+---
+
+## CodeSnippet
+
+### 포커스 상태
+- **Tab**: 복사 버튼으로 포커스 이동
+- **코드 영역**: 포커스 불가 (읽기 전용)
+
+### 복사 버튼
+- **Enter**: 코드 복사
+- **Space**: 코드 복사
+
+### 구현 세부사항
+```tsx
+<div className="code-snippet">
+  {/* Header with Copy Button */}
+  <button
+    onClick={handleCopy}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleCopy();
+      }
+    }}
+    aria-label={isCopied ? '복사 완료' : '코드 복사'}
+  >
+    {isCopied ? 'Copied!' : 'Copy'}
+  </button>
+
+  {/* Code Content (read-only) */}
+  <pre tabIndex={-1}>
+    <code>{code}</code>
+  </pre>
+</div>
+```
+
+### 테스트 시나리오
+```
+1. Tab 키로 복사 버튼에 포커스
+2. Enter 키로 코드 복사
+3. 복사 완료 피드백 확인 ("Copied!")
+4. 클립보드에 코드가 복사되었는지 확인
+```
+
+---
+
+## 포커스 순서 원칙
+
+### 1. 논리적 순서
+포커스 순서는 **시각적 순서**와 **일치**해야 함.
+
+```
+시각적 순서:
+[Logo] → [Menu] → [Search] → [Login] → [Content] → [Footer]
+
+포커스 순서도 동일하게:
+Tab: Logo → Menu → Search → Login → Content → Footer
+```
+
+### 2. `tabindex` 사용 규칙
+
+<table>
+  <thead>
+    <tr>
+      <th>tabindex 값</th>
+      <th>의미</th>
+      <th>사용 예시</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>0</td><td>자연스러운 Tab 순서 포함</td><td>&lt;div tabindex="0"&gt;</td></tr>
+    <tr><td>-1</td><td>Tab 순서 제외, JS 포커스 가능</td><td>&lt;div tabindex="-1"&gt;</td></tr>
+    <tr><td>1+</td><td>사용 금지</td><td>포커스 순서 혼란</td></tr>
+  </tbody>
+</table>
+
+
+**권장 사항:**
+- `tabindex="1"` 이상 사용 금지
+- 시맨틱 HTML(`<button>`, `<a>`)은 자동으로 포커스 가능
+- 필요 시 `tabindex="0"` 또는 `-1`만 사용
+
+### 3. Skip Links
+긴 네비게이션을 건너뛸 수 있는 링크 제공
+
+```tsx
+<a href="#main-content" className="skip-link">
+  본문으로 바로가기
+</a>
+
+<nav>...</nav>
+
+<main id="main-content" tabIndex={-1}>
+  {/* 메인 콘텐츠 */}
+</main>
+```
+
+```css
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+```
+
+---
+
+## 포커스 스타일 (Focus Indicator)
+
+### 기본 원칙
+- 포커스 표시는 **항상 명확**해야 함
+- 색상 대비율 **최소 3:1** 이상
+- **2px 이상** 두께 권장
+
+### AssetMind 포커스 스타일
+```css
+/* 기본 포커스 스타일 */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid #6D4AE6;
+  outline-offset: 2px;
+}
+
+/* :focus vs :focus-visible */
+/* :focus-visible는 키보드로 포커스했을 때만 표시 */
+/* 마우스 클릭 시에는 outline이 나타나지 않음 */
+```
+
+### 테스트
+```
+1. Tab 키로 요소 포커스
+2. 2px 파란색(#6D4AE6) outline 확인
+3. 마우스 클릭 시 outline이 나타나지 않는지 확인 (UX)
+```
+
+---
+
+## 키보드 트랩 금지
+
+### 잘못된 예시 ❌
+```tsx
+// 모달 밖으로 포커스가 빠져나가지 못함
+<div onKeyDown={(e) => e.preventDefault()}>
+  <Modal />
+</div>
+```
+
+### 올바른 예시 ✅
+```tsx
+// 모달 내부에서만 순환, ESC로 탈출 가능
+<Modal onClose={handleClose}>
+  {/* Focus Trap with Escape */}
+</Modal>
+```
+
+**원칙:**
+- 사용자가 **항상 벗어날 수 있어야** 함 (ESC 키 등)
+- Focus Trap은 모달, 다이얼로그 등 제한된 상황에서만 사용
+
+---
+
+## 테스트 체크리스트
+
+### 자동화 테스트
+```bash
+# Vitest + Testing Library
+npm test
+```
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+test('Button은 Tab 키로 포커스 가능', async () => {
+  const user = userEvent.setup();
+  render(<Button>클릭</Button>);
+  
+  const button = screen.getByRole('button', { name: '클릭' });
+  
+  await user.tab();
+  expect(button).toHaveFocus();
+});
+
+test('Enter 키로 버튼 클릭 가능', async () => {
+  const handleClick = jest.fn();
+  const user = userEvent.setup();
+  
+  render(<Button onClick={handleClick}>클릭</Button>);
+  
+  await user.tab();
+  await user.keyboard('{Enter}');
+  
+  expect(handleClick).toHaveBeenCalledTimes(1);
+});
+```
+
+### 수동 테스트
+```
+✅ 마우스를 치우고 키보드만으로 전체 페이지 탐색
+✅ 모든 버튼과 링크가 Tab으로 포커스되는지 확인
+✅ Enter/Space로 모든 버튼 클릭 가능한지 확인
+✅ 모달 열고 닫기 (ESC 포함)
+✅ 포커스 표시가 명확한지 확인
+✅ Skip Link 동작 확인
+```
+
+---
+
+## 참고 자료
+
+- [WCAG 2.1 - Keyboard Accessible](https://www.w3.org/WAI/WCAG21/Understanding/keyboard)
+- [WebAIM - Keyboard Accessibility](https://webaim.org/articles/keyboard/)
+- [MDN - Using tabindex](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/tabindex)
+- [ARIA Authoring Practices - Keyboard Support](https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/)
+
+---
+
+## 빠른 참고
+
+### 컴포넌트 개발 시 체크
+```
+✅ Tab/Shift+Tab으로 모든 요소 탐색 가능한가?
+✅ Enter/Space로 버튼 클릭 가능한가?
+✅ 포커스 표시가 명확한가?
+✅ 키보드 트랩이 없는가?
+✅ 모달은 ESC로 닫히는가?
+✅ 포커스 순서가 논리적인가?
+```
