@@ -1,0 +1,539 @@
+export const meta = {
+  title: 'Docs/Accessibility/Component Guide',
+};
+
+# 컴포넌트별 접근성 가이드
+
+각 컴포넌트의 접근성 구현 방법과 주의사항을 설명합니다.
+
+---
+
+## Button
+
+### 접근성 요구사항
+- ✅ 시맨틱 `<button>` 태그 사용
+- ✅ 명확한 텍스트 또는 `aria-label` 제공
+- ✅ 포커스 표시 (Focus Indicator)
+- ✅ 비활성 상태 처리
+- ✅ 로딩 상태 안내
+
+---
+
+### 구현 예시
+
+#### 1. 기본 버튼
+```tsx
+<Button variant="primary" size="lg">
+  로그인
+</Button>
+```
+
+**접근성 포인트:**
+- 버튼 텍스트가 명확하게 동작을 설명함
+- Tab 키로 포커스 가능
+- Enter/Space 키로 활성화
+
+---
+
+#### 2. 아이콘 버튼
+```tsx
+// ✅ 좋은 예 - aria-label 제공
+<Button 
+  variant="google" 
+  size="icon"
+  aria-label="Google 로그인"
+>
+  <GoogleIcon />
+</Button>
+
+// ❌ 나쁜 예 - 텍스트 없음
+<Button variant="google" size="icon">
+  <GoogleIcon />
+</Button>
+```
+
+**접근성 포인트:**
+- 아이콘만 있는 버튼은 반드시 `aria-label` 필요
+- 스크린리더 사용자가 버튼의 목적을 알 수 있어야 함
+
+---
+
+#### 3. 비활성 버튼
+```tsx
+<Button disabled aria-label="로그인 비활성">
+  로그인
+</Button>
+```
+
+**접근성 포인트:**
+- `disabled` 속성 사용
+- Tab 키로 포커스 불가 (의도된 동작)
+- 색상만으로 비활성 상태를 표현하지 말고 `disabled` 속성 필수
+
+---
+
+#### 4. 로딩 상태
+```tsx
+<Button 
+  isLoading 
+  loadingText="로그인 중..."
+  aria-label="로그인 처리 중"
+>
+  로그인
+</Button>
+```
+
+**접근성 포인트:**
+- 로딩 중임을 시각적/청각적으로 알림
+- `aria-label`로 상태 명시
+- 로딩 중에는 클릭 불가 처리
+
+---
+
+### 키보드 동작
+| 키 | 동작 |
+|---|------|
+| `Tab` | 버튼으로 포커스 이동 |
+| `Enter` | 버튼 활성화 |
+| `Space` | 버튼 활성화 |
+
+---
+
+### 스크린리더 읽기 예시
+```
+"로그인, 버튼" (VoiceOver)
+"Google 로그인, 버튼" (NVDA)
+"로그인 처리 중, 버튼" (로딩 상태)
+```
+
+---
+
+## Input
+
+### 접근성 요구사항
+- ✅ `<label>` 태그로 레이블 연결
+- ✅ 오류 메시지 `aria-describedby` 연결
+- ✅ 입력 타입(`type`) 명시
+- ✅ 유효성 검증 피드백
+- ✅ Placeholder는 보조 힌트로만 사용
+
+---
+
+### 구현 예시
+
+#### 1. 기본 입력 필드
+```tsx
+<Input
+  label="이메일"
+  type="email"
+  placeholder="example@email.com"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+/>
+```
+
+**접근성 포인트:**
+- `label`과 `input`이 자동으로 연결됨 (내부적으로 `htmlFor` + `id`)
+- Label 클릭 시 Input에 포커스 이동
+- `type="email"`로 모바일에서 적절한 키보드 표시
+
+---
+
+#### 2. 오류 상태
+```tsx
+<Input
+  label="비밀번호"
+  type="password"
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  state="error"
+  error="비밀번호는 8자 이상이어야 합니다"
+/>
+```
+
+**접근성 포인트:**
+- 오류 메시지가 `aria-describedby`로 연결됨
+- 스크린리더가 오류 메시지를 자동으로 읽음
+- 색상만으로 오류를 표현하지 않고 텍스트로 명확히 안내
+
+---
+
+#### 3. 성공 상태
+```tsx
+<Input
+  label="아이디"
+  value={username}
+  onChange={(e) => setUsername(e.target.value)}
+  state="success"
+  message="사용 가능한 아이디입니다"
+/>
+```
+
+**접근성 포인트:**
+- 성공 메시지도 `aria-describedby`로 연결
+- 긍정적 피드백 제공
+
+---
+
+#### 4. 비밀번호 보기/숨기기
+```tsx
+<Input
+  label="비밀번호"
+  type={showPassword ? "text" : "password"}
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  icon={
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+    >
+      <EyeIcon isOpen={showPassword} />
+    </button>
+  }
+/>
+```
+
+**접근성 포인트:**
+- 토글 버튼에 명확한 `aria-label`
+- 현재 상태(보이는 중/숨겨진 중)를 레이블로 전달
+
+---
+
+#### 5. 우측 섹션 버튼 (중복 확인 등)
+```tsx
+<Input
+  label="아이디"
+  value={username}
+  onChange={(e) => setUsername(e.target.value)}
+  rightSection={
+    <button 
+      className="..."
+      aria-label="아이디 중복 확인"
+    >
+      중복 확인
+    </button>
+  }
+  rightSectionWidth="pr-[115px]"
+/>
+```
+
+**접근성 포인트:**
+- 우측 버튼도 `aria-label` 필수
+- Tab 순서: Input → 우측 버튼
+
+---
+
+### 키보드 동작
+| 키 | 동작 |
+|---|------|
+| `Tab` | 입력 필드로 포커스 이동 |
+| `Shift + Tab` | 이전 요소로 이동 |
+| `Enter` | 폼 제출 (폼 내부일 경우) |
+| 텍스트 입력 키 | 텍스트 입력 |
+
+---
+
+### 스크린리더 읽기 예시
+```
+"이메일, 편집 가능, 텍스트 필드" (기본 상태)
+"비밀번호, 편집 가능, 보안 텍스트 필드, 비밀번호는 8자 이상이어야 합니다" (오류 상태)
+"아이디, 편집 가능, 텍스트 필드, 사용 가능한 아이디입니다" (성공 상태)
+```
+
+---
+
+## Modal
+
+### 접근성 요구사항
+- ✅ `role="dialog"`, `aria-modal="true"`
+- ✅ Focus Trap (포커스 모달 내부에 가둠)
+- ✅ ESC 키로 닫기
+- ✅ 백드롭 클릭 시 닫기
+- ✅ 모달 열릴 때 첫 번째 요소에 포커스
+- ✅ 모달 닫힐 때 이전 포커스 복원
+- ✅ `aria-labelledby`, `aria-describedby` 제공
+
+---
+
+### 구현 예시
+
+#### 1. 기본 모달
+```tsx
+<Modal
+  isOpen={isOpen}
+  onClose={() => setIsOpen(false)}
+  title="알림"
+  description="모달의 설명입니다"
+  className="w-[480px] bg-[#1C1D21] rounded-[40px] px-[40px] py-[50px]"
+>
+  <div className="flex flex-col gap-6">
+    <h2 id="modal-title">알림</h2>
+    <p>모달 내용</p>
+    <Button onClick={() => setIsOpen(false)}>확인</Button>
+  </div>
+</Modal>
+```
+
+**접근성 포인트:**
+- `role="dialog"` 자동 적용
+- `aria-modal="true"`로 모달임을 명시
+- `title` prop이 스크린리더 전용 제목으로 사용됨
+
+---
+
+#### 2. Focus Trap 동작
+```
+1. 모달이 열리면 → 첫 번째 포커스 가능 요소(X 버튼)로 포커스 이동
+2. Tab 키 → 모달 내부 요소들만 순환
+3. 마지막 요소에서 Tab → 첫 번째 요소로 회귀
+4. 모달 밖의 요소는 포커스 불가
+```
+
+---
+
+#### 3. 중첩 모달
+```tsx
+// 첫 번째 모달
+<Modal isOpen={isFirstOpen} onClose={() => setIsFirstOpen(false)}>
+  <Button onClick={() => setIsSecondOpen(true)}>
+    두 번째 모달 열기
+  </Button>
+</Modal>
+
+// 두 번째 모달 (중첩)
+<Modal isOpen={isSecondOpen} onClose={() => setIsSecondOpen(false)}>
+  <p>중첩된 모달</p>
+</Modal>
+```
+
+**접근성 포인트:**
+- 각 모달이 독립적인 Focus Trap 유지
+- ESC 키는 가장 위의 모달만 닫음
+- z-index로 시각적 레이어 구분
+
+---
+
+### 키보드 동작
+| 키 | 동작 |
+|---|------|
+| `Esc` | 모달 닫기 |
+| `Tab` | 모달 내 다음 요소로 이동 |
+| `Shift + Tab` | 모달 내 이전 요소로 이동 |
+
+---
+
+### 스크린리더 읽기 예시
+```
+"대화상자, 알림" (모달 열릴 때)
+"모달 닫기, 버튼" (X 버튼)
+"확인, 버튼" (확인 버튼)
+```
+
+---
+
+## Toast
+
+### 접근성 요구사항
+- ✅ `aria-live` 속성 (동적 콘텐츠 알림)
+- ✅ 충분한 표시 시간 (최소 5초)
+- ✅ 사용자가 닫을 수 있는 옵션
+- ✅ 중요도에 따라 `polite` / `assertive` 구분
+
+---
+
+### 구현 예시
+
+#### 1. 기본 Toast
+```tsx
+const { showToast } = useToast();
+
+// 일반 알림 (polite)
+showToast('PASSWORD_CHANGE_SUCCESS');
+
+// 긴급 알림 (assertive) - 오류
+showToast('LOGIN_FAIL');
+```
+
+**접근성 포인트:**
+- 화면에 나타나면 스크린리더가 자동으로 읽음
+- `aria-live="polite"` (일반) 또는 `aria-live="assertive"` (긴급)
+- 최소 5초 표시로 읽을 시간 보장
+
+---
+
+#### 2. 지속 시간 조절
+```tsx
+// 짧게 표시 (3초)
+showToast('VERIFICATION_FAIL', 3000);
+
+// 길게 표시 (10초)
+showToast('IDENTITY_FAIL', 10000);
+```
+
+**접근성 포인트:**
+- 중요한 정보는 더 오래 표시
+- 사용자가 읽을 시간 충분히 제공
+
+---
+
+### aria-live 값
+| 값 | 용도 | 예시 |
+|---|------|------|
+| `polite` | 일반 알림, 사용자 작업을 방해하지 않음 | 비밀번호 변경 완료 |
+| `assertive` | 긴급 알림, 즉시 읽어줌 | 로그인 실패, 인증 오류 |
+
+---
+
+### 스크린리더 읽기 예시
+```
+"비밀번호가 변경되었습니다. 서비스 이용을 위해 다시 로그인해 주세요."
+"로그인에 실패했습니다. 잠시 후 다시 시도해주세요."
+```
+
+---
+
+## CodeSnippet
+
+### 접근성 요구사항
+- ✅ 코드를 텍스트로 읽을 수 있어야 함
+- ✅ 복사 버튼에 명확한 레이블
+- ✅ 복사 완료 피드백
+- ✅ 키보드로 복사 버튼 접근 가능
+
+---
+
+### 구현 예시
+
+#### 1. 기본 코드 스니펫
+```tsx
+<CodeSnippet
+  title="Button.tsx"
+  language="typescript"
+  code={`const Button = () => { return <button>Click</button>; };`}
+/>
+```
+
+**접근성 포인트:**
+- `<pre>` 태그로 코드 구조 유지
+- 스크린리더가 코드를 한 줄씩 읽음
+- 복사 버튼: `aria-label="코드 복사"` / `"복사 완료"`
+
+---
+
+#### 2. 복사 버튼
+```tsx
+<button
+  onClick={handleCopy}
+  aria-label={isCopied ? '복사 완료' : '코드 복사'}
+>
+  {isCopied ? 'Copied!' : 'Copy'}
+</button>
+```
+
+**접근성 포인트:**
+- 상태에 따라 `aria-label` 변경
+- 시각적 + 청각적 피드백
+
+---
+
+### 키보드 동작
+| 키 | 동작 |
+|---|------|
+| `Tab` | 복사 버튼으로 포커스 |
+| `Enter` | 코드 복사 |
+
+---
+
+### 스크린리더 읽기 예시
+```
+"Button.tsx, TypeScript"
+"interface ButtonProps { variant: 'primary' | 'secondary'; }" (코드 내용)
+"코드 복사, 버튼" (복사 전)
+"복사 완료, 버튼" (복사 후)
+```
+
+---
+
+## 공통 패턴
+
+### 1. 포커스 관리
+
+#### 페이지 로드 시
+```tsx
+useEffect(() => {
+  // 메인 콘텐츠로 포커스 이동
+  mainContentRef.current?.focus();
+}, []);
+```
+
+#### 동적 콘텐츠 추가 시
+```tsx
+useEffect(() => {
+  if (isLoaded) {
+    // 새로 추가된 콘텐츠의 첫 번째 요소로 포커스
+    newContentRef.current?.focus();
+  }
+}, [isLoaded]);
+```
+
+---
+
+### 2. 로딩 상태 안내
+
+#### Spinner + aria-live
+```tsx
+{isLoading && (
+  <div role="status" aria-live="polite">
+    <Spinner />
+    <span className="sr-only">로딩 중입니다...</span>
+  </div>
+)}
+```
+
+---
+
+### 3. 스크린리더 전용 텍스트
+
+```tsx
+<span className="sr-only">
+  스크린리더에서만 읽히는 설명
+</span>
+```
+
+```css
+/* Tailwind CSS의 sr-only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+```
+
+---
+
+## 참고 자료
+
+- [ARIA Authoring Practices Guide (APG)](https://www.w3.org/WAI/ARIA/apg/)
+- [Inclusive Components](https://inclusive-components.design/)
+- [A11y Style Guide](https://a11y-style-guide.com/style-guide/)
+
+---
+
+## 빠른 체크
+
+### 컴포넌트 개발 완료 전
+```
+✅ 시맨틱 HTML 사용했는가?
+✅ 키보드로 모든 기능 사용 가능한가?
+✅ 스크린리더로 내용을 이해할 수 있는가?
+✅ 포커스 표시가 명확한가?
+✅ 적절한 ARIA 속성을 사용했는가?
+✅ 오류 메시지가 명확한가?
+```
