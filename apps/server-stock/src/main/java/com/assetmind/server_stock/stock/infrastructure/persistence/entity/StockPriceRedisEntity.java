@@ -3,11 +3,13 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.entity;
 import jakarta.persistence.Id;
 import java.io.Serializable;
 import lombok.Builder;
+import lombok.Getter;
 import org.springframework.data.redis.core.RedisHash;
 
 /**
  * 실시간 최신가를 빠르게 조회하기 위한 인메모리(Redis) 객체
  */
+@Getter
 @RedisHash(value = "stock_snapshot", timeToLive = 600) // TTL : 10분, 실시간 데이터이므로 과거의 데이터는 오래 캐싱할 필요가 없음
 public class StockPriceRedisEntity implements Serializable {
 

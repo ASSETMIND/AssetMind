@@ -22,5 +22,5 @@ public interface StockSnapshotRepository {
     List<StockPriceRedisEntity> getTopStocksByTradeValue(int limit);
 
     // 거래량 상위 N개 종목 조회
-    List<StockPriceRedisEntity> getTopStocksByTradeRate(int limit);
+    List<StockPriceRedisEntity> getTopStocksByTradeVolume(int limit);
 }
