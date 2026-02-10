@@ -8,7 +8,7 @@ import lombok.Builder;
  */
 @Builder
 public record KisRealTimeData(
-        String symbol,              // 종목코드
+        String stockCode,              // 종목코드
         String executionTime,       // 체결 시간 (HHmmss)
         Long currentPrice,          // 현재가
         Long changeSign,            // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
