@@ -4,7 +4,7 @@
 
 - **대상 모듈:** `extractor.kis_extractor.KISExtractor`
 - **복잡도 수준:** **최상 (Critical)** (외부 금융 API 연동 및 민감 정보 처리)
-- **커버리지 목표:** 분기 커버리지(Branch Coverage) 100%, 구문 커버리지 100%
+- **커버리지 목표:** 분기 커버리지 100%, 구문 커버리지 100%
 - **적용 전략:**
   - [x] **MC/DC (수정 조건/결정 커버리지):** `_validate_request` 내 다중 검증 조건(Job ID, Policy, Provider, TR_ID)의 독립적 결함 유발 검증.
   - [x] **Fail-Fast (조기 실패):** 설정 오류나 필수 파라미터 누락 시 즉각적인 예외 발생 여부 검증.
