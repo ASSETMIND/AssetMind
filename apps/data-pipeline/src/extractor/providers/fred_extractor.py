@@ -19,14 +19,19 @@ Trade-off:
     - 근거: 부모 클래스의 서명(Signature)을 변경하지 않고 메타데이터(Job ID) 추적성을 확보하기 위함.
 """
 
-from typing import Any, Dict, Optional
 from datetime import datetime
+from typing import Any
 
-from .abstract_extractor import AbstractExtractor
-from ..domain.interfaces import IHttpClient
+# [Decorator Imports]
+from ...common.decorators.log_decorator import log_decorator
+from ...common.decorators.rate_limit_decorator import rate_limit
+from ...common.decorators.retry_decorator import retry
+
+from ...common.config import AppConfig
 from ..domain.dtos import RequestDTO, ResponseDTO
 from ..domain.exceptions import ExtractorError
-from ...common.config import AppConfig
+from ..domain.interfaces import IHttpClient
+from .abstract_extractor import AbstractExtractor
 
 
 class FREDExtractor(AbstractExtractor):
@@ -128,8 +133,16 @@ class FREDExtractor(AbstractExtractor):
         if not (has_series_id_in_policy or has_series_id_in_request):
             raise ExtractorError(f"Missing Parameter: 'series_id' is required for job '{request.job_id}'.")
 
+    @retry(max_retries=3)
+    @rate_limit(limit=2, period=1.0, bucket_key="FRED_API") # FRED Docs: 120 calls/min = 2 calls/sec
+    @log_decorator(logger_name="FRED_Extractor")
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """FRED API를 호출하여 원본 데이터를 가져옵니다.
+
+        Decorators:
+            @retry: 네트워크 오류 시 최대 3회 재시도.
+            @rate_limit: 초당 2회로 제한 (API 공식 제한 준수).
+            @log_decorator: 수행 로깅.
 
         Args:
             request (RequestDTO): 요청 객체.

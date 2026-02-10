@@ -72,6 +72,7 @@ class ECOSSettings(BaseSettings):
 class UPBITSettings(BaseSettings):
     """업비트(UPBIT) API 전용 설정 모델."""
     api_key: SecretStr = Field(alias="UPBIT_API_KEY")
+    secret_key: SecretStr = Field(alias="UPBIT_SECRET_KEY")
     base_url: str = Field(alias="UPBIT_BASE_URL")
     model_config = SettingsConfigDict(
         env_file=".env", 

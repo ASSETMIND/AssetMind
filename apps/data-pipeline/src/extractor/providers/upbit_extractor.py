@@ -21,14 +21,20 @@ Trade-off:
     - 근거: 급변하는 암호화폐 시장 특성상 새로운 마켓 데이터 수집 요구사항에 빠르게 대응해야 함.
 """
 
-from typing import Any, Dict, Optional
 from datetime import datetime
+from typing import Any
 
-from .abstract_extractor import AbstractExtractor
-from ..domain.interfaces import IHttpClient, IAuthStrategy
+# [Decorator Imports]
+from ...common.decorators.log_decorator import log_decorator
+from ...common.decorators.rate_limit_decorator import rate_limit
+from ...common.decorators.retry_decorator import retry
+
+from ...common.config import AppConfig
 from ..domain.dtos import RequestDTO, ResponseDTO
 from ..domain.exceptions import ExtractorError
-from ...common.config import AppConfig
+from ..domain.interfaces import IAuthStrategy, IHttpClient
+from .abstract_extractor import AbstractExtractor
+
 
 class UPBITExtractor(AbstractExtractor):
     """설정(Config)에 정의된 정책을 기반으로 동작하는 업비트 데이터 수집기.
@@ -130,8 +136,16 @@ class UPBITExtractor(AbstractExtractor):
         if "market" not in combined_params and "markets" not in combined_params:
              self.logger.warning(f"Parameter Warning: 'market' might be missing in policy '{request.job_id}'.")
 
+    @retry(max_retries=3)
+    @rate_limit(limit=10, period=1.0, bucket_key="UPBIT_Quotation") # Quotation API Limit (Safe)
+    @log_decorator(logger_name="UPBIT_Extractor")
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """설정된 정책과 인증 정보를 결합하여 UPBIT API를 호출합니다.
+
+        Decorators:
+            @retry: 네트워크 오류 시 재시도.
+            @rate_limit: 초당 10회 제한 (Quotation API 기준).
+            @log_decorator: 수행 로깅.
 
         Args:
             request (RequestDTO): 검증된 요청 객체.
