@@ -109,7 +109,12 @@ const loginResolver: HttpResponseResolver = async ({ request }) => {
 						'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2YWMyNTI5ZS1kMDY3LTQ2ODQtOTZhOS0yYmYzNGM1NDBhMDYiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc2OTk1MTkxMywiZXhwIjoxNzY5OTUzNzEzfQ.WErNWe_zgQrhPXe5PKlTKZ-aeX7JDKjDev2Yu2Fmp8k',
 				},
 			},
-			{ status: 200 },
+			{
+				status: 200,
+				headers: {
+					'Set-Cookie': `refresh_token=mock-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+				},
+			},
 		);
 	}
 
@@ -142,25 +147,43 @@ const socialLoginResolver: HttpResponseResolver = async ({
 				loginType: provider,
 			},
 		},
-		{ status: 200 },
+		{
+			status: 200,
+			headers: {
+				'Set-Cookie': `refresh_token=mock-social-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+			},
+		},
 	);
 };
 
 // 토큰 갱신 Resolver
-const refreshTokenResolver: HttpResponseResolver = async () => {
+const refreshTokenResolver: HttpResponseResolver = async ({ cookies }) => {
 	console.log('[MSW] 토큰 갱신 요청 받음');
-	// 실제 백엔드에서는 리프레시 토큰을 사용하여 새 액세스 토큰을 발급
-	// 여기서는 간단히 새로운 가짜 액세스 토큰과 사용자 정보를 반환
+	console.log('[MSW] Cookies:', cookies); // 디버깅용: 실제 들어오는 쿠키 확인
+
+	// 쿠키 확인 (RTR) - MSW에서 파싱해준 cookies 객체 사용
+	const refreshToken = cookies.refresh_token;
+	if (!refreshToken) {
+		return HttpResponse.json(
+			{ message: 'Refresh Token이 없습니다.' },
+			{ status: 401 },
+		);
+	}
+
 	return HttpResponse.json(
 		{
-			accessToken: 'mock-new-access-token-' + Date.now(), // 매번 다른 토큰 반환
-			user: {
-				id: 1,
-				email: 'refreshed@test.com',
-				name: '갱신된유저',
+			success: true,
+			message: null,
+			data: {
+				access_token: 'mock-new-access-token-' + Date.now(),
 			},
 		},
-		{ status: 200 },
+		{
+			status: 200,
+			headers: {
+				'Set-Cookie': `refresh_token=mock-new-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+			},
+		},
 	);
 };
 
@@ -203,7 +226,7 @@ export const handlers = [
 	http.post('*/auth/login/:provider', socialLoginResolver),
 
 	// 토큰 갱신 (POST)
-	http.post('*/auth/refresh', refreshTokenResolver),
+	http.post('*/auth/reissue', refreshTokenResolver),
 
 	// 로그아웃 (POST)
 	http.post('*/auth/logout', logoutResolver),

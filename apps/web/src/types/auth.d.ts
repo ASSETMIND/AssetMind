@@ -78,8 +78,14 @@ export interface EmailVerificationResponse {
 	sign_up_token: string;
 }
 
-// 토큰 갱신 응답
-export interface RefreshTokenResponse extends AuthResponse {}
+// 토큰 갱신 (재발급) 응답
+export interface ReissueTokenResponse {
+	success: boolean;
+	message: string | null;
+	data: {
+		access_token: string;
+	};
+}
 
 // 로그아웃 응답
 export interface LogoutResponse {

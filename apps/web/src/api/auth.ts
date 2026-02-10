@@ -3,7 +3,7 @@ import type {
 	LoginParams,
 	LoginResponse,
 	LogoutResponse,
-	RefreshTokenResponse,
+	ReissueTokenResponse,
 	SignupParams,
 	VerifyEmailResponse,
 } from '../types/auth';
@@ -69,10 +69,9 @@ export const socialLogin = async (provider: string, code: string) => {
 };
 
 // 토큰 갱신 API 함수 (AuthResponse 반환)
-export const refreshToken = async (): Promise<RefreshTokenResponse> => {
-	// LoginResponse가 AuthResponse를 확장하도록 변경됨
+export const refreshToken = async (): Promise<ReissueTokenResponse> => {
 	const { data } =
-		await axiosInstance.post<RefreshTokenResponse>('/auth/refresh'); // Refresh Token은 인터셉터에서 처리
+		await axiosInstance.post<ReissueTokenResponse>('/auth/reissue'); // Refresh Token은 인터셉터에서 처리
 	return data;
 };
 
