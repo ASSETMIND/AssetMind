@@ -131,7 +131,6 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 			clearErrors('authCode');
 			setSignUpToken(token); // 회원가입용 토큰 저장
 		} catch (error: any) {
-			console.error('인증 확인 에러:', error);
 			setIsEmailVerified(false);
 			const errorMsg =
 				error?.response?.data?.message ||
