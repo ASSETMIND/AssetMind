@@ -2,14 +2,10 @@ import { renderHook, act } from '@testing-library/react';
 import { useSignupLogic } from '../hooks/auth/use-signup-logic';
 
 // api 모킹
-const mockCheckIDMutate = jest.fn();
+const mockCheckEmailMutate = jest.fn();
 const mockSendEmailMutate = jest.fn();
 const mockVerifyCodeMutate = jest.fn();
 const mockSignupMutate = jest.fn();
-
-jest.mock('../hooks/auth/use-check-ID', () => ({
-	useCheckID: () => ({ mutateAsync: mockCheckIDMutate, isPending: false }),
-}));
 
 jest.mock('../hooks/auth/use-email-verification', () => ({
 	useSendEmailCode: () => ({
@@ -18,6 +14,10 @@ jest.mock('../hooks/auth/use-email-verification', () => ({
 	}),
 	useVerifyEmailCode: () => ({
 		mutateAsync: mockVerifyCodeMutate,
+		isPending: false,
+	}),
+	useCheckEmail: () => ({
+		mutateAsync: mockCheckEmailMutate,
 		isPending: false,
 	}),
 }));
@@ -43,14 +43,14 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'invalid-email');
+				result.current.formMethods.setValue('email', 'invalid-email');
 			});
 
 			await act(async () => {
-				await result.current.actions.handleCheckID();
+				await result.current.actions.handleCheckEmail();
 			});
 
-			expect(mockCheckIDMutate).not.toHaveBeenCalled();
+			expect(mockCheckEmailMutate).not.toHaveBeenCalled();
 		});
 
 		test('아이디 중복 확인 결과가 "중복(false)"이면 에러를 설정해야 한다', async () => {
@@ -58,20 +58,20 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// 유효한 이메일 입력
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'duplicate@test.com');
+				result.current.formMethods.setValue('email', 'duplicate@test.com');
 			});
 
 			// API가 false(중복)를 반환하도록 설정
-			mockCheckIDMutate.mockResolvedValue(false);
+			mockCheckEmailMutate.mockResolvedValue(false);
 
 			// 실행
 			await act(async () => {
-				await result.current.actions.handleCheckID();
+				await result.current.actions.handleCheckEmail();
 			});
 
 			// 검증: 중복 에러 메시지가 설정되어야 함
-			expect(result.current.state.isIDChecked).toBe(false);
-			expect(result.current.formMethods.formState.errors.id?.message).toBe(
+			expect(result.current.state.isEmailChecked).toBe(false);
+			expect(result.current.formMethods.formState.errors.email?.message).toBe(
 				'이미 사용 중인 아이디입니다.',
 			);
 			expect(result.current.state.toastMessage).toBe(
@@ -83,26 +83,26 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			// 중복 에러 상태로 시작
-			mockCheckIDMutate.mockResolvedValue(false);
+			mockCheckEmailMutate.mockResolvedValue(false);
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'dup@email.com');
+				result.current.formMethods.setValue('email', 'dup@email.com');
 			});
 			await act(async () => {
-				await result.current.actions.handleCheckID();
+				await result.current.actions.handleCheckEmail();
 			});
 
 			// 에러가 있는지 확인
-			expect(result.current.formMethods.formState.errors.id?.type).toBe(
+			expect(result.current.formMethods.formState.errors.email?.type).toBe(
 				'duplicate',
 			);
 
 			// 아이디 값이 변경됨 -> handleIdChange 호출
 			await act(async () => {
-				result.current.actions.handleIdChange();
+				result.current.actions.handleEmailChange();
 			});
 
 			// 중복 에러가 사라져야 함 (초기화 확인)
-			expect(result.current.formMethods.formState.errors.id).toBeUndefined();
+			expect(result.current.formMethods.formState.errors.email).toBeUndefined();
 		});
 	});
 
@@ -126,12 +126,12 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			// 전제 조건: ID 확인 완료
-			mockCheckIDMutate.mockResolvedValue(true);
+			mockCheckEmailMutate.mockResolvedValue(true);
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'valid@email.com');
+				result.current.formMethods.setValue('email', 'valid@email.com');
 			});
 			await act(async () => {
-				await result.current.actions.handleCheckID();
+				await result.current.actions.handleCheckEmail();
 			});
 
 			// API 실패 Mocking (서버 메시지 있음)
@@ -152,12 +152,12 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			// 전제 조건 설정
-			mockCheckIDMutate.mockResolvedValue(true);
+			mockCheckEmailMutate.mockResolvedValue(true);
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'valid@email.com');
+				result.current.formMethods.setValue('email', 'valid@email.com');
 			});
 			await act(async () => {
-				await result.current.actions.handleCheckID();
+				await result.current.actions.handleCheckEmail();
 			});
 
 			// API 실패 Mocking (response 없음 -> 기본 메시지 사용)
@@ -197,7 +197,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'test@test.com');
+				result.current.formMethods.setValue('email', 'test@test.com');
 				result.current.formMethods.setValue('authCode', '123456');
 			});
 
@@ -241,7 +241,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 	describe('4. 회원가입 제출(onSubmit)', () => {
 		const setupReadyToSubmit = async (result: any) => {
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'final@test.com');
+				result.current.formMethods.setValue('email', 'final@test.com');
 				result.current.formMethods.setValue('password', 'password123!');
 				result.current.formMethods.setValue('passwordConfirm', 'password123!');
 				result.current.formMethods.setValue('authCode', '123456');
@@ -257,7 +257,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('id', 'no-auth@test.com');
+				result.current.formMethods.setValue('email', 'no-auth@test.com');
 				result.current.formMethods.setValue('password', 'pass123!');
 				result.current.formMethods.setValue('passwordConfirm', 'pass123!');
 				result.current.formMethods.setValue('authCode', '000000');
@@ -310,7 +310,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			expect(mockSignupMutate).toHaveBeenCalledWith(
 				expect.objectContaining({
-					id: 'final@test.com',
+					email: 'final@test.com',
 					password: 'password123!',
 				}),
 				expect.any(Object),

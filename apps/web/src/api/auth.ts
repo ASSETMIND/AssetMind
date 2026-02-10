@@ -6,10 +6,16 @@ export async function signup(data: SignupParams): Promise<void> {
 	await axiosInstance.post('api/auth/signup', data);
 }
 
-// ID 중복 확인 true면 중복아이디 없음 / false면 중복아이디 있음
-export async function checkIDDuplicate(email: string): Promise<boolean> {
-	const { data } = await axiosInstance.get(`api/users?email=${email}`);
-	return data.length === 0; // 데이터가 없으면 빈배열 반환 -> true
+/**
+ * 이메일 사용 가능 여부를 확인합니다. (회원가입 시 중복 체크)
+ * @param email 확인할 이메일
+ * @returns 사용 가능하면 true, 중복이면 false
+ */
+export async function checkEmailAvailability(email: string): Promise<boolean> {
+	const { data } = await axiosInstance.get<{ data: boolean }>(
+		`/api/auth/check-email?email=${email}`,
+	);
+	return !data.data; // API 응답: data:true (중복) -> false 반환 / data:false (사용가능) -> true 반환
 }
 
 // 인증번호 이메일 발송 요청

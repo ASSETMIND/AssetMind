@@ -40,12 +40,18 @@ const checkIdResolver: HttpResponseResolver = ({ request }) => {
 	console.log(`[MSW] 중복 확인 요청옴: ${email}`);
 
 	if (email === 'fail@test.com') {
-		return HttpResponse.json([
-			{ id: 1, email: 'fail@test.com', name: '기존유저' },
-		]);
+		return HttpResponse.json({
+			success: true,
+			message: null,
+			data: true, // 중복됨
+		});
 	}
 
-	return HttpResponse.json([]);
+	return HttpResponse.json({
+		success: true,
+		message: null,
+		data: false, // 사용 가능
+	});
 };
 
 // 인증번호 전송 Resolver
@@ -165,7 +171,7 @@ export const handlers = [
 	http.post('*/auth/signup', signupResolver),
 
 	// 이메일 중복 확인 (GET)
-	http.get('*/users', checkIdResolver),
+	http.get('*/api/auth/check-email', checkIdResolver),
 
 	// 인증번호 발송 (POST)
 	http.post('*/api/auth/send-code', sendCodeResolver),
