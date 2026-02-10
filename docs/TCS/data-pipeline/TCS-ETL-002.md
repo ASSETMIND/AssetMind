@@ -2,7 +2,7 @@
 
 ## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `extractor.kis_extractor.KISExtractor`
+- **대상 모듈:** `extractor.providers.kis_extractor.KISExtractor`
 - **복잡도 수준:** **최상 (Critical)** (외부 금융 API 연동 및 민감 정보 처리)
 - **커버리지 목표:** 분기 커버리지 100%, 구문 커버리지 100%
 - **적용 전략:**

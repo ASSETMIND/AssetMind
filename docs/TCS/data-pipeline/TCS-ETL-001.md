@@ -2,7 +2,7 @@
 
 ## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `extractor.AbstractExtractor`
+- **대상 모듈:** `extractor.providers.AbstractExtractor`
 - **복잡도 수준:** **높음 (High)** (모든 수집기의 기반이 되는 템플릿 메서드 및 에러 처리 표준 정의)
 - **커버리지 목표:** 분기 커버리지 100%, 구문 커버리지 100%
 - **적용 전략:**

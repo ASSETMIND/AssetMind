@@ -2,7 +2,7 @@
 
 ## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `extractor.fred_extractor.FREDExtractor`
+- **대상 모듈:** `extractor.providers.fred_extractor.FREDExtractor`
 - **복잡도 수준:** **높음 (High)** (파라미터 병합 로직 및 부모 클래스 오버라이딩 포함)
 - **커버리지 목표:** 분기 커버리지 100%, 구문 커버리지 100%
 - **적용 전략:**
