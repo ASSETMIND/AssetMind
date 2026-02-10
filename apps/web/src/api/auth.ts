@@ -1,9 +1,14 @@
 import { axiosInstance } from '../libs/axios';
-import type { LoginParams, LoginResponse, SignupParams } from '../types/auth';
+import type {
+	LoginParams,
+	LoginResponse,
+	SignupParams,
+	VerifyEmailResponse,
+} from '../types/auth';
 
-// 회원가입 POST /auth/signup
+// 회원가입 POST
 export async function signup(data: SignupParams): Promise<void> {
-	await axiosInstance.post('api/auth/signup', data);
+	await axiosInstance.post('auth/register', data);
 }
 
 /**
@@ -13,7 +18,10 @@ export async function signup(data: SignupParams): Promise<void> {
  */
 export async function checkEmailAvailability(email: string): Promise<boolean> {
 	const { data } = await axiosInstance.get<{ data: boolean }>(
-		`/api/auth/check-email?email=${email}`,
+		'/auth/check-email',
+		{
+			params: { email },
+		},
 	);
 	return !data.data; // API 응답: data:true (중복) -> false 반환 / data:false (사용가능) -> true 반환
 }
@@ -21,21 +29,28 @@ export async function checkEmailAvailability(email: string): Promise<boolean> {
 // 인증번호 이메일 발송 요청
 export async function sendVerificationCode(email: string): Promise<void> {
 	// body에 email을 담아서 POST 요청
-	await axiosInstance.post('api/auth/send-code', { email });
+	await axiosInstance.post('auth/code', { email });
 }
 
 // 인증번호 검증 요청
 export async function verifyEmailCode(
 	email: string,
 	code: string,
-): Promise<void> {
-	await axiosInstance.post('api/auth/verify-code', { email, code });
+): Promise<string> {
+	const { data } = await axiosInstance.post<VerifyEmailResponse>(
+		'auth/code/verify',
+		{ email, code },
+	);
+
+	const token = data?.data?.sign_up_token;
+	if (!token) throw new Error(data?.message || '인증 토큰을 찾을 수 없습니다.');
+	return token;
 }
 
 export async function login(data: LoginParams): Promise<LoginResponse> {
 	// <LoginResponse> 제네릭을 사용하여 리턴 타입을 명시
 	const { data: response } = await axiosInstance.post<LoginResponse>(
-		'api/auth/login',
+		'auth/login',
 		data,
 	);
 	return response;

@@ -25,7 +25,7 @@ export const removeAuthTokens = () => {
 };
 
 export const axiosInstance = axios.create({
-	baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+	baseURL: '/api', // 모든 요청이 /api로 시작하도록 설정 (Vite Proxy 트리거)
 	headers: {
 		'Content-Type': 'application/json',
 	},

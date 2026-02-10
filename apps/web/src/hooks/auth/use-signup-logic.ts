@@ -20,11 +20,13 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	const [isEmailSent, setIsEmailSent] = useState(false);
 	const [isEmailVerified, setIsEmailVerified] = useState(false);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const [signUpToken, setSignUpToken] = useState<string | null>(null);
 
 	const formMethods = useForm<SignupSchemaType>({
 		resolver: zodResolver(signupSchema),
 		mode: 'onChange',
 		defaultValues: {
+			name: '',
 			email: '',
 			authCode: '',
 			password: '',
@@ -52,7 +54,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	const { mutateAsync: verifyCodeMutate, isPending: isVerifyingCode } =
 		useVerifyEmailCode();
 
-	// 입력값이 바뀌면 모든 인증 단계 초기화 (처음부터 다시)
+	// 입력값이 바뀌면 모든 인증 단계 초기화
 	const handleEmailChange = () => {
 		if (isEmailChecked) setIsEmailChecked(false);
 		if (isEmailSent) setIsEmailSent(false);
@@ -121,19 +123,21 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 		try {
 			// 실제 인증번호 검증 API 호출
-			await verifyCodeMutate({ email, code });
+			const token = await verifyCodeMutate({ email, code });
 
 			// 성공 시 (에러가 발생하지 않으면 성공으로 간주)
 			setIsEmailVerified(true);
 			setToastMessage('이메일 인증이 완료되었습니다.');
-			clearErrors('authCode'); // 기존 에러 제거
+			clearErrors('authCode');
+			setSignUpToken(token); // 회원가입용 토큰 저장
 		} catch (error: any) {
-			// 실패 시 (400 Bad Request 등)
 			setIsEmailVerified(false);
 			const errorMsg =
-				error?.response?.data?.message || '인증번호가 일치하지 않습니다.';
+				error?.response?.data?.message ||
+				error?.message ||
+				'인증번호가 일치하지 않습니다.';
 
-			// 폼 에러 설정 (빨간 테두리 및 메시지 표시용)
+			// 폼 에러 설정
 			setError('authCode', { message: errorMsg });
 			setToastMessage(errorMsg);
 		}
@@ -148,8 +152,10 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 		signupMutate(
 			{
+				user_name: data.name,
 				email: data.email,
 				password: data.password,
+				sign_up_token: signUpToken ?? undefined,
 			},
 			{
 				onSuccess: () => {
@@ -193,7 +199,6 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 			handleCheckEmail, // 중복 확인 함수
 			handleSendEmailAuth, // 전송 함수
 			handleVerifyEmailAuth, // 검증 함수
-			// [삭제됨] handleVerifySuccess, handleVerifyError 제거
 			onSubmit,
 		},
 	};

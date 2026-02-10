@@ -8,12 +8,13 @@ import { http, HttpResponse, type HttpResponseResolver } from 'msw';
 // 회원가입 Resolver
 const signupResolver: HttpResponseResolver = async ({ request }) => {
 	const requestBody = (await request.json()) as {
-		id?: string;
-		email?: string;
-		password?: string;
+		user_name: string;
+		email: string;
+		password: string;
+		sign_up_token: string;
 	};
 
-	const email = requestBody.email || requestBody.id;
+	const email = requestBody.email;
 	console.log('MSW: 회원가입 요청 받음', requestBody);
 
 	if (email === 'fail@test.com') {
@@ -73,7 +74,16 @@ const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 
 	// [테스트 시나리오] '123456' 입력 시에만 성공
 	if (body.code === '123456') {
-		return HttpResponse.json({ message: '인증되었습니다.' }, { status: 200 });
+		return HttpResponse.json(
+			{
+				success: true,
+				message: '인증되었습니다.',
+				data: {
+					sign_up_token: 'mock-sign-up-token-eyJhbGciOiJIUzI1NiJ9',
+				},
+			},
+			{ status: 200 },
+		);
 	}
 
 	// 그 외에는 실패 (400 Bad Request)
@@ -168,16 +178,16 @@ const logoutResolver: HttpResponseResolver = async () => {
 */
 export const handlers = [
 	// 회원가입 (POST)
-	http.post('*/auth/signup', signupResolver),
+	http.post('*/auth/register', signupResolver),
 
 	// 이메일 중복 확인 (GET)
 	http.get('*/api/auth/check-email', checkIdResolver),
 
 	// 인증번호 발송 (POST)
-	http.post('*/api/auth/send-code', sendCodeResolver),
+	http.post('*/api/auth/code', sendCodeResolver),
 
 	// 인증번호 검증 (POST)
-	http.post('*/api/auth/verify-code', verifyCodeResolver),
+	http.post('*/api/auth/code/verify', verifyCodeResolver),
 
 	// 일반 로그인 (POST)
 	http.post('*/api/auth/login', loginResolver),
