@@ -1,14 +1,12 @@
 import { createContext, useContext, useState, type ReactNode, useCallback } from "react";
 import { ToastItem, type ToastVariant } from "../components/common/Toast/ToastItem";
 
-// 1. [정의] 사용 가능한 토스트 타입은 딱 4가지만 존재
 export type ToastCaseType = 
   | 'PASSWORD_CHANGE_SUCCESS' // 비밀번호 변경 완료
   | 'VERIFICATION_FAIL'       // 인증 실패 (입력 불일치)
   | 'IDENTITY_FAIL'           // 본인인증 실패 (시스템 오류)
   | 'LOGIN_FAIL';             // 로그인 실패
 
-// 2. [데이터] 각 타입별 고정 문구 및 디자인 정의
 const TOAST_CONTENTS: Record<ToastCaseType, { variant: ToastVariant; title: string; message: string }> = {
   PASSWORD_CHANGE_SUCCESS: {
     variant: 'success',
@@ -40,8 +38,7 @@ interface ToastData {
 }
 
 interface ToastContextType {
-  // 함수 인자를 'type' 하나로 제한하여 다른 문구 입력 불가능하게 함
-  showToast: (type: ToastCaseType) => void;
+  showToast: (type: ToastCaseType, duration?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -53,9 +50,8 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  // [수정] type만 받아서 미리 정의된 문구를 뿌려주는 방식으로 변경
-  const showToast = useCallback((type: ToastCaseType) => {
-    const content = TOAST_CONTENTS[type]; // 해당 타입의 문구 가져오기
+  const showToast = useCallback((type: ToastCaseType, duration: number = 3000) => {
+    const content = TOAST_CONTENTS[type];
     const id = Math.random().toString(36).substr(2, 9);
 
     setToasts((prev) => [...prev, { 
@@ -65,8 +61,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       message: content.message 
     }]);
 
-    // 3초 뒤 자동 삭제
-    setTimeout(() => removeToast(id), 3000);
+    setTimeout(() => removeToast(id), duration);
   }, [removeToast]);
 
   return (
