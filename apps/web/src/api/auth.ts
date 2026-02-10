@@ -1,7 +1,8 @@
-import { axiosInstance } from '../libs/axios';
+import { axiosInstance, removeAuthTokens } from '../libs/axios';
 import type {
 	LoginParams,
 	LoginResponse,
+	RefreshTokenResponse,
 	SignupParams,
 	VerifyEmailResponse,
 } from '../types/auth';
@@ -67,9 +68,10 @@ export const socialLogin = async (provider: string, code: string) => {
 };
 
 // 토큰 갱신 API 함수 (AuthResponse 반환)
-export const refreshToken = async (): Promise<LoginResponse> => {
+export const refreshToken = async (): Promise<RefreshTokenResponse> => {
 	// LoginResponse가 AuthResponse를 확장하도록 변경됨
-	const { data } = await axiosInstance.post<LoginResponse>('/auth/refresh'); // Refresh Token은 인터셉터에서 처리
+	const { data } =
+		await axiosInstance.post<RefreshTokenResponse>('/auth/refresh'); // Refresh Token은 인터셉터에서 처리
 	return data;
 };
 
@@ -79,4 +81,5 @@ export const logout = async (): Promise<void> => {
 	// 리프레시 토큰은 HttpOnly Cookie로 관리되는 경우 서버가 자동으로 파싱합니다.
 	// 그렇지 않은 경우, 요청 바디나 헤더에 명시적으로 포함해야 합니다.
 	await axiosInstance.post('/auth/logout');
+	removeAuthTokens(); // 클라이언트 측 토큰 및 인증 플래그 제거
 };

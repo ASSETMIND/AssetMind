@@ -1,6 +1,6 @@
 // 일반 자체 로그인
 export interface LoginParams {
-	id: string;
+	email: string;
 	password: string; // LoginResponse는 AuthResponse를 확장
 }
 
@@ -55,7 +55,13 @@ export interface AuthResponse {
 }
 
 // LoginResponse와 RefreshTokenResponse가 AuthResponse를 확장
-export interface LoginResponse extends AuthResponse {}
+export interface LoginResponse {
+	success: boolean;
+	message: string | null;
+	data: {
+		access_token: string;
+	};
+}
 
 // 비밀번호 재설정 토큰 응답
 export interface VerifyTokenResponse {

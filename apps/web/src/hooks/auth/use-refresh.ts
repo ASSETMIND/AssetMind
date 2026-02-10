@@ -10,6 +10,13 @@ export function useRefresh() {
 
 	useEffect(() => {
 		const trySilentRefresh = async () => {
+			// 로그인 상태 플래그가 없으면 갱신 시도하지 않음 (로그아웃 상태로 간주)
+			const isAuthenticated = localStorage.getItem('isAuthenticated');
+			if (!isAuthenticated) {
+				setIsInitialized(true);
+				return;
+			}
+
 			try {
 				// HttpOnly 쿠키에 저장된 Refresh Token이 있다면 브라우저가 자동으로 요청에 포함
 				// 클라이언트에서는 토큰 존재 여부를 알 수 없으므로, 일단 갱신을 시도하고 실패 시 로그아웃 처리

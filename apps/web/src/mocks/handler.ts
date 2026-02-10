@@ -95,18 +95,18 @@ const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 
 // 일반 로그인 Resolver
 const loginResolver: HttpResponseResolver = async ({ request }) => {
-	const body = (await request.json()) as { id: string; password: string };
-	console.log(`[MSW] 로그인 요청: ${body.id}`);
+	const body = (await request.json()) as { email: string; password: string };
+	console.log(`[MSW] 로그인 요청: ${body.email}`);
 
 	// [테스트 시나리오] 특정 계정으로 로그인 시 성공
-	if (body.id === 'test@test.com' && body.password === 'password123!') {
+	if (body.email === 'test@test.com' && body.password === 'test1234!') {
 		return HttpResponse.json(
 			{
-				accessToken: 'mock-access-token-12345', // 가짜 토큰 발급
-				user: {
-					id: 1,
-					email: body.id,
-					name: '테스트유저',
+				success: true,
+				message: null,
+				data: {
+					access_token:
+						'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2YWMyNTI5ZS1kMDY3LTQ2ODQtOTZhOS0yYmYzNGM1NDBhMDYiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc2OTk1MTkxMywiZXhwIjoxNzY5OTUzNzEzfQ.WErNWe_zgQrhPXe5PKlTKZ-aeX7JDKjDev2Yu2Fmp8k',
 				},
 			},
 			{ status: 200 },

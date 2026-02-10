@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
+const IS_AUTHENTICATED_KEY = 'isAuthenticated';
 
 export const getAccessToken = (): string | null => {
 	return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -10,9 +11,11 @@ export const setAccessToken = (token: string | null) => {
 	// Access Token은 Authorization 헤더에 항상 포함
 	if (token) {
 		localStorage.setItem(ACCESS_TOKEN_KEY, token);
+		localStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
 		axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 	} else {
 		localStorage.removeItem(ACCESS_TOKEN_KEY);
+		localStorage.removeItem(IS_AUTHENTICATED_KEY);
 		delete axiosInstance.defaults.headers.common['Authorization'];
 	}
 };
@@ -20,6 +23,7 @@ export const setAccessToken = (token: string | null) => {
 // Access Token과 Refresh Token 모두 제거하는 함수
 export const removeAuthTokens = () => {
 	localStorage.removeItem(ACCESS_TOKEN_KEY);
+	localStorage.removeItem(IS_AUTHENTICATED_KEY);
 	delete axiosInstance.defaults.headers.common['Authorization'];
 	// HttpOnly 쿠키로 관리되는 Refresh Token은 서버 측 로그아웃 엔드포인트 호출을 통해 제거
 };

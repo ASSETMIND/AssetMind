@@ -21,7 +21,7 @@ export function useLoginLogic({ onClose }: Props) {
 		resolver: zodResolver(loginSchema),
 		mode: 'onSubmit',
 		defaultValues: {
-			id: '',
+			email: '',
 			password: '',
 		},
 	});
@@ -31,42 +31,53 @@ export function useLoginLogic({ onClose }: Props) {
 	const { mutate: loginMutate, isPending: isLoggingIn } = useLogin();
 
 	// 제출 핸들러
-	const onSubmit = handleSubmit((data) => {
-		loginMutate(
-			{ id: data.id, password: data.password },
-			{
-				onSuccess: (response) => {
-					// response 타입은 AuthResponse (LoginResponse)
-					if (response.accessToken) {
-						setAccessToken(response.accessToken);
-					}
-					// Refresh Token은 백엔드에서 HttpOnly 쿠키로 설정하므로 클라이언트에서 처리하지 않음
-					login(response.user || { id: 0, email: data.id });
+	const onSubmit = handleSubmit(
+		(data) => {
+			if (isLoggingIn) return;
+			loginMutate(
+				{ email: data.email, password: data.password },
+				{
+					onSuccess: (response) => {
+						// response 타입은 LoginResponse (success, message, data)
+						const accessToken = response.data?.access_token;
+						if (accessToken) {
+							setAccessToken(accessToken);
 
-					// [성공 메시지]
-					setToastMessage('로그인 되었습니다.');
+							login({
+								id: 0,
+								email: data.email,
+								name: '사용자',
+							});
+						}
 
-					onClose();
-					navigate('/');
+						// [성공 메시지]
+						setToastMessage('로그인 되었습니다.');
+
+						onClose();
+						navigate('/');
+					},
+					onError: (error: any) => {
+						const status = error?.response?.status;
+
+						if (status === 401 || status === 404) {
+							setError('password', {
+								type: 'manual',
+								message: '아이디 또는 비밀번호를 확인해주세요.',
+							});
+						} else {
+							setError('password', {
+								type: 'manual',
+								message: '회원이 아닙니다. 회원가입을 진행해 주세요',
+							});
+						}
+					},
 				},
-				onError: (error: any) => {
-					const status = error?.response?.status;
-
-					if (status === 401 || status === 404) {
-						setError('password', {
-							type: 'manual',
-							message: '아이디 또는 비밀번호를 확인해주세요.',
-						});
-					} else {
-						setError('password', {
-							type: 'manual',
-							message: '회원이 아닙니다. 회원가입을 진행해 주세요',
-						});
-					}
-				},
-			},
-		);
-	});
+			);
+		},
+		(errors) => {
+			console.error('로그인 유효성 검사 실패:', errors);
+		},
+	);
 
 	return {
 		formMethods,
