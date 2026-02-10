@@ -31,7 +31,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 		formState: { errors },
 	} = formMethods;
 
-	// [UI 로직] 버튼의 텍스트와 클릭 동작을 상태에 따라 결정
 	const getEmailButtonConfig = () => {
 		// 1. 중복 확인 전 -> "중복 확인"
 		if (!state.isEmailChecked) {
@@ -71,8 +70,8 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						<AuthInput
 							type='text'
 							placeholder='이름을 입력해 주세요'
-							errorMessage={(errors as any).name?.message}
-							{...register('name' as any)}
+							errorMessage={errors.name?.message}
+							{...register('name')}
 						/>
 					</div>
 
@@ -84,7 +83,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 								type='text'
 								placeholder='이메일 형식 입력'
 								readOnly={state.isEmailVerified}
-								// [UI 적용] 상태에 따른 테두리 색상 변경
 								className={`pr-24 ${
 									errors.email
 										? 'border-red-500'

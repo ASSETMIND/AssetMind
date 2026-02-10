@@ -256,7 +256,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// When
 			await act(async () => {
-				await result.current.actions.onSubmit({} as any);
+				await result.current.actions.onSubmit();
 			});
 
 			// Then
@@ -281,7 +281,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// When
 			await act(async () => {
-				await result.current.actions.onSubmit({} as any);
+				await result.current.actions.onSubmit();
 			});
 
 			// Then
@@ -302,7 +302,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// When
 			await act(async () => {
-				await result.current.actions.onSubmit({} as any);
+				await result.current.actions.onSubmit();
 			});
 
 			// Then

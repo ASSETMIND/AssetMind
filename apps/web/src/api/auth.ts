@@ -6,7 +6,7 @@ import type {
 	VerifyEmailResponse,
 } from '../types/auth';
 
-// 회원가입 POST /auth/signup
+// 회원가입 POST
 export async function signup(data: SignupParams): Promise<void> {
 	await axiosInstance.post('auth/register', data);
 }
