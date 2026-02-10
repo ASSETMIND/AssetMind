@@ -21,14 +21,20 @@ Trade-off:
     - 근거: 다양한 종류의 금융 데이터를 수집해야 하는 요구사항 특성상 확장성이 최우선임.
 """
 
-from typing import Any, Dict, Optional
 from datetime import datetime
+from typing import Any
 
-from .abstract_extractor import AbstractExtractor
-from ..domain.interfaces import IHttpClient, IAuthStrategy
+# [Decorator Imports]
+from ...common.decorators.log_decorator import log_decorator
+from ...common.decorators.rate_limit_decorator import rate_limit
+from ...common.decorators.retry_decorator import retry
+
+from ...common.config import AppConfig
 from ..domain.dtos import RequestDTO, ResponseDTO
 from ..domain.exceptions import ExtractorError
-from ...common.config import AppConfig
+from ..domain.interfaces import IAuthStrategy, IHttpClient
+from .abstract_extractor import AbstractExtractor
+
 
 class KISExtractor(AbstractExtractor):
     """설정(Config)에 정의된 정책을 기반으로 동작하는 한국투자증권 데이터 수집기.
@@ -128,8 +134,16 @@ class KISExtractor(AbstractExtractor):
         if not policy.tr_id:
              raise ExtractorError(f"Configuration Error: 'tr_id' is missing in policy '{request.job_id}'.")
 
+    @retry(max_retries=3)
+    @rate_limit(limit=5, period=1.0, bucket_key="KIS_OpenAPI") # Personal/Corp Limit Shared
+    @log_decorator(logger_name="KIS_Extractor")
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """설정된 정책과 인증 정보를 결합하여 KIS API를 호출합니다.
+
+        Decorators:
+            @retry: 네트워크 오류 시 재시도.
+            @rate_limit: 초당 5회 제한 (계좌/앱키 단위 공유).
+            @log_decorator: 수행 로깅.
 
         Args:
             request (RequestDTO): 검증된 요청 객체.

@@ -22,14 +22,21 @@ Trade-off:
     - 근거: API 명세 준수가 일반화된 유연성보다 우선시되어야 하는 인프라 계층임.
 """
 
-from typing import Any, Dict, Optional
 from datetime import datetime
+from typing import Any
 
-from .abstract_extractor import AbstractExtractor
-from ..domain.interfaces import IHttpClient
+# [Decorator Imports]
+# 공통 데코레이터 모듈을 임포트하여 횡단 관심사(Logging, Retry, RateLimit)를 처리합니다.
+from ...common.decorators.log_decorator import log_decorator
+from ...common.decorators.rate_limit_decorator import rate_limit
+from ...common.decorators.retry_decorator import retry
+
+from ...common.config import AppConfig
 from ..domain.dtos import RequestDTO, ResponseDTO
 from ..domain.exceptions import ExtractorError
-from ...common.config import AppConfig
+from ..domain.interfaces import IHttpClient
+from .abstract_extractor import AbstractExtractor
+
 
 class ECOSExtractor(AbstractExtractor):
     """설정(Config)에 정의된 정책을 기반으로 동작하는 한국은행(ECOS) 데이터 수집기.
@@ -122,8 +129,16 @@ class ECOSExtractor(AbstractExtractor):
         if "start_date" not in request.params or "end_date" not in request.params:
             raise ExtractorError("Invalid Request: 'start_date' and 'end_date' are mandatory for ECOS.")
 
+    @retry(max_retries=3, base_delay=1.0)
+    @rate_limit(limit=20, period=1.0, bucket_key="ECOS_API")
+    @log_decorator(logger_name="ECOS_Extractor")
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """설정된 정책과 요청 파라미터를 결합하여 ECOS API URL을 조립하고 호출합니다.
+
+        Decorators:
+            @retry: 네트워크 일시 오류 시 최대 3회 재시도.
+            @rate_limit: 초당 20회 호출 제한 (안전한 기본값).
+            @log_decorator: 함수 진입/종료 및 에러 로깅.
 
         ECOS API 구조: /Service/Key/Type/Lang/Start/End/StatCode/Cycle/StartDate/EndDate/ItemCode
 
