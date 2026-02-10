@@ -169,7 +169,14 @@ const logoutResolver: HttpResponseResolver = async () => {
 	console.log('[MSW] 로그아웃 요청 받음');
 	// 클라이언트에서 토큰을 삭제하는 것이 주 목적이므로,
 	// 서버에서는 성공 응답만 보내주면 됨
-	return HttpResponse.json({ message: '로그아웃 성공' }, { status: 200 });
+	return HttpResponse.json(
+		{
+			success: true,
+			message: '로그아웃 성공',
+			data: null,
+		},
+		{ status: 200 },
+	);
 };
 
 /*

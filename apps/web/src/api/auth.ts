@@ -2,6 +2,7 @@ import { axiosInstance, removeAuthTokens } from '../libs/axios';
 import type {
 	LoginParams,
 	LoginResponse,
+	LogoutResponse,
 	RefreshTokenResponse,
 	SignupParams,
 	VerifyEmailResponse,
@@ -77,9 +78,6 @@ export const refreshToken = async (): Promise<RefreshTokenResponse> => {
 
 // 로그아웃 API 함수 (서버에 Refresh Token 무효화 요청)
 export const logout = async (): Promise<void> => {
-	// 클라이언트가 가지고 있는 리프레시 토큰을 서버에 보내 무효화하도록 요청합니다.
-	// 리프레시 토큰은 HttpOnly Cookie로 관리되는 경우 서버가 자동으로 파싱합니다.
-	// 그렇지 않은 경우, 요청 바디나 헤더에 명시적으로 포함해야 합니다.
-	await axiosInstance.post('/auth/logout');
-	removeAuthTokens(); // 클라이언트 측 토큰 및 인증 플래그 제거
+	await axiosInstance.post<LogoutResponse>('/auth/logout');
+	removeAuthTokens();
 };

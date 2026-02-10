@@ -80,3 +80,10 @@ export interface EmailVerificationResponse {
 
 // 토큰 갱신 응답
 export interface RefreshTokenResponse extends AuthResponse {}
+
+// 로그아웃 응답
+export interface LogoutResponse {
+	success: boolean;
+	message: string;
+	data: null;
+}
