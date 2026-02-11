@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Modal from '../common/modal';
 import Button from '../common/button';
 import AuthInput from '../auth/auth-input';
@@ -19,11 +20,24 @@ type Props = {
 };
 
 export default function SignupModal({ onClose, onClickLogin }: Props) {
+	const [toastMessage, setToastMessage] = useState<string | null>(null);
+
 	// 비즈니스 로직과 상태 관리를 커스텀 훅에서 불러옴
 	// state: UI 렌더링에 필요한 상태 (loading, verified, message 등)
 	const { formMethods, state, actions } = useSignupLogic({
-		onClose,
-		onClickLogin,
+		onSuccess: () => {
+			setToastMessage('회원가입 완료! 로그인해주세요.');
+			setTimeout(() => {
+				onClose();
+				onClickLogin();
+			}, 2000);
+		},
+		onError: (message) => {
+			setToastMessage(message);
+		},
+		onToast: (message) => {
+			setToastMessage(message);
+		},
 	});
 
 	const {
@@ -219,10 +233,8 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 				</div>
 			</div>
 
-			{state.toastMessage && (
-				<Toast onClose={() => actions.setToastMessage(null)}>
-					{state.toastMessage}
-				</Toast>
+			{toastMessage && (
+				<Toast onClose={() => setToastMessage(null)}>{toastMessage}</Toast>
 			)}
 		</Modal>
 	);

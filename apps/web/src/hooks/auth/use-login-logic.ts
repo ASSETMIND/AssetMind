@@ -1,20 +1,17 @@
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate } from 'react-router-dom';
 import { loginSchema, type LoginSchemaType } from '../../libs/schema/auth';
 import { useLogin } from './queries/use-login';
 import { setAccessToken } from '../../libs/axios';
 import { useAuthStore } from '../../store/auth';
 
-type Props = {
-	onClose: () => void;
-};
+interface Props {
+	onSuccess?: () => void;
+	onError?: (message: string) => void;
+}
 
 // 전체적인 로그인 비즈니스 로직에 대한 훅
-export function useLoginLogic({ onClose }: Props) {
-	const navigate = useNavigate();
-	const [toastMessage, setToastMessage] = useState<string | null>(null);
+export function useLoginLogic({ onSuccess, onError }: Props = {}) {
 	const { login } = useAuthStore();
 
 	const formMethods = useForm<LoginSchemaType>({
@@ -50,26 +47,24 @@ export function useLoginLogic({ onClose }: Props) {
 							});
 						}
 
-						// [성공 메시지]
-						setToastMessage('로그인 되었습니다.');
-
-						onClose();
-						navigate('/');
+						onSuccess?.();
 					},
 					onError: (error: any) => {
 						const status = error?.response?.status;
+						let errorMessage: string;
 
 						if (status === 401 || status === 404) {
-							setError('password', {
-								type: 'manual',
-								message: '아이디 또는 비밀번호를 확인해주세요.',
-							});
+							errorMessage = '아이디 또는 비밀번호를 확인해주세요.';
 						} else {
-							setError('password', {
-								type: 'manual',
-								message: '회원이 아닙니다. 회원가입을 진행해 주세요',
-							});
+							errorMessage = '회원이 아닙니다. 회원가입을 진행해 주세요';
 						}
+
+						setError('password', {
+							type: 'manual',
+							message: errorMessage,
+						});
+
+						onError?.(errorMessage);
 					},
 				},
 			);
@@ -83,11 +78,9 @@ export function useLoginLogic({ onClose }: Props) {
 		formMethods,
 		state: {
 			isLoggingIn,
-			toastMessage,
 		},
 		actions: {
 			onSubmit,
-			setToastMessage,
 		},
 	};
 }

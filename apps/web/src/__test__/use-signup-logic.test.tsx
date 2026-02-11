@@ -7,7 +7,7 @@ const mockSendEmailMutate = jest.fn();
 const mockVerifyCodeMutate = jest.fn();
 const mockSignupMutate = jest.fn();
 
-jest.mock('../hooks/auth/use-email-verification', () => ({
+jest.mock('../hooks/auth/queries/use-email-verification', () => ({
 	useSendEmailCode: () => ({
 		mutateAsync: mockSendEmailMutate,
 		isPending: false,
@@ -22,14 +22,19 @@ jest.mock('../hooks/auth/use-email-verification', () => ({
 	}),
 }));
 
-jest.mock('../hooks/auth/use-signup', () => ({
+jest.mock('../hooks/auth/queries/use-signup', () => ({
 	useSignup: () => ({ mutate: mockSignupMutate, isPending: false }),
 }));
 
 describe('useSignupLogic 유닛 테스트', () => {
+	const mockOnSuccess = jest.fn();
+	const mockOnError = jest.fn();
+	const mockOnToast = jest.fn();
+
 	const defaultProps = {
-		onClose: jest.fn(),
-		onClickLogin: jest.fn(),
+		onSuccess: mockOnSuccess,
+		onError: mockOnError,
+		onToast: mockOnToast,
 	};
 
 	beforeEach(() => {
@@ -42,7 +47,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('email', 'invalid-email');
+				result.current.formMethods.setValue('email', 'invalid-email', {
+					shouldValidate: false,
+				});
 			});
 
 			// When
@@ -60,7 +67,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// 유효한 이메일 입력
 			await act(async () => {
-				result.current.formMethods.setValue('email', 'duplicate@test.com');
+				result.current.formMethods.setValue('email', 'duplicate@test.com', {
+					shouldValidate: false,
+				});
 			});
 
 			// API가 false(중복)를 반환하도록 설정
@@ -76,9 +85,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 			expect(result.current.formMethods.formState.errors.email?.message).toBe(
 				'이미 사용 중인 아이디입니다.',
 			);
-			expect(result.current.state.toastMessage).toBe(
-				'이미 사용 중인 아이디입니다.',
-			);
+			expect(mockOnError).toHaveBeenCalledWith('이미 사용 중인 아이디입니다.');
 		});
 
 		test('Scenario: 이메일 입력값이 변경되면 기존 인증 상태가 초기화된다', async () => {
@@ -88,7 +95,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 			// 중복 에러 상태로 시작
 			mockCheckEmailMutate.mockResolvedValue(false);
 			await act(async () => {
-				result.current.formMethods.setValue('email', 'dup@email.com');
+				result.current.formMethods.setValue('email', 'dup@email.com', {
+					shouldValidate: false,
+				});
 			});
 			await act(async () => {
 				await result.current.actions.handleCheckEmail();
@@ -119,7 +128,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 			});
 
 			expect(mockSendEmailMutate).not.toHaveBeenCalled();
-			expect(result.current.state.toastMessage).toBe(
+			expect(mockOnError).toHaveBeenCalledWith(
 				'먼저 아이디 중복 확인을 진행해주세요.',
 			);
 		});
@@ -130,7 +139,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			mockCheckEmailMutate.mockResolvedValue(true);
 			await act(async () => {
-				result.current.formMethods.setValue('email', 'valid@email.com');
+				result.current.formMethods.setValue('email', 'valid@email.com', {
+					shouldValidate: false,
+				});
 			});
 			await act(async () => {
 				await result.current.actions.handleCheckEmail();
@@ -148,7 +159,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// Then
 			expect(result.current.state.isEmailSent).toBe(false);
-			expect(result.current.state.toastMessage).toBe('서버 에러 발생');
+			expect(mockOnError).toHaveBeenCalledWith('서버 에러 발생');
 		});
 	});
 
@@ -158,7 +169,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('authCode', '123'); // 3자리
+				result.current.formMethods.setValue('authCode', '123', {
+					shouldValidate: false,
+				}); // 3자리
 			});
 
 			// When
@@ -168,8 +181,8 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// Then
 			expect(mockVerifyCodeMutate).not.toHaveBeenCalled();
-			expect(result.current.state.toastMessage).toContain(
-				'6자리를 입력해주세요',
+			expect(mockOnError).toHaveBeenCalledWith(
+				'인증번호 6자리를 입력해주세요.',
 			);
 		});
 
@@ -178,8 +191,12 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('email', 'test@test.com');
-				result.current.formMethods.setValue('authCode', '123456');
+				result.current.formMethods.setValue('email', 'test@test.com', {
+					shouldValidate: false,
+				});
+				result.current.formMethods.setValue('authCode', '123456', {
+					shouldValidate: false,
+				});
 			});
 
 			const errorMsg = '인증번호가 틀렸습니다.';
@@ -194,7 +211,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// Then
 			expect(result.current.state.isEmailVerified).toBe(false);
-			expect(result.current.state.toastMessage).toBe(errorMsg);
+			expect(mockOnError).toHaveBeenCalledWith(errorMsg);
 			expect(
 				result.current.formMethods.formState.errors.authCode?.message,
 			).toBe(errorMsg);
@@ -205,7 +222,9 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('authCode', '123456');
+				result.current.formMethods.setValue('authCode', '123456', {
+					shouldValidate: false,
+				});
 			});
 
 			// API가 토큰 문자열을 반환한다고 가정
@@ -218,9 +237,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// Then
 			expect(result.current.state.isEmailVerified).toBe(true);
-			expect(result.current.state.toastMessage).toBe(
-				'이메일 인증이 완료되었습니다.',
-			);
+			expect(mockOnToast).toHaveBeenCalledWith('이메일 인증이 완료되었습니다.');
 		});
 	});
 
@@ -228,11 +245,13 @@ describe('useSignupLogic 유닛 테스트', () => {
 		// 공통 Setup 함수
 		const setupReadyToSubmit = async (result: any) => {
 			await act(async () => {
-				result.current.formMethods.setValue('name', '테스트유저');
-				result.current.formMethods.setValue('email', 'final@test.com');
-				result.current.formMethods.setValue('password', 'password123!');
-				result.current.formMethods.setValue('passwordConfirm', 'password123!');
-				result.current.formMethods.setValue('authCode', '123456');
+				result.current.formMethods.reset({
+					name: '테스트유저',
+					email: 'final@test.com',
+					password: 'password123!',
+					passwordConfirm: 'password123!',
+					authCode: '123456',
+				});
 			});
 
 			// 인증 성공 시 토큰 반환
@@ -247,11 +266,13 @@ describe('useSignupLogic 유닛 테스트', () => {
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 
 			await act(async () => {
-				result.current.formMethods.setValue('name', '테스트유저');
-				result.current.formMethods.setValue('email', 'no-auth@test.com');
-				result.current.formMethods.setValue('password', 'pass123!');
-				result.current.formMethods.setValue('passwordConfirm', 'pass123!');
-				result.current.formMethods.setValue('authCode', '000000');
+				result.current.formMethods.reset({
+					name: '테스트유저',
+					email: 'no-auth@test.com',
+					password: 'pass123!',
+					passwordConfirm: 'pass123!',
+					authCode: '000000',
+				});
 			});
 
 			// When
@@ -261,9 +282,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 
 			// Then
 			expect(mockSignupMutate).not.toHaveBeenCalled();
-			expect(result.current.state.toastMessage).toBe(
-				'이메일 인증을 완료해주세요.',
-			);
+			expect(mockOnError).toHaveBeenCalledWith('이메일 인증을 완료해주세요.');
 		});
 
 		test('Scenario: 회원가입 요청 실패 시 에러 메시지를 표시한다', async () => {
@@ -285,13 +304,11 @@ describe('useSignupLogic 유닛 테스트', () => {
 			});
 
 			// Then
-			expect(result.current.state.toastMessage).toBe(serverErrorMsg);
+			expect(mockOnError).toHaveBeenCalledWith(serverErrorMsg);
 		});
 
 		test('Scenario: 모든 조건 만족 시 가입 요청을 보내고 성공 처리한다', async () => {
 			// Given
-			jest.useFakeTimers();
-
 			const { result } = renderHook(() => useSignupLogic(defaultProps));
 			await setupReadyToSubmit(result);
 
@@ -316,18 +333,7 @@ describe('useSignupLogic 유닛 테스트', () => {
 				expect.any(Object),
 			);
 
-			expect(result.current.state.toastMessage).toBe(
-				'회원가입 완료! 로그인해주세요.',
-			);
-
-			act(() => {
-				jest.advanceTimersByTime(2000);
-			});
-
-			expect(defaultProps.onClose).toHaveBeenCalled();
-			expect(defaultProps.onClickLogin).toHaveBeenCalled();
-
-			jest.useRealTimers();
+			expect(mockOnSuccess).toHaveBeenCalled();
 		});
 	});
 });

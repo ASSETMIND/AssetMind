@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { KAKAO_AUTH_URL, GOOGLE_AUTH_URL } from '../../libs/constants/auth';
 import { useAuthStore } from '../../store/auth';
 import { setAccessToken } from '../../libs/axios';
@@ -14,14 +14,17 @@ const SOCIAL_AUTH_URLS: Record<SocialProvider, string> = {
 	google: GOOGLE_AUTH_URL,
 };
 
-export function useSocialLoginLogic() {
-	const navigate = useNavigate();
+interface Props {
+	onSuccess?: () => void;
+	onError?: (message: string) => void;
+}
+
+export function useSocialLoginLogic({ onSuccess, onError }: Props = {}) {
 	const [searchParams] = useSearchParams();
 	const { login } = useAuthStore();
 
 	// 상태 정의
 	const [isRedirecting, setIsRedirecting] = useState(false);
-	const [toastMessage, setToastMessage] = useState<string | null>(null);
 
 	// 로그인 페이지 -> 소셜 리다이렉트
 	const handleSocialLogin = (provider: SocialProvider) => {
@@ -38,10 +41,7 @@ export function useSocialLoginLogic() {
 
 		if (error) {
 			console.error(`소셜 로그인 에러: ${error}`);
-			setToastMessage(
-				'로그인 과정에서 오류가 발생했습니다. 다시 시도해주세요.',
-			);
-			navigate('/', { replace: true });
+			onError?.('로그인 과정에서 오류가 발생했습니다. 다시 시도해주세요.');
 			return;
 		}
 
@@ -56,18 +56,16 @@ export function useSocialLoginLogic() {
 						}
 						login(response.user);
 						// 메인 페이지로 이동
-						navigate('/', { replace: true });
+						onSuccess?.();
 					},
 					onError: (error) => {
 						console.error('소셜 로그인 실패:', error);
-						setToastMessage('로그인에 실패했습니다. 다시 시도해주세요.');
-						navigate('/', { replace: true }); // 실패 시 메인페이지로 이동
+						onError?.('로그인에 실패했습니다. 다시 시도해주세요.');
 					},
 				},
 			);
 		} else {
-			setToastMessage('인증 정보를 받아오지 못했습니다. 다시 시도해주세요.');
-			navigate('/', { replace: true });
+			onError?.('인증 정보를 받아오지 못했습니다. 다시 시도해주세요.');
 		}
 	};
 
@@ -75,12 +73,10 @@ export function useSocialLoginLogic() {
 		state: {
 			isRedirecting, // 리다이렉트 중
 			isProcessing, // API 통신 용
-			toastMessage,
 		},
 		actions: {
 			handleSocialLogin,
 			handleSocialCallback,
-			setToastMessage,
 		},
 	};
 }

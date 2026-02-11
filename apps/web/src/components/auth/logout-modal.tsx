@@ -1,6 +1,7 @@
 import Modal from '../common/modal';
 import Button from '../common/button';
 
+// UX 경험을 위해 넣은 로그아웃 확인 모달
 type Props = {
 	onClose: () => void;
 	onConfirm: () => void;
