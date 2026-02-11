@@ -103,7 +103,7 @@ class KisWebSocketHandlerTest {
             String payload = "0|H0STCNT0|001|005930^123000^80000^1^0^2.5^...^100";
             // 파서가 결과 리스트를 반환하도록 설정
             when(dataParser.parse(payload)).thenReturn(List.of(
-                    new KisRealTimeData("005930", "123000", 80000L, 1L, 0L, 2.5,
+                    new KisRealTimeData("005930", "123000", 80000L, "1", 0L, 2.5,
                             80000L, 81000L, 79000L, 100L, 1000L, 1000000L, 100.0, "20")
             ));
 
