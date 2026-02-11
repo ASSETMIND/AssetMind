@@ -1,7 +1,7 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper;
 
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
-import com.assetmind.server_stock.stock.application.listner.dto.RealTimeStockTradeEvent;
+import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Component;
 

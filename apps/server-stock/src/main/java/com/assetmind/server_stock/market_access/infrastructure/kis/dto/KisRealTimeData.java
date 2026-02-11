@@ -11,7 +11,7 @@ public record KisRealTimeData(
         String stockCode,              // 종목코드
         String executionTime,       // 체결 시간 (HHmmss)
         Long currentPrice,          // 현재가
-        Long changeSign,            // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
+        String changeSign,            // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
         Long priceChange,           // 전일 대비
         Double changeRate,          // 등락률
         Long openPrice,             // 시가

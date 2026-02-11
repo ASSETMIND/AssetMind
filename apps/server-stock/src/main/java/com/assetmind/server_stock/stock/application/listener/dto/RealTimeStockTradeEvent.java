@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.application.listner.dto;
+package com.assetmind.server_stock.stock.application.listener.dto;
 
 import java.time.LocalDateTime;
 import lombok.Builder;
@@ -14,7 +14,7 @@ public record RealTimeStockTradeEvent(
         // --- 가격 정보 ---
         Long currentPrice,              // 현재가
         Long priceChange,               // 전일 대비
-        Long changeSign,                // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
+        String changeSign,                // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
         Double changeRate,              // 등락률
 
         // --- 가격 정보 ---
