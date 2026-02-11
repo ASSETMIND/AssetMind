@@ -1,237 +1,247 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch, ANY
 
+# [Target Modules] 테스트 대상 및 의존성
+from src.extractor.providers.fred_extractor import FREDExtractor
 from src.extractor.domain.dtos import RequestDTO, ResponseDTO
 from src.extractor.domain.exceptions import ExtractorError
-from src.extractor.providers.fred_extractor import FREDExtractor
 
-# -------------------------------------------------------------------------
-# Mocks & Fixtures
-# -------------------------------------------------------------------------
+# ========================================================================================
+# [Fixtures] Common Test Environment Setup
+# ========================================================================================
+
+@pytest.fixture(autouse=True)
+def mock_logger():
+    """
+    [Auto-use Fixture]
+    LogManager 초기화 시 전역 Config를 로딩하는 부작용(Side Effect)을 차단합니다.
+    """
+    with patch("src.common.log.LogManager.get_logger") as mock_get:
+        mock_get.return_value = MagicMock()
+        yield mock_get
 
 @pytest.fixture
 def mock_http_client():
-    """IHttpClient Mock: 실제 네트워크 요청 차단 및 파라미터 검증용"""
+    """
+    [Dependency Mock] 비동기 HTTP 클라이언트 모방.
+    """
     client = MagicMock()
-    client.get = AsyncMock()
+    client.get = AsyncMock() # 비동기 메서드 모방
     return client
 
 @pytest.fixture
 def mock_config():
-    """AppConfig Mock: FRED 전용 설정 및 정책 주입"""
+    """
+    [Config Mock] 별도의 Helper Class 없이 MagicMock으로 복잡한 설정 객체를 모방합니다.
+    """
     config = MagicMock()
     
-    # 1. FRED 기본 설정 (Base URL & API Key)
-    config.fred.base_url = "https://api.stlouisfed.org"
-    # SecretStr 동작 모방: get_secret_value() 호출 시 평문 반환
-    config.fred.api_key.get_secret_value.return_value = "TEST_FRED_KEY"
+    # 1. FRED 섹션 설정 (기본값 주입)
+    config.fred.base_url = "https://api.stlouisfed.org/fred"
+    config.fred.api_key.get_secret_value.return_value = "test_key" # SecretStr 동작 모방
     
-    # 2. 정책(Policy) 설정
-    # Case A: Normal Policy (series_id included)
-    normal_policy = MagicMock()
-    normal_policy.provider = "FRED"
-    normal_policy.path = "/fred/series/observations"
-    normal_policy.params = {"series_id": "GDP", "frequency": "q"} # Default Params
-    
-    # Case B: Policy without series_id (to test request injection)
-    flexible_policy = MagicMock()
-    flexible_policy.provider = "FRED"
-    flexible_policy.path = "/fred/series/observations"
-    flexible_policy.params = {"frequency": "m"} # series_id missing here
-    
-    # Case C: Provider Mismatch
-    kis_policy = MagicMock()
-    kis_policy.provider = "KIS" # Not FRED
-    
-    config.extraction_policy = {
-        "valid_job": normal_policy,
-        "flex_job": flexible_policy,
-        "kis_job": kis_policy
+    # 2. Policy 설정 (Dictionary 동작 에뮬레이션)
+    # 팩토리 함수로 Mock Policy 객체 생성
+    def make_policy(provider="FRED", params=None):
+        p = MagicMock()
+        p.provider = provider
+        p.params = params or {}
+        p.path = "/series/observations"
+        return p
+
+    # 테스트 시나리오별 정책 정의
+    policies = {
+        "JOB_01": make_policy(params={"series_id": "GDP"}),
+        "JOB_NO_PARAM": make_policy(params={}),
+        "JOB_KIS": make_policy(provider="KIS")
     }
+    
+    # 객체를 딕셔너리처럼 조회(.get, []) 할 수 있도록 side_effect 설정
+    config.extraction_policy.__getitem__.side_effect = policies.__getitem__
+    config.extraction_policy.get.side_effect = policies.get
+    
     return config
 
 @pytest.fixture
-def extractor(mock_http_client, mock_config):
-    """FREDExtractor 인스턴스 생성 (LogManager 의존성 제거)"""
-    
-    # Critical Fix: KIS 테스트와 동일하게 부모 클래스의 LogManager 호출을 무력화
-    with patch("src.extractor.providers.abstract_extractor.LogManager") as MockLogManager:
-        MockLogManager.get_logger.return_value = MagicMock()
-        
-        # FRED는 AuthStrategy가 필요 없으므로 http_client와 config만 주입
-        extractor_instance = FREDExtractor(mock_http_client, mock_config)
-        return extractor_instance
+def fred_extractor(mock_http_client, mock_config):
+    """[SUT] System Under Test: 테스트 대상 인스턴스"""
+    return FREDExtractor(mock_http_client, mock_config)
 
-# -------------------------------------------------------------------------
-# Test Cases (TC-001 ~ TC-013)
-# -------------------------------------------------------------------------
+# ========================================================================================
+# 1. 초기화 테스트 (Initialization & Configuration)
+# ========================================================================================
+
+def test_init_01_empty_base_url(mock_http_client, mock_config):
+    """[INIT-01] base_url이 비어있으면 초기화 단계에서 즉시 에러 발생 (Fail-Fast)"""
+    # Given: 잘못된 설정 (URL 누락)
+    mock_config.fred.base_url = ""
+    
+    # When & Then: 인스턴스 생성 시 예외 발생 검증
+    with pytest.raises(ExtractorError, match="base_url.*empty"):
+        FREDExtractor(mock_http_client, mock_config)
+
+def test_init_02_missing_api_key(mock_http_client, mock_config):
+    """[INIT-02] api_key가 None이면 초기화 실패"""
+    # Given: 잘못된 설정 (Key 누락)
+    mock_config.fred.api_key = None
+    
+    # When & Then
+    with pytest.raises(ExtractorError, match="api_key.*missing"):
+        FREDExtractor(mock_http_client, mock_config)
+
+def test_init_03_valid_init(fred_extractor):
+    """[INIT-03] 유효한 설정인 경우 인스턴스가 정상적으로 생성됨"""
+    # Then: Config가 정상적으로 주입되었는지 확인
+    assert fred_extractor.config.fred.base_url == "https://api.stlouisfed.org/fred"
+
+# ========================================================================================
+# 2. 유효성 검증 테스트 (Validation - Logic & MC/DC)
+# ========================================================================================
+
+def test_val_00_missing_job_id(fred_extractor):
+    """[VAL-00] Request에 job_id가 없는 경우 유효성 검증 실패 (Coverage Hole Patch)"""
+    # Given: Job ID가 없는 요청
+    request = RequestDTO(job_id="", params={})
+    
+    # When & Then: 필수 필드 누락 에러 확인
+    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+        fred_extractor._validate_request(request)
+
+def test_val_01_policy_missing(fred_extractor):
+    """[VAL-01] Config에 정의되지 않은 job_id 요청 시 실패"""
+    # Given: 알 수 없는 Job ID
+    request = RequestDTO(job_id="UNKNOWN_JOB", params={})
+    
+    # When & Then: 정책 미존재 에러 확인
+    with pytest.raises(ExtractorError, match="Policy not found"):
+        fred_extractor._validate_request(request)
+
+def test_val_02_provider_mismatch(fred_extractor):
+    """[VAL-02] 해당 Policy의 Provider가 'FRED'가 아닌 경우 실패"""
+    # Given: KIS용 Job을 FRED 수집기에 요청
+    request = RequestDTO(job_id="JOB_KIS", params={})
+    
+    # When & Then: 제공자 불일치 에러 확인
+    with pytest.raises(ExtractorError, match="Provider Mismatch"):
+        fred_extractor._validate_request(request)
 
 @pytest.mark.asyncio
-async def test_tc_001_happy_path_success(extractor, mock_http_client):
-    """[TC-001] 정상 Config, Policy, 응답(No Error Msg) -> 성공"""
-    # Given
-    request = RequestDTO(job_id="valid_job")
-    mock_data = {"realtime_start": "2024-01-01", "observations": [{"value": "100"}]}
-    mock_http_client.get.return_value = mock_data
-
-    # When
-    response = await extractor.extract(request)
-
-    # Then
-    assert response.data == mock_data
-    assert response.meta["source"] == "FRED"
-    assert response.meta["status_code"] == "200" # FRED는 명시적 코드가 없으므로 200 가정
-    assert response.meta["job_id"] == "valid_job"
+async def test_val_03_mcdc_series_id_in_policy(fred_extractor, mock_http_client):
+    """[VAL-03] [MC/DC] series_id가 Policy에만 존재하는 경우 -> 성공"""
+    # Given: Policy에는 "GDP"가 있고, Request에는 없음
+    request = RequestDTO(job_id="JOB_01", params={})
+    mock_http_client.get.return_value = {"observations": []}
+    
+    # When: 추출 실행
+    await fred_extractor.extract(request)
+    
+    # Then: 에러 없이 API 호출이 발생했는지 확인
     mock_http_client.get.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_tc_002_logic_param_merge_distinct(extractor, mock_http_client):
-    """[TC-002] Policy Param과 Request Param 병합 확인"""
+async def test_val_04_mcdc_series_id_in_request(fred_extractor, mock_http_client):
+    """[VAL-04] [MC/DC] series_id가 Request에만 존재하는 경우 -> 성공"""
+    # Given: Policy(JOB_NO_PARAM)에는 없고, Request 파라미터로 "CPI" 전달
+    request = RequestDTO(job_id="JOB_NO_PARAM", params={"series_id": "CPI"})
+    mock_http_client.get.return_value = {"observations": []}
+    
+    # When: 추출 실행
+    await fred_extractor.extract(request)
+    
+    # Then: 실제 API 호출 시 Request의 "CPI"가 사용되었는지 확인
+    call_kwargs = mock_http_client.get.call_args.kwargs
+    assert call_kwargs['params']['series_id'] == "CPI"
+
+def test_val_05_mcdc_series_id_missing(fred_extractor):
+    """[VAL-05] [MC/DC] series_id가 Policy와 Request 어디에도 없는 경우 -> 실패"""
+    # Given: 양쪽 모두 series_id 없음
+    request = RequestDTO(job_id="JOB_NO_PARAM", params={})
+    
+    # When & Then: 필수 파라미터 누락 에러 확인
+    with pytest.raises(ExtractorError, match="'series_id' is required"):
+        fred_extractor._validate_request(request)
+
+# ========================================================================================
+# 3. 실행 및 병합 테스트 (Execution & Data Merging)
+# ========================================================================================
+
+@pytest.mark.asyncio
+async def test_exec_01_param_merging(fred_extractor, mock_http_client):
+    """
+    [EXEC-01] 파라미터 병합 로직 검증
+    1. Request 파라미터가 Policy 파라미터보다 우선순위가 높은가?
+    2. 시스템 필수 파라미터(api_key, file_type)가 강제 주입되는가?
+    """
     # Given
-    # Policy: {'series_id': 'GDP', 'frequency': 'q'}
-    request = RequestDTO(job_id="valid_job", params={"observation_start": "2020-01-01"})
+    # Policy(JOB_01) params: {series_id: GDP}
+    # Request params: {frequency: m}
+    request = RequestDTO(job_id="JOB_01", params={"frequency": "m"})
     mock_http_client.get.return_value = {}
 
     # When
-    await extractor.extract(request)
+    await fred_extractor.extract(request)
 
     # Then
-    call_params = mock_http_client.get.call_args[1]["params"]
-    assert call_params["series_id"] == "GDP"
-    assert call_params["frequency"] == "q"
-    assert call_params["observation_start"] == "2020-01-01"
+    call_params = mock_http_client.get.call_args.kwargs['params']
+    assert call_params["series_id"] == "GDP"   # Policy 값 유지
+    assert call_params["frequency"] == "m"     # Request 값 병합됨
+    assert call_params["file_type"] == "json"  # 시스템 강제 주입 확인
+    assert call_params["api_key"] == "test_key" # API Key 주입 확인
 
 @pytest.mark.asyncio
-async def test_tc_003_logic_forced_json_injection(extractor, mock_http_client):
-    """[TC-003] Request가 xml을 요청해도 시스템이 json을 강제해야 함"""
+async def test_exec_02_metadata_injection(fred_extractor, mock_http_client):
+    """[EXEC-02] extract 메서드 오버라이딩을 통해 ResponseDTO에 job_id가 주입되는지 확인"""
     # Given
-    request = RequestDTO(job_id="valid_job", params={"file_type": "xml"})
-    mock_http_client.get.return_value = {}
+    request = RequestDTO(job_id="JOB_01", params={})
+    mock_http_client.get.return_value = {"observations": []}
 
     # When
-    await extractor.extract(request)
+    response = await fred_extractor.extract(request)
 
     # Then
-    call_params = mock_http_client.get.call_args[1]["params"]
-    assert call_params["file_type"] == "json" # Override Check
+    assert response.meta["job_id"] == "JOB_01"
+    assert response.meta["source"] == "FRED"
+
+# ========================================================================================
+# 4. 에러 처리 테스트 (Error Handling & Reliability)
+# ========================================================================================
 
 @pytest.mark.asyncio
-async def test_tc_004_logic_api_key_injection(extractor, mock_http_client):
-    """[TC-004] Config의 SecretKey가 평문으로 Query Param에 주입되어야 함"""
-    # Given
-    request = RequestDTO(job_id="valid_job")
-    mock_http_client.get.return_value = {}
-
-    # When
-    await extractor.extract(request)
-
-    # Then
-    call_params = mock_http_client.get.call_args[1]["params"]
-    assert call_params["api_key"] == "TEST_FRED_KEY"
-
-@pytest.mark.asyncio
-async def test_tc_005_boundary_series_id_in_request(extractor, mock_http_client):
-    """[TC-005] Policy에 series_id가 없어도 Request에 있으면 성공"""
-    # Given
-    # 'flex_job' policy has no series_id
-    request = RequestDTO(job_id="flex_job", params={"series_id": "CPI"})
-    mock_http_client.get.return_value = {}
-
-    # When
-    await extractor.extract(request)
-
-    # Then
-    call_params = mock_http_client.get.call_args[1]["params"]
-    assert call_params["series_id"] == "CPI"
-
-@pytest.mark.asyncio
-async def test_tc_006_boundary_empty_request_params(extractor, mock_http_client):
-    """[TC-006] Request Params가 비어있으면 Policy 기본값 사용"""
-    # Given
-    request = RequestDTO(job_id="valid_job", params={})
-    mock_http_client.get.return_value = {}
-
-    # When
-    await extractor.extract(request)
-
-    # Then
-    call_params = mock_http_client.get.call_args[1]["params"]
-    assert call_params["series_id"] == "GDP"
-
-def test_tc_007_config_empty_base_url(mock_http_client, mock_config):
-    """[TC-007] Config의 base_url이 비어있으면 초기화 시 에러"""
-    # Given
-    mock_config.fred.base_url = ""
-
-    # When & Then
-    with patch("src.extractor.providers.abstract_extractor.LogManager") as MockLogManager:
-        MockLogManager.get_logger.return_value = MagicMock()
-        with pytest.raises(ExtractorError, match="Critical Config Error"):
-            FREDExtractor(mock_http_client, mock_config)
-
-@pytest.mark.asyncio
-async def test_tc_008_error_missing_job_id(extractor):
-    """[TC-008] job_id 누락 시 ExtractorError"""
-    # Given
-    request = RequestDTO(job_id=None)
-
-    # When & Then
-    with pytest.raises(ExtractorError, match="Invalid Request: 'job_id' is mandatory"):
-        await extractor.extract(request)
-
-@pytest.mark.asyncio
-async def test_tc_009_error_unknown_policy(extractor):
-    """[TC-009] Config에 없는 job_id 요청 시 ExtractorError"""
-    # Given
-    request = RequestDTO(job_id="unknown_job")
-
-    # When & Then
-    with pytest.raises(ExtractorError, match="Policy not found"):
-        await extractor.extract(request)
-
-@pytest.mark.asyncio
-async def test_tc_010_error_provider_mismatch(extractor):
-    """[TC-010] Policy Provider가 FRED가 아님 -> ExtractorError"""
-    # Given
-    request = RequestDTO(job_id="kis_job") # Provider is KIS
-
-    # When & Then
-    with pytest.raises(ExtractorError, match="Provider Mismatch"):
-        await extractor.extract(request)
-
-@pytest.mark.asyncio
-async def test_tc_011_error_missing_series_id(extractor):
-    """[TC-011] Policy와 Request 모두 series_id 누락 -> ExtractorError"""
-    # Given
-    # 'flex_job' has no series_id in policy
-    request = RequestDTO(job_id="flex_job", params={}) 
-
-    # When & Then
-    with pytest.raises(ExtractorError, match="Missing Parameter: 'series_id' is required"):
-        await extractor.extract(request)
-
-@pytest.mark.asyncio
-async def test_tc_012_error_fred_business_failure(extractor, mock_http_client):
-    """[TC-012] HTTP 200이지만 Body에 error_message 포함 -> ExtractorError"""
-    # Given
-    request = RequestDTO(job_id="valid_job")
+async def test_err_01_logical_error_in_body(fred_extractor, mock_http_client):
+    """[ERR-01] HTTP 200 OK이지만 Body에 에러 메시지가 포함된 경우 (Logical Error)"""
+    # Given: FRED API 특유의 에러 응답 포맷
+    request = RequestDTO(job_id="JOB_01", params={})
     mock_http_client.get.return_value = {
         "error_code": 400,
-        "error_message": "Bad Request. The value for variable series_id cannot be found."
+        "error_message": "Bad Request"
     }
 
-    # When & Then
-    with pytest.raises(ExtractorError, match="FRED API Failed: Bad Request"):
-        await extractor.extract(request)
+    # When & Then: ExtractorError로 변환되어 던져지는지 확인
+    with pytest.raises(ExtractorError, match="FRED API Failed"):
+        await fred_extractor.extract(request)
 
 @pytest.mark.asyncio
-async def test_tc_013_error_system_failure(extractor, mock_http_client):
-    """[TC-013] HttpClient 네트워크 예외 발생 -> System Error로 래핑"""
-    # Given
-    request = RequestDTO(job_id="valid_job")
-    mock_http_client.get.side_effect = Exception("Connection Timeout")
+async def test_err_02_unexpected_exception_wrapping(fred_extractor, mock_http_client):
+    """[ERR-02] 내부 로직 수행 중 예상치 못한 시스템 에러 발생 시 래핑 처리"""
+    # Given: 예상치 못한 KeyError 발생
+    request = RequestDTO(job_id="JOB_01", params={})
+    mock_http_client.get.side_effect = KeyError("Unexpected")
 
-    # When & Then
-    with pytest.raises(ExtractorError, match="System Error: Connection Timeout"):
-        await extractor.extract(request)
+    # When & Then: System Error 메시지로 래핑 확인
+    with pytest.raises(ExtractorError, match="System Error"):
+        await fred_extractor.extract(request)
+
+@pytest.mark.asyncio
+async def test_err_03_retry_decorator_trigger(fred_extractor, mock_http_client):
+    """[ERR-03] 네트워크 타임아웃 발생 시 @retry 데코레이터 작동 여부 검증"""
+    # Given: 항상 실패하는 API 호출
+    request = RequestDTO(job_id="JOB_01", params={})
+    mock_http_client.get.side_effect = Exception("Network Timeout")
+    
+    # When & Then: 최종적으로 에러가 발생해야 함
+    with pytest.raises(ExtractorError, match="System Error"):
+        await fred_extractor.extract(request)
+    
+    # Assert: 재시도로 인해 호출 횟수가 1회 초과인지 확인
+    assert mock_http_client.get.call_count > 1

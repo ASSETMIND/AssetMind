@@ -126,7 +126,7 @@ class AbstractExtractor(IExtractor, ABC):
         Raises:
             ExtractorError: 설정이 없거나 요청이 유효하지 않은 경우.
         """
-        pass
+        pass # pragma: no cover
 
     @abstractmethod
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
@@ -143,7 +143,7 @@ class AbstractExtractor(IExtractor, ABC):
         Returns:
             Any: API로부터 받은 원본 응답 데이터.
         """
-        pass
+        pass # pragma: no cover
 
     @abstractmethod
     def _create_response(self, raw_data: Any) -> ResponseDTO:
@@ -158,4 +158,4 @@ class AbstractExtractor(IExtractor, ABC):
         Raises:
             ExtractorError: API 호출은 성공했으나 비즈니스 로직상 실패인 경우.
         """
-        pass
+        pass # pragma: no cover

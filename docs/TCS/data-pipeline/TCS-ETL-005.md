@@ -1,31 +1,40 @@
-# UPBIT Extractor Test Specification
+# UPBIT Extractor 테스트 명세서
 
-## 1. 개요
+## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `src.extractor.providers.upbit_extractor.UPBITExtractor`
-- **작성 목적:** Upbit Open API 수집 로직의 정합성 검증 및 예외 처리 견고성 확보.
-- **테스트 범위:** 인증 전략 연동, 파라미터 동적 병합, URL/Header 조립, Upbit 고유 에러 핸들링, Request/Config 유효성 검사.
+- **대상 모듈:** `extractor.upbit_extractor.UPBITExtractor`
+- **복잡도 수준:** **최상 (Critical)** (외부 가상화폐 거래소 API 연동 및 시세 데이터 수집)
+- **커버리지 목표:** 분기 커버리지(Branch Coverage) 100%, 구문 커버리지(Statement Coverage) 100%
+- **적용 전략:**
+  - [x] **MC/DC (수정 조건/결정 커버리지):** `_validate_request` 내 필수 파라미터(`market`, `markets`) 조합에 따른 경고 로직의 독립적 검증.
+  - [x] **Fail-Fast (조기 실패):** `base_url` 설정 누락 및 잘못된 정책 요청 시 즉각적인 예외 발생 여부 검증.
+  - [x] **Mocking & Stubbing:** `IHttpClient`, `IAuthStrategy`의 응답 제어를 통한 네트워크/인증 격리 테스트.
+  - [x] **Data Integrity:** Request 파라미터의 Policy 덮어쓰기(Override) 및 에러 객체(`error`) 감지 로직 검증.
 
-## 2. 테스트 환경 및 전략
+## 2. BDD 테스트 시나리오 (전체 목록)
 
-- **Mocking:** `IHttpClient`, `IAuthStrategy`, `AppConfig`는 철저히 Mocking하여 외부 의존성을 격리합니다.
-- **Logging:** `LogManager`를 Patch하여 테스트 중 불필요한 I/O를 방지하고, 특정 상황(Warning)에서의 로그 호출 여부를 검증합니다.
-- **Assertions:** 결과값(DTO) 뿐만 아니라, 호출된 URL, Header, Log Message를 검증하여 내부 로직의 정확성을 보장합니다.
+**시나리오 요약:**
 
-## 3. 테스트 케이스 명세
+- **초기화 (Initialization):** 1건 (설정 검증)
+- **요청 검증 (Validation):** 4건 (MC/DC 적용 - JobID, Policy, Provider, Params)
+- **정상 흐름 (Functional):** 2건 (파라미터 병합, URL 구성)
+- **보안 (Security):** 2건 (토큰 존재/미존재 시 헤더 구성)
+- **데이터 안정성 (Robustness):** 2건 (API 에러 응답 처리, 정상 응답 매핑)
+- **예외 및 데코레이터 (Exception):** 3건 (인증 예외 전파, 시스템 예외 래핑, 데코레이터 적용)
 
-|  Test ID   |         Category         | Given (Preconditions)                                                 | When (Action)                                 | Then (Expected Outcome)                                                                                      | Input Data                   | Priority |
-| :--------: | :----------------------: | :-------------------------------------------------------------------- | :-------------------------------------------- | :----------------------------------------------------------------------------------------------------------- | :--------------------------- | :------- |
-| **TC-001** |    **Unit (Config)**     | `config.upbit.base_url`이 비어있는 상태("")                           | `UPBITExtractor` 인스턴스 초기화 (`__init__`) | `ExtractorError` 발생 ("Critical Config Error").                                                             | `base_url=""`                | High     |
-| **TC-002** |  **Unit (Happy Path)**   | 정상 Config, Policy, AuthToken 존재. API는 정상 Dict 응답 반환.       | `extract(request)` 호출                       | status='OK', data=원본응답 반환. Info 로그 호출 확인.                                                        | `job_id="upbit_job"`         | High     |
-| **TC-003** |  **Unit (Happy Path)**   | 정상 Config, Policy 존재.                                             | `extract(request)` 호출                       | **URL**(`base+path`), **Header**(`Bearer Token`), **Params**가 순서대로 조립되어 `client.get` 호출됨을 검증. | `job_id="upbit_job"`, params | High     |
-| **TC-004** |     **Unit (Logic)**     | `AuthStrategy`가 `None`을 반환 (Public API).                          | `extract(request)` 호출                       | `client.get` 호출 시 헤더에 `Authorization` 필드가 **없어야 함**.                                            | `job_id="public_job"`        | Medium   |
-| **TC-005** |     **Unit (Logic)**     | Policy Params(`count=1`)와 Request Params(`count=100`)가 중복.        | `extract(request)` 호출                       | `client.get` 호출 시 **Request Param(`count=100`)이 우선** 적용되었는지 검증.                                | `params={'count': 100}`      | Medium   |
-| **TC-006** |     **Unit (Logic)**     | Request와 Policy 양쪽 모두 `market` 파라미터 없음.                    | `extract(request)` 호출                       | 예외 없이 진행되나, **Warning 로그**가 기록됨을 검증.                                                        | `params={}` (No market)      | Medium   |
-| **TC-007** |     **Unit (Logic)**     | API가 Dict가 아닌 **List** (예: 캔들 데이터)를 반환.                  | `extract(request)` 호출                       | 에러 없이 정상 처리되며 `ResponseDTO.data`가 List인지 검증.                                                  | API Resp: `[{}, {}]`         | Medium   |
-| **TC-008** | **Exception (Request)**  | `request.job_id`가 `None`.                                            | `extract(request)` 호출                       | `ExtractorError` 발생 ("Invalid Request").                                                                   | `job_id=None`                | High     |
-| **TC-009** |  **Exception (Policy)**  | 요청한 `job_id`가 Config Policy 맵에 없음.                            | `extract(request)` 호출                       | `ExtractorError` 발생 ("Policy not found").                                                                  | `job_id="unknown"`           | High     |
-| **TC-010** |  **Exception (Policy)**  | 해당 Policy의 Provider가 "UPBIT"가 아님 (예: "KIS").                  | `extract(request)` 호출                       | `ExtractorError` 발생 ("Provider Mismatch").                                                                 | `provider="KIS"`             | High     |
-| **TC-011** | **Exception (Response)** | API 응답 Body에 `error` 객체 포함 (`{"error": {"message": "Fail"}}`). | `extract(request)` 호출                       | `ExtractorError` 발생 (메시지 포함).                                                                         | API Resp: `{"error": ...}`   | High     |
-| **TC-012** | **Exception (Response)** | API 응답 Body에 `error` 키가 있으나 내부 필드 누락.                   | `extract(request)` 호출                       | `ExtractorError` 발생 (기본 메시지 "UnknownError" 등 확인).                                                  | API Resp: `{"error": {}}`    | Low      |
-| **TC-013** |       **Resource**       | `http_client.get` 호출 시 `ConnectionError` 발생.                     | `extract(request)` 호출                       | `ExtractorError`로 래핑되어 던져짐 ("System Error").                                                         | `client.get` raises Ex       | High     |
+|  테스트 ID  | 분류 | 기법  | 전제 조건 (Given)                         | 수행 (When)                          | 검증 (Then)                                                     | 입력 데이터 / 상황               |
+| :---------: | :--: | :---: | :---------------------------------------- | :----------------------------------- | :-------------------------------------------------------------- | :------------------------------- |
+| **INIT-01** | 단위 |  BVA  | `upbit.base_url`이 비어있는 설정 객체     | `UPBITExtractor(config)` 초기화      | `ExtractorError` 발생 (Critical Config Error)                   | `base_url=""`                    |
+| **REQ-01**  | 단위 | MC/DC | `job_id`가 없는 요청 객체                 | `extract(request)` 호출              | `ExtractorError` 발생 (Invalid Request)                         | `job_id=None`                    |
+| **REQ-02**  | 단위 | MC/DC | 설정 파일에 정의되지 않은 `job_id` 요청   | `extract(request)` 호출              | `ExtractorError` 발생 (Policy not found)                        | `job_id="UNKNOWN"`               |
+| **REQ-03**  | 단위 | MC/DC | Provider가 'KIS'로 설정된 정책 요청       | `extract(request)` 호출              | `ExtractorError` 발생 (Provider Mismatch)                       | `provider="KIS"`                 |
+| **REQ-04**  | 단위 | MC/DC | 정책/요청에 `market`, `markets` 모두 없음 | `extract(request)` 호출              | **Logger.warning 호출됨** (Parameter Warning)                   | `params={}`                      |
+| **FLOW-01** | 단위 |  BVA  | 정책 파라미터와 요청 파라미터 중복        | `extract(request)` 호출              | **요청 파라미터가 우선순위**를 가져 정책값을 덮어씀             | Policy:`{cnt:1}`, Req:`{cnt:10}` |
+| **FLOW-02** | 단위 | 표준  | `base_url`과 `path`가 설정됨              | `_fetch_raw_data` 내부 호출 URL 확인 | 두 문자열이 결합된 **완전한 URL**로 호출됨                      | `url="host/v1/candles..."`       |
+| **SEC-01**  | 단위 | 보안  | `AuthStrategy`가 유효 토큰 반환           | `_fetch_raw_data` 헤더 검사          | `authorization` 헤더에 토큰 값이 포함됨                         | `headers["authorization"]` 존재  |
+| **SEC-02**  | 단위 | 보안  | `AuthStrategy`가 `None` 반환 (Public)     | `_fetch_raw_data` 헤더 검사          | `authorization` 헤더가 **포함되지 않음**                        | `token=None`                     |
+| **DATA-01** | 단위 |  BVA  | API 응답 본문에 `error` 키 존재           | `extract(request)` 호출              | `ExtractorError` 발생 (UPBIT API Failed)                        | `{"error": {"message": "Fail"}}` |
+| **DATA-02** | 단위 | 표준  | 정상 JSON 응답 수신                       | `extract(request)` 호출              | 1. `ResponseDTO` 반환<br>2. 메타데이터(`source`, `job_id`) 검증 | `{"market": "KRW-BTC"}`          |
+| **ERR-01**  | 예외 | 전파  | `AuthStrategy`에서 예외 발생              | `extract(request)` 호출              | 예외가 **그대로 상위로 전파됨** (로그 기록 확인)                | Raise `AuthError`                |
+| **ERR-02**  | 예외 | 래핑  | 수집 중 예상치 못한 `KeyError` 발생       | `extract(request)` 호출              | `ExtractorError`로 래핑되어 던져짐 (System Error)               | Raise `KeyError`                 |
+| **DEC-01**  | 단위 | 메타  | `@retry`, `@rate_limit` 데코레이터 적용   | `_fetch_raw_data` 속성 검사          | 데코레이터 래퍼가 적용되어 있음 (실제 동작은 Stub으로 검증)     | `__wrapped__` 속성 확인          |
