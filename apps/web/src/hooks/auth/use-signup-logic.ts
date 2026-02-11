@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signupSchema, type SignupSchemaType } from '../../libs/schema/auth';
-import { useSignup } from './use-signup';
 import {
 	useSendEmailCode,
 	useVerifyEmailCode,
 	useCheckEmail,
-} from './use-email-verification';
+} from './queries/use-email-verification';
+import { useSignup } from './queries/use-signup';
 
 type Props = {
 	onClose: () => void;

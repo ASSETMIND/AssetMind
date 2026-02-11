@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useLoginLogic } from '../hooks/auth/use-login-logic';
-import { useLogin } from '../hooks/auth/use-login';
+import { useLogin } from '../hooks/auth/queries/use-login';
 import { setAccessToken } from '../libs/axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';

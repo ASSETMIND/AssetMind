@@ -3,7 +3,7 @@ import {
 	sendVerificationCode,
 	verifyEmailCode,
 	checkEmailAvailability,
-} from '../../api/auth';
+} from '../../../api/auth';
 
 // 이메일 중복 확인 (사용 가능 여부) 훅
 export function useCheckEmail() {

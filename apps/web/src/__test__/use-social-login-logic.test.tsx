@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useSocialLoginLogic } from '../hooks/auth/use-social-login-logic';
-import { useMutation } from '@tanstack/react-query';
+import { useSocialLogin } from '../hooks/auth/queries/use-social-login';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { setAccessToken } from '../libs/axios';
@@ -20,8 +20,8 @@ jest.mock('react-router-dom', () => ({
 	useSearchParams: jest.fn(),
 }));
 
-jest.mock('@tanstack/react-query', () => ({
-	useMutation: jest.fn(),
+jest.mock('../hooks/auth/use-social-login', () => ({
+	useSocialLogin: jest.fn(),
 }));
 
 jest.mock('../libs/axios', () => ({
@@ -40,7 +40,6 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 	let mockNavigate: jest.Mock;
 	let mockLoginAction: jest.Mock;
 	let mockMutate: jest.Mock;
-	let mutationOptions: any;
 
 	// window.location 저장을 위한 변수
 	const originalLocation = window.location;
@@ -80,8 +79,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			login: mockLoginAction,
 		});
 
-		(useMutation as jest.Mock).mockImplementation((options) => {
-			mutationOptions = options;
+		(useSocialLogin as jest.Mock).mockImplementation(() => {
 			return {
 				mutate: mockMutate,
 				isPending: false,
@@ -179,9 +177,13 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 	});
 
 	describe('로그인 API 응답 처리 (Mutation Callbacks)', () => {
+		// onSuccess/onError는 이제 mutate 호출 시 전달되므로,
+		// handleSocialCallback을 호출하여 mutate가 실행된 후 인자를 캡처해야 함.
+
 		beforeEach(() => {
-			// Given: 훅이 렌더링되어 mutation 콜백이 설정된 상태
-			renderHook(() => useSocialLoginLogic());
+			(useSearchParams as jest.Mock).mockReturnValue([
+				new URLSearchParams('code=test-code'),
+			]);
 		});
 
 		test('로그인 성공(onSuccess) 시 토큰 저장, 스토어 업데이트, 페이지 이동이 수행되어야 한다', () => {
@@ -191,9 +193,18 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 				user: { id: 1, email: 'social@test.com' },
 			};
 
-			// When: mutation의 onSuccess 콜백이 호출될 때
+			const { result } = renderHook(() => useSocialLoginLogic());
+
+			// When: 소셜 콜백 실행 -> mutate 호출 -> onSuccess 콜백 실행
 			act(() => {
-				mutationOptions.onSuccess(mockResponse);
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			const mutateCall = mockMutate.mock.calls[0];
+			const options = mutateCall[1]; // 두 번째 인자가 옵션 객체
+
+			act(() => {
+				options.onSuccess(mockResponse);
 			});
 
 			// Then: 토큰이 저장되고, 로그인 상태가 업데이트되며, 메인 페이지로 이동
@@ -208,9 +219,15 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 				user: { id: 1, email: 'social@test.com' },
 			};
 
-			// When: mutation의 onSuccess 콜백이 호출될 때
+			const { result } = renderHook(() => useSocialLoginLogic());
+
 			act(() => {
-				mutationOptions.onSuccess(mockResponse);
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			const options = mockMutate.mock.calls[0][1];
+			act(() => {
+				options.onSuccess(mockResponse);
 			});
 
 			// Then: 토큰 저장은 호출되지 않고, 로그인 상태 업데이트와 페이지 이동은 수행됨
@@ -224,9 +241,13 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			const mockError = new Error('API Error');
 			const { result } = renderHook(() => useSocialLoginLogic());
 
-			// When: mutation의 onError 콜백이 호출될 때
 			act(() => {
-				mutationOptions.onError(mockError);
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			const options = mockMutate.mock.calls[0][1];
+			act(() => {
+				options.onError(mockError);
 			});
 
 			// Then: 에러가 콘솔에 기록되고, 토스트 메시지가 설정되며, 메인 페이지로 이동
