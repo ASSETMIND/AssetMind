@@ -2,20 +2,20 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signupSchema, type SignupSchemaType } from '../../libs/schema/auth';
-import { useSignup } from './use-signup';
 import {
 	useSendEmailCode,
 	useVerifyEmailCode,
 	useCheckEmail,
-} from './use-email-verification';
+} from './queries/use-email-verification';
+import { useSignup } from './queries/use-signup';
 
-type Props = {
-	onClose: () => void;
-	onClickLogin: () => void;
-};
+interface Props {
+	onSuccess?: () => void;
+	onError?: (message: string) => void;
+	onToast?: (message: string) => void;
+}
 
-export function useSignupLogic({ onClose, onClickLogin }: Props) {
-	const [toastMessage, setToastMessage] = useState<string | null>(null);
+export function useSignupLogic({ onSuccess, onError, onToast }: Props = {}) {
 	const [isEmailChecked, setIsEmailChecked] = useState(false);
 	const [isEmailSent, setIsEmailSent] = useState(false);
 	const [isEmailVerified, setIsEmailVerified] = useState(false);
@@ -24,7 +24,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 	const formMethods = useForm<SignupSchemaType>({
 		resolver: zodResolver(signupSchema),
-		mode: 'onChange',
+		mode: 'onBlur',
 		defaultValues: {
 			name: '',
 			email: '',
@@ -73,14 +73,14 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		const isAvailable = await checkEmailMutate(email);
 
 		if (isAvailable) {
-			setToastMessage('사용 가능한 아이디입니다. 인증번호를 전송해주세요.');
+			onToast?.('사용 가능한 아이디입니다. 인증번호를 전송해주세요.');
 			setSuccessMessage('사용 가능한 아이디입니다.');
 			setIsEmailChecked(true); // 중복확인 통과
 			clearErrors('email');
 		} else {
 			const msg = '이미 사용 중인 아이디입니다.';
 			setError('email', { type: 'duplicate', message: msg });
-			setToastMessage(msg);
+			onError?.(msg);
 			setSuccessMessage(null);
 			setIsEmailChecked(false);
 		}
@@ -89,7 +89,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 	// 2단계: 인증번호 전송 로직
 	const handleSendEmailAuth = async () => {
 		if (!isEmailChecked) {
-			setToastMessage('먼저 아이디 중복 확인을 진행해주세요.');
+			onError?.('먼저 아이디 중복 확인을 진행해주세요.');
 			return;
 		}
 
@@ -99,14 +99,14 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 			// 실제 이메일 발송 API 호출
 			await sendEmailMutate(email);
 
-			setToastMessage('인증번호가 발송되었습니다. 이메일을 확인해주세요.');
+			onToast?.('인증번호가 발송되었습니다. 이메일을 확인해주세요.');
 			setIsEmailSent(true); // 입력창 활성화
 			setIsEmailVerified(false); // 재전송 시 인증 상태 초기화
 		} catch (error: any) {
 			// 에러 처리
 			const msg =
 				error?.response?.data?.message || '인증번호 발송에 실패했습니다.';
-			setToastMessage(msg);
+			onError?.(msg);
 			setIsEmailSent(false);
 		}
 	};
@@ -117,7 +117,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 		const code = getValues('authCode');
 
 		if (code.length !== 6) {
-			setToastMessage('인증번호 6자리를 입력해주세요.');
+			onError?.('인증번호 6자리를 입력해주세요.');
 			return;
 		}
 
@@ -127,7 +127,7 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 			// 성공 시 (에러가 발생하지 않으면 성공으로 간주)
 			setIsEmailVerified(true);
-			setToastMessage('이메일 인증이 완료되었습니다.');
+			onToast?.('이메일 인증이 완료되었습니다.');
 			clearErrors('authCode');
 			setSignUpToken(token); // 회원가입용 토큰 저장
 		} catch (error: any) {
@@ -139,14 +139,14 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 
 			// 폼 에러 설정
 			setError('authCode', { message: errorMsg });
-			setToastMessage(errorMsg);
+			onError?.(errorMsg);
 		}
 	};
 
 	const onSubmit = handleSubmit((data) => {
 		if (isSignupPending) return;
 		if (!isEmailVerified) {
-			setToastMessage('이메일 인증을 완료해주세요.');
+			onError?.('이메일 인증을 완료해주세요.');
 			return;
 		}
 
@@ -158,14 +158,8 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 				sign_up_token: signUpToken ?? undefined,
 			},
 			{
-				onSuccess: () => {
-					setToastMessage('회원가입 완료! 로그인해주세요.');
-					setTimeout(() => {
-						onClose();
-						onClickLogin();
-					}, 2000);
-				},
-				onError: (e: any) => setToastMessage(e?.message || '가입 실패'),
+				onSuccess: () => onSuccess?.(),
+				onError: (e: any) => onError?.(e?.message || '가입 실패'),
 			},
 		);
 	});
@@ -187,14 +181,12 @@ export function useSignupLogic({ onClose, onClickLogin }: Props) {
 			isEmailSent, // 전송 상태
 			isEmailVerified, // 인증 완료 상태
 			successMessage,
-			toastMessage,
 			isSignupPending,
 			isPasswordMatch,
 			isCheckingEmail:
 				isCheckingAvailability || isSendingEmail || isVerifyingCode,
 		},
 		actions: {
-			setToastMessage,
 			handleEmailChange,
 			handleCheckEmail, // 중복 확인 함수
 			handleSendEmailAuth, // 전송 함수

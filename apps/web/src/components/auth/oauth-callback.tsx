@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react';
-import {
-	useSocialLoginLogic,
-	type SocialProvider,
-} from '../../hooks/auth/use-social-login-logic';
+import { useSocialLoginLogic } from '../../hooks/auth/use-social-login-logic';
+import type { SocialProvider } from '../../hooks/auth/queries/use-social-login';
 
 type Props = {
 	provider: SocialProvider;

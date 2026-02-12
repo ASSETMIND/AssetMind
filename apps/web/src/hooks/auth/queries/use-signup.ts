@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
-import type { SignupParams } from '../../types/auth';
 import { AxiosError } from 'axios';
-import { signup } from '../../api/auth';
+import { signup } from '../../../api/auth';
+import type { SignupParams } from '../../../types/auth';
 
 // 최종 회원가입 훅
 export function useSignup() {

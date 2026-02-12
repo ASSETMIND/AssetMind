@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from '../common/modal';
 import Button from '../common/button';
 import AuthInput from '../auth/auth-input';
@@ -23,12 +25,26 @@ export default function LoginModal({
 	onClickSignup,
 	onClickFindIdPw,
 }: Props) {
+	const navigate = useNavigate();
+	const [toastMessage, setToastMessage] = useState<string | null>(null);
+
 	// 자체적인 일반로그인
 	const {
 		formMethods,
 		state: loginState,
 		actions: loginActions,
-	} = useLoginLogic({ onClose });
+	} = useLoginLogic({
+		onSuccess: () => {
+			setToastMessage('로그인 되었습니다.');
+			setTimeout(() => {
+				onClose();
+				navigate('/');
+			}, 1000);
+		},
+		onError: (message) => {
+			setToastMessage(message);
+		},
+	});
 
 	// 소셜 로그인
 	const { state: socialState, actions: socialActions } = useSocialLoginLogic();
@@ -121,10 +137,8 @@ export default function LoginModal({
 				</div>
 			</div>
 
-			{loginState.toastMessage && (
-				<Toast onClose={() => loginActions.setToastMessage(null)}>
-					{loginState.toastMessage}
-				</Toast>
+			{toastMessage && (
+				<Toast onClose={() => setToastMessage(null)}>{toastMessage}</Toast>
 			)}
 		</Modal>
 	);

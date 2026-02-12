@@ -1,17 +1,12 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useLoginLogic } from '../hooks/auth/use-login-logic';
-import { useLogin } from '../hooks/auth/use-login';
+import { useLogin } from '../hooks/auth/queries/use-login';
 import { setAccessToken } from '../libs/axios';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 
 // 모듈 및 api 모킹
-jest.mock('../hooks/auth/use-login', () => ({
+jest.mock('../hooks/auth/queries/use-login', () => ({
 	useLogin: jest.fn(),
-}));
-
-jest.mock('react-router-dom', () => ({
-	useNavigate: jest.fn(),
 }));
 
 jest.mock('../libs/axios', () => ({
@@ -24,27 +19,27 @@ jest.mock('../store/auth', () => ({
 
 // 유닛 테스트 시작
 describe('useLoginLogic 유닛 테스트', () => {
+	const mockOnSuccess = jest.fn();
+	const mockOnError = jest.fn();
+
 	const defaultProps = {
-		onClose: jest.fn(),
+		onSuccess: mockOnSuccess,
+		onError: mockOnError,
 	};
 
 	let mockLoginMutate: jest.Mock;
-	let mockNavigate: jest.Mock;
 	let mockLoginAction: jest.Mock;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
 
 		mockLoginMutate = jest.fn();
-		mockNavigate = jest.fn();
 		mockLoginAction = jest.fn();
 
 		(useLogin as jest.Mock).mockReturnValue({
 			mutate: mockLoginMutate,
 			isPending: false,
 		});
-
-		(useNavigate as jest.Mock).mockReturnValue(mockNavigate);
 
 		(useAuthStore as unknown as jest.Mock).mockReturnValue({
 			login: mockLoginAction,
@@ -66,8 +61,9 @@ describe('useLoginLogic 유닛 테스트', () => {
 		const setupLoginSuccess = () => {
 			mockLoginMutate.mockImplementation((_data, options) => {
 				options.onSuccess({
-					accessToken: 'test-access-token',
-					user: { id: 1, email: 'test@test.com' },
+					data: {
+						access_token: 'test-access-token',
+					},
 				});
 			});
 		};
@@ -84,15 +80,15 @@ describe('useLoginLogic 유닛 테스트', () => {
 			});
 		};
 
-		test('로그인 성공 시 토큰 저장, 스토어 업데이트, 성공 토스트 표시, 페이지 이동이 수행되어야 한다', async () => {
+		test('로그인 성공 시 토큰 저장, 스토어 업데이트, 성공 콜백이 호출되어야 한다', async () => {
 			const { result } = renderLoginHook();
 
 			//[로그인 성공] 폼 입력
 			await act(async () => {
-				result.current.formMethods.register('id');
+				result.current.formMethods.register('email');
 				result.current.formMethods.register('password');
 
-				result.current.formMethods.setValue('id', 'test@test.com', {
+				result.current.formMethods.setValue('email', 'test@test.com', {
 					shouldValidate: true,
 				});
 				result.current.formMethods.setValue('password', 'password123!', {
@@ -110,27 +106,26 @@ describe('useLoginLogic 유닛 테스트', () => {
 			});
 
 			expect(mockLoginMutate).toHaveBeenCalledWith(
-				{ id: 'test@test.com', password: 'password123!' },
+				{ email: 'test@test.com', password: 'password123!' },
 				expect.any(Object),
 			);
 			expect(setAccessToken).toHaveBeenCalledWith('test-access-token');
 			expect(mockLoginAction).toHaveBeenCalledWith({
-				id: 1,
+				id: 0,
 				email: 'test@test.com',
+				name: '사용자',
 			});
 
-			expect(result.current.state.toastMessage).toBe('로그인 되었습니다.');
-			expect(defaultProps.onClose).toHaveBeenCalled();
-			expect(mockNavigate).toHaveBeenCalledWith('/');
+			expect(mockOnSuccess).toHaveBeenCalled();
 		});
 
-		test('로그인 실패(401 Unauthorized) 시 토스트는 없고 비밀번호 필드에 에러를 표시해야 한다', async () => {
+		test('로그인 실패(401 Unauthorized) 시 에러 콜백 호출 및 비밀번호 필드에 에러를 표시해야 한다', async () => {
 			const { result } = renderLoginHook();
 
 			// [로그인 실패] 폼 입력
 			await act(async () => {
 				result.current.formMethods.register('password');
-				result.current.formMethods.setValue('id', 'test@test.com', {
+				result.current.formMethods.setValue('email', 'test@test.com', {
 					shouldValidate: true,
 				});
 				result.current.formMethods.setValue('password', 'wrong-password', {
@@ -146,8 +141,10 @@ describe('useLoginLogic 유닛 테스트', () => {
 				} as any);
 			});
 
-			// 토스트 메시지 없음 확인
-			expect(result.current.state.toastMessage).toBeNull();
+			// 에러 콜백 확인
+			expect(mockOnError).toHaveBeenCalledWith(
+				'아이디 또는 비밀번호를 확인해주세요.',
+			);
 
 			// 에러 메시지 확인
 			await waitFor(() => {
@@ -158,12 +155,12 @@ describe('useLoginLogic 유닛 테스트', () => {
 			});
 		});
 
-		test('로그인 실패(404 Not Found) 시에도 토스트 없이 비밀번호 필드에 에러를 표시해야 한다', async () => {
+		test('로그인 실패(404 Not Found) 시에도 에러 콜백 호출 및 비밀번호 필드에 에러를 표시해야 한다', async () => {
 			const { result } = renderLoginHook();
 
 			await act(async () => {
 				result.current.formMethods.register('password');
-				result.current.formMethods.setValue('id', 'test@test.com', {
+				result.current.formMethods.setValue('email', 'test@test.com', {
 					shouldValidate: true,
 				});
 				result.current.formMethods.setValue('password', 'unknown', {
@@ -179,7 +176,9 @@ describe('useLoginLogic 유닛 테스트', () => {
 				} as any);
 			});
 
-			expect(result.current.state.toastMessage).toBeNull();
+			expect(mockOnError).toHaveBeenCalledWith(
+				'아이디 또는 비밀번호를 확인해주세요.',
+			);
 
 			await waitFor(() => {
 				const { errors } = result.current.formMethods.formState;
@@ -189,12 +188,12 @@ describe('useLoginLogic 유닛 테스트', () => {
 			});
 		});
 
-		test('기타 서버 에러(예: 500) 발생 시 토스트 없이 "회원이 아닙니다..." 에러를 표시해야 한다', async () => {
+		test('기타 서버 에러(예: 500) 발생 시 "회원이 아닙니다..." 에러를 표시해야 한다', async () => {
 			const { result } = renderLoginHook();
 
 			await act(async () => {
 				result.current.formMethods.register('password');
-				result.current.formMethods.setValue('id', 'test@test.com', {
+				result.current.formMethods.setValue('email', 'test@test.com', {
 					shouldValidate: true,
 				});
 				result.current.formMethods.setValue('password', 'valid', {
@@ -211,7 +210,9 @@ describe('useLoginLogic 유닛 테스트', () => {
 				} as any);
 			});
 
-			expect(result.current.state.toastMessage).toBeNull();
+			expect(mockOnError).toHaveBeenCalledWith(
+				'회원이 아닙니다. 회원가입을 진행해 주세요',
+			);
 
 			await waitFor(() => {
 				const { errors } = result.current.formMethods.formState;
