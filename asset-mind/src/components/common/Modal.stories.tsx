@@ -5,7 +5,7 @@ import { Input } from './Input';
 import { useState, useRef, useEffect } from 'react';
 
 const meta: Meta<typeof Modal> = {
-  title: 'UI_KIT/Modal',
+  title: 'Components/Common/Modal',
   component: Modal,
   parameters: {
     layout: 'centered',
@@ -272,8 +272,6 @@ export const Accessibility_Demo: Story = {
               size="lg"
               fullWidth
               onClick={() => setIsOpen(false)}
-              // 🛑 닫기 버튼의 onFocus도 제거해야 마지막까지 순서대로 갑니다.
-              // onFocus={() => setFocusedElement('닫기 버튼')}
               className="h-[52px] text-[16px] font-medium bg-[#2E2F33] text-white hover:bg-[#3E3F43] mt-2"
             >
               닫기 (또는 ESC 키)

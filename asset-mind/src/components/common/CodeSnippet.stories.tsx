@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { CodeSnippet } from './CodeSnippet';
 
 const meta: Meta<typeof CodeSnippet> = {
-  title: 'UI_KIT/CodeSnippet',
+  title: 'Components/Common/CodeSnippet',
   component: CodeSnippet,
   parameters: {
     layout: 'centered',

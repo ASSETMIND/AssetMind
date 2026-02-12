@@ -2,8 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ToastItem } from './ToastItem';
 
 const meta: Meta<typeof ToastItem> = {
-  // [수정] 'Toast' 폴더 아래 'Design_Spec'으로 배치
-  title: 'UI_KIT/Toast/Design_Spec', 
+  title: 'Components/Common/Toast',
   component: ToastItem,
   parameters: {
     layout: 'centered',
@@ -23,7 +22,7 @@ export default meta;
 type Story = StoryObj<typeof ToastItem>;
 
 // ----------------------------------------------------------------
-// [디자인 시안에 있는 4가지 케이스 박제]
+// [디자인 시안에 있는 4가지 케이스]
 // ----------------------------------------------------------------
 
 // 1. 비밀번호 변경 완료 (Success)

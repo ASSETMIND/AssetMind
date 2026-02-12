@@ -5,7 +5,7 @@ import { KakaoIcon } from '../icons/KakaoIcon';
 import { useState } from 'react';
 
 const meta: Meta<typeof Button> = {
-  title: 'UI_KIT/Button',
+  title: 'Components/Common/Button',
   component: Button,
   parameters: {
     layout: 'centered',

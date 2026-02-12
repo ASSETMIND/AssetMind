@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { SignUpModal } from './SignUpModal';
 
 const meta: Meta<typeof SignUpModal> = {
-  title: 'UI_KIT/SignUpModal',
+  title: 'Components/Auth/SignUpModal',
   component: SignUpModal,
   parameters: {
     layout: 'fullscreen',
