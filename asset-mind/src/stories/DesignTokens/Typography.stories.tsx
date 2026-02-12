@@ -3,7 +3,7 @@ import { TypographyViewer } from './TypographyViewer';
 import { extractDesignTokens } from '../../lib/design-tokens';
 
 const meta = {
-  title: 'Design Tokens/Typography',
+  title: 'Foundation/Design Tokens/Typography',
   component: TypographyViewer,
   parameters: {
     layout: 'fullscreen',

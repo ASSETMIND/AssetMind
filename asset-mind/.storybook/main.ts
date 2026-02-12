@@ -12,6 +12,9 @@ const config: StorybookConfig = {
     "@storybook/addon-docs"
   ],
   framework: "@storybook/react-vite",
+  docs: {
+    autodocs: true,
+  } as any,
 };
 
 export default config;

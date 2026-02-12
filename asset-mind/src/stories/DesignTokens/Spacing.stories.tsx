@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { SpacingViewer } from './SpacingViewer';
 
 const meta = {
-  title: 'Design Tokens/Spacing',
+  title: 'Foundation/Design Tokens/Spacing',
   component: SpacingViewer,
   parameters: {
     layout: 'fullscreen',

@@ -4,7 +4,7 @@ import { EyeIcon } from '../icons/EyeIcon';
 import { useState } from 'react';
 
 const meta: Meta<typeof Input> = {
-  title: 'UI_KIT/Input',
+  title: 'Components/Common/Input',
   component: Input,
   parameters: {
     layout: 'centered',

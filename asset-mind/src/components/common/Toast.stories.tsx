@@ -129,7 +129,7 @@ const MultipleToastsDemo = () => {
 // Meta 설정
 // =============================================================================
 const meta: Meta<typeof ToastTester> = {
-  title: 'UI_KIT/Toast/Interactive',
+  title:'Components/Common/Toast/Interactive',
   component: ToastTester,
   parameters: {
     layout: 'centered',
