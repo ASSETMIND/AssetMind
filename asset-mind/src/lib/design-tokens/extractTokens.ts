@@ -136,12 +136,25 @@ const tailwindColors = {
 };
 
 const tailwindFontSize = {
-  b1: ['16px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
-  b2: ['14px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
-  l1: ['18px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
-  l2: ['16px', { lineHeight: '130%', letterSpacing: '0em', fontWeight: '400' }],
-  l3: ['14px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
-  l4: ['14px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+  // Headline (H)
+  'h1': ['48px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+  'h1-t': ['32px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+  'h1-m': ['24px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+  
+  // Title (T)
+  't1': ['20px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+  't1-t': ['16px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+  't1-m': ['14px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+  
+  // Body (B)
+  'b1': ['16px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
+  'b2': ['14px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
+  
+  // Label (L)
+  'l1': ['18px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
+  'l2': ['16px', { lineHeight: '130%', letterSpacing: '0em', fontWeight: '400' }],
+  'l3': ['14px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
+  'l4': ['14px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
 };
 
 function extractColors(): ColorGroup[] {

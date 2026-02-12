@@ -11,13 +11,23 @@ export default {
         sans: ["Pretendard", "Pretendard Variable", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
       },
 
-      // 2. 타이포그래피 사이즈 (Desktop 기준)
+      // 2. 타이포그래피 사이즈 (전체 시스템)
       fontSize: {
-        // Body (B)
+        // Headline (H) - 페이지 최상위 제목
+        'h1': ['48px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+        'h1-t': ['32px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+        'h1-m': ['24px', { lineHeight: '120%', letterSpacing: '-0.05em', fontWeight: '500' }],
+        
+        // Title (T) - 섹션 제목
+        't1': ['20px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+        't1-t': ['16px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+        't1-m': ['14px', { lineHeight: '140%', letterSpacing: '0em', fontWeight: '400' }],
+        
+        // Body (B) - 본문
         'b1': ['16px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
         'b2': ['14px', { lineHeight: '150%', letterSpacing: '0em', fontWeight: '400' }],
         
-        // Label (L)
+        // Label (L) - UI 요소
         'l1': ['18px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
         'l2': ['16px', { lineHeight: '130%', letterSpacing: '0em', fontWeight: '400' }],
         'l3': ['14px', { lineHeight: '100%', letterSpacing: '0.05em', fontWeight: '500' }],
