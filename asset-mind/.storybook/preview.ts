@@ -1,7 +1,6 @@
 import type { Preview } from "@storybook/react";
 import "../src/index.css";
 
-/* Storybook Docs 스크롤 강제 복구 + Pretendard 폰트 강제 적용 */
 const style = document.createElement("style");
 style.innerHTML = `
   /* html/body 고정 높이/스크롤 차단 제거 */
@@ -59,6 +58,18 @@ const preview: Preview = {
     },
     layout: "centered",
     controls: { hideNoControlsWarning: true },
+    options: {
+      storySort: {
+        order: [
+          'Getting Started',
+          ['Introduction', 'Installation', 'Changelog'],
+          'Foundation',
+          ['Design Tokens', 'Typography', 'Colors', 'Spacing'],
+          'Components',
+          ['Auth', 'Common', 'Forms', 'Navigation', 'Feedback'],
+        ],
+      },
+    },
   },
 };
 

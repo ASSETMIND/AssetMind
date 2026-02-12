@@ -3,7 +3,7 @@ import { ColorPalette } from './ColorPalette';
 import { extractDesignTokens } from '../../lib/design-tokens';
 
 const meta = {
-  title: 'Design Tokens/Color Palette',
+  title: 'Foundation/Design Tokens/Color Palette',
   component: ColorPalette,
   parameters: {
     layout: 'fullscreen',
