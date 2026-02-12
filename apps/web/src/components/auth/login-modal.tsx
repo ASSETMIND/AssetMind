@@ -54,9 +54,9 @@ export default function LoginModal({
 							type='email'
 							placeholder='아이디를 입력해 주세요.'
 							// 에러 메시지 전달
-							errorMessage={errors.id?.message}
-							className={errors.id ? 'border-red-500' : ''}
-							{...register('id')}
+							errorMessage={errors.email?.message}
+							className={errors.email ? 'border-red-500' : ''}
+							{...register('email')}
 						/>
 					</div>
 

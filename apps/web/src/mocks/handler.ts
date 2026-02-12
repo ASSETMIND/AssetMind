@@ -95,21 +95,26 @@ const verifyCodeResolver: HttpResponseResolver = async ({ request }) => {
 
 // 일반 로그인 Resolver
 const loginResolver: HttpResponseResolver = async ({ request }) => {
-	const body = (await request.json()) as { id: string; password: string };
-	console.log(`[MSW] 로그인 요청: ${body.id}`);
+	const body = (await request.json()) as { email: string; password: string };
+	console.log(`[MSW] 로그인 요청: ${body.email}`);
 
 	// [테스트 시나리오] 특정 계정으로 로그인 시 성공
-	if (body.id === 'test@test.com' && body.password === 'password123!') {
+	if (body.email === 'test@test.com' && body.password === 'test1234!') {
 		return HttpResponse.json(
 			{
-				accessToken: 'mock-access-token-12345', // 가짜 토큰 발급
-				user: {
-					id: 1,
-					email: body.id,
-					name: '테스트유저',
+				success: true,
+				message: null,
+				data: {
+					access_token:
+						'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2YWMyNTI5ZS1kMDY3LTQ2ODQtOTZhOS0yYmYzNGM1NDBhMDYiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc2OTk1MTkxMywiZXhwIjoxNzY5OTUzNzEzfQ.WErNWe_zgQrhPXe5PKlTKZ-aeX7JDKjDev2Yu2Fmp8k',
 				},
 			},
-			{ status: 200 },
+			{
+				status: 200,
+				headers: {
+					'Set-Cookie': `refresh_token=mock-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+				},
+			},
 		);
 	}
 
@@ -142,25 +147,43 @@ const socialLoginResolver: HttpResponseResolver = async ({
 				loginType: provider,
 			},
 		},
-		{ status: 200 },
+		{
+			status: 200,
+			headers: {
+				'Set-Cookie': `refresh_token=mock-social-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+			},
+		},
 	);
 };
 
 // 토큰 갱신 Resolver
-const refreshTokenResolver: HttpResponseResolver = async () => {
+const refreshTokenResolver: HttpResponseResolver = async ({ cookies }) => {
 	console.log('[MSW] 토큰 갱신 요청 받음');
-	// 실제 백엔드에서는 리프레시 토큰을 사용하여 새 액세스 토큰을 발급
-	// 여기서는 간단히 새로운 가짜 액세스 토큰과 사용자 정보를 반환
+	console.log('[MSW] Cookies:', cookies); // 디버깅용: 실제 들어오는 쿠키 확인
+
+	// 쿠키 확인 (RTR) - MSW에서 파싱해준 cookies 객체 사용
+	const refreshToken = cookies.refresh_token;
+	if (!refreshToken) {
+		return HttpResponse.json(
+			{ message: 'Refresh Token이 없습니다.' },
+			{ status: 401 },
+		);
+	}
+
 	return HttpResponse.json(
 		{
-			accessToken: 'mock-new-access-token-' + Date.now(), // 매번 다른 토큰 반환
-			user: {
-				id: 1,
-				email: 'refreshed@test.com',
-				name: '갱신된유저',
+			success: true,
+			message: null,
+			data: {
+				access_token: 'mock-new-access-token-' + Date.now(),
 			},
 		},
-		{ status: 200 },
+		{
+			status: 200,
+			headers: {
+				'Set-Cookie': `refresh_token=mock-new-refresh-token-${Date.now()}; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax`,
+			},
+		},
 	);
 };
 
@@ -169,7 +192,14 @@ const logoutResolver: HttpResponseResolver = async () => {
 	console.log('[MSW] 로그아웃 요청 받음');
 	// 클라이언트에서 토큰을 삭제하는 것이 주 목적이므로,
 	// 서버에서는 성공 응답만 보내주면 됨
-	return HttpResponse.json({ message: '로그아웃 성공' }, { status: 200 });
+	return HttpResponse.json(
+		{
+			success: true,
+			message: '로그아웃 성공',
+			data: null,
+		},
+		{ status: 200 },
+	);
 };
 
 /*
@@ -196,7 +226,7 @@ export const handlers = [
 	http.post('*/auth/login/:provider', socialLoginResolver),
 
 	// 토큰 갱신 (POST)
-	http.post('*/auth/refresh', refreshTokenResolver),
+	http.post('*/auth/reissue', refreshTokenResolver),
 
 	// 로그아웃 (POST)
 	http.post('*/auth/logout', logoutResolver),

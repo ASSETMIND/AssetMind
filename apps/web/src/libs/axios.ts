@@ -1,6 +1,8 @@
 import axios from 'axios';
+import type { ReissueTokenResponse } from '../types/auth';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
+const IS_AUTHENTICATED_KEY = 'isAuthenticated';
 
 export const getAccessToken = (): string | null => {
 	return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -10,9 +12,11 @@ export const setAccessToken = (token: string | null) => {
 	// Access Token은 Authorization 헤더에 항상 포함
 	if (token) {
 		localStorage.setItem(ACCESS_TOKEN_KEY, token);
+		localStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
 		axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 	} else {
 		localStorage.removeItem(ACCESS_TOKEN_KEY);
+		localStorage.removeItem(IS_AUTHENTICATED_KEY);
 		delete axiosInstance.defaults.headers.common['Authorization'];
 	}
 };
@@ -20,6 +24,7 @@ export const setAccessToken = (token: string | null) => {
 // Access Token과 Refresh Token 모두 제거하는 함수
 export const removeAuthTokens = () => {
 	localStorage.removeItem(ACCESS_TOKEN_KEY);
+	localStorage.removeItem(IS_AUTHENTICATED_KEY);
 	delete axiosInstance.defaults.headers.common['Authorization'];
 	// HttpOnly 쿠키로 관리되는 Refresh Token은 서버 측 로그아웃 엔드포인트 호출을 통해 제거
 };
@@ -46,6 +51,12 @@ axiosInstance.interceptors.response.use(
 	(response) => response,
 	async (error) => {
 		const originalRequest = error.config;
+
+		// [무한 루프 방지] 토큰 갱신 요청 자체가 401 실패한 경우, 더 이상 재시도하지 않음
+		if (originalRequest.url?.includes('/auth/reissue')) {
+			return Promise.reject(error);
+		}
+
 		// 401 에러이고, 이전에 재시도하지 않은 요청인 경우
 		if (error.response?.status === 401 && !originalRequest._retry) {
 			originalRequest._retry = true; // 재시도 플래그 설정
@@ -53,9 +64,11 @@ axiosInstance.interceptors.response.use(
 			try {
 				// 토큰 갱신 API 호출 (Refresh Token은 서버에서 HttpOnly Cookie 등으로 관리,
 				// 필요시 요청 바디/헤더에 명시적으로 포함하여 전송)
-				const { data } = await axiosInstance.post('/auth/refresh'); // api/auth.ts의 refreshToken 함수 호출
-				setAccessToken(data.accessToken);
-				originalRequest.headers.Authorization = `Bearer ${data.accessToken}`; // 원래 요청 헤더 업데이트
+				const { data } =
+					await axiosInstance.post<ReissueTokenResponse>('/auth/reissue');
+				const newAccessToken = data.data.access_token;
+				setAccessToken(newAccessToken);
+				originalRequest.headers.Authorization = `Bearer ${newAccessToken}`; // 원래 요청 헤더 업데이트
 				return axiosInstance(originalRequest); // 원래 요청 재시도
 			} catch (refreshError) {
 				console.error('Token refresh failed:', refreshError);
