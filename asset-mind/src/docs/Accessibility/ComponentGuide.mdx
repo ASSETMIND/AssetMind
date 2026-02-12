@@ -11,11 +11,11 @@ export const meta = {
 ## Button
 
 ### 접근성 요구사항
-- ✅ 시맨틱 `<button>` 태그 사용
-- ✅ 명확한 텍스트 또는 `aria-label` 제공
-- ✅ 포커스 표시 (Focus Indicator)
-- ✅ 비활성 상태 처리
-- ✅ 로딩 상태 안내
+- 시맨틱 `<button>` 태그 사용
+- 명확한 텍스트 또는 `aria-label` 제공
+- 포커스 표시 (Focus Indicator)
+- 비활성 상태 처리
+- 로딩 상태 안내
 
 ---
 
@@ -91,11 +91,20 @@ export const meta = {
 ---
 
 ### 키보드 동작
-| 키 | 동작 |
-|---|------|
-| `Tab` | 버튼으로 포커스 이동 |
-| `Enter` | 버튼 활성화 |
-| `Space` | 버튼 활성화 |
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>동작</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Tab</td><td>버튼으로 포커스 이동</td></tr>
+    <tr><td>Enter</td><td>버튼 활성화</td></tr>
+    <tr><td>Space</td><td>버튼 활성화</td></tr>
+  </tbody>
+</table>
+
 
 ---
 
@@ -225,12 +234,22 @@ export const meta = {
 ---
 
 ### 키보드 동작
-| 키 | 동작 |
-|---|------|
-| `Tab` | 입력 필드로 포커스 이동 |
-| `Shift + Tab` | 이전 요소로 이동 |
-| `Enter` | 폼 제출 (폼 내부일 경우) |
-| 텍스트 입력 키 | 텍스트 입력 |
+
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>동작</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Tab</td><td>입력 필드로 포커스 이동</td></tr>
+    <tr><td>Shift + Tab</td><td>이전 요소로 이동</td></tr>
+    <tr><td>Enter</td><td>폼 제출</td></tr>
+    <tr><td>텍스트 키</td><td>문자 입력</td></tr>
+  </tbody>
+</table>
+
 
 ---
 
@@ -314,12 +333,20 @@ export const meta = {
 
 ---
 
-### 키보드 동작
-| 키 | 동작 |
-|---|------|
-| `Esc` | 모달 닫기 |
-| `Tab` | 모달 내 다음 요소로 이동 |
-| `Shift + Tab` | 모달 내 이전 요소로 이동 |
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>동작</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Esc</td><td>모달 닫기</td></tr>
+    <tr><td>Tab</td><td>모달 내 다음 요소로 이동</td></tr>
+    <tr><td>Shift + Tab</td><td>모달 내 이전 요소로 이동</td></tr>
+  </tbody>
+</table>
+
 
 ---
 
@@ -378,10 +405,20 @@ showToast('IDENTITY_FAIL', 10000);
 ---
 
 ### aria-live 값
-| 값 | 용도 | 예시 |
-|---|------|------|
-| `polite` | 일반 알림, 사용자 작업을 방해하지 않음 | 비밀번호 변경 완료 |
-| `assertive` | 긴급 알림, 즉시 읽어줌 | 로그인 실패, 인증 오류 |
+
+<table>
+  <thead>
+    <tr>
+      <th>값</th>
+      <th>용도</th>
+      <th>예시</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>polite</td><td>일반 알림</td><td>비밀번호 변경 완료</td></tr>
+    <tr><td>assertive</td><td>긴급 알림</td><td>로그인 실패</td></tr>
+  </tbody>
+</table>
 
 ---
 
@@ -438,10 +475,18 @@ showToast('IDENTITY_FAIL', 10000);
 ---
 
 ### 키보드 동작
-| 키 | 동작 |
-|---|------|
-| `Tab` | 복사 버튼으로 포커스 |
-| `Enter` | 코드 복사 |
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>동작</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Tab</td><td>복사 버튼으로 포커스</td></tr>
+    <tr><td>Enter</td><td>코드 복사</td></tr>
+  </tbody>
+</table>
 
 ---
 
