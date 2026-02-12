@@ -5,11 +5,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
  * 정적 데이터(종목명, 시장 구분 등)를 저장하기 위한 영속성 객체
  */
+@Getter
 @Entity
 @Table(name = "stock_meta_data")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
