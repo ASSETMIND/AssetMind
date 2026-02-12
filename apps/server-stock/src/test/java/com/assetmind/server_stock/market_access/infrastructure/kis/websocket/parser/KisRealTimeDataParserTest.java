@@ -22,7 +22,7 @@ class KisRealTimeDataParserTest {
 
         // then
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().symbol()).isEqualTo("005930");
+        assertThat(result.getFirst().stockCode()).isEqualTo("005930");
         assertThat(result.getFirst().marketStatus()).isEqualTo("20");
     }
 

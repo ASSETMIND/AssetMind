@@ -58,10 +58,10 @@ public class KisRealTimeDataParser {
 
     private KisRealTimeData mapToDto(String[] details, int offset) {
         return KisRealTimeData.builder()
-                .symbol(details[offset + 0])
+                .stockCode(details[offset + 0])
                 .executionTime(details[offset + 1])
                 .currentPrice(Long.parseLong(details[offset + 2]))
-                .changeSign(Long.parseLong(details[offset + 3]))
+                .changeSign(details[offset + 3])
                 .priceChange(Long.parseLong(details[offset + 4]))
                 .changeRate(Double.parseDouble(details[offset + 5]))
                 .openPrice(Long.parseLong(details[offset + 7]))

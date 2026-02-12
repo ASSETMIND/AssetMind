@@ -2,10 +2,10 @@ package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisSubscriptionRequest;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -26,6 +27,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * 웹소켓 세션 이벤트(연결, 종료, 에러) 처리
  * 실시간 데이터 수신 및 파싱 (JSON -> Domain/DTO)
  * 구독 요청 전송 (미세 딜레이 적용)
+ *
+ * 핵심 로직: 실시간 데이터 수신 -> 파싱 -> Spring Event 발행
  */
 @Slf4j
 @Component
@@ -34,6 +37,8 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final KisRealTimeDataParser dataParser;
+    private final KisEventMapper eventMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Setter
     private String approveKey;
@@ -126,9 +131,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
         dataList.forEach(data -> {
             log.info("[KIS WS] 실시간 체결 데이터 : {}", data.toString());
-        });
+            eventPublisher.publishEvent(eventMapper.toEvent(data));
 
-        //TODO: 추후 DB 연동 및 Spring Event 연동 예정
+        });
     }
 
     @Override
