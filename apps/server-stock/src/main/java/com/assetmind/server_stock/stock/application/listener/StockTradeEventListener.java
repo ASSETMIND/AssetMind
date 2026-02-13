@@ -1,6 +1,8 @@
 package com.assetmind.server_stock.stock.application.listener;
 
+import com.assetmind.server_stock.stock.application.StockService;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -14,7 +16,10 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class StockTradeEventListener {
+
+    private final StockService stockService;
 
     /**
      * 이벤트 수신 시 실행되는 메서드
@@ -28,6 +33,7 @@ public class StockTradeEventListener {
             printEventLog(event);
 
             // TODO: 비즈니스 로직 수행 (서비스 연동 하여 DB 저장)
+            stockService.processRealTimeTrade(event);
         } catch (Exception e) {
             // @Async가 적용된 비동기 메서드 이므로 메인 스레드로 예외가 전파되지 않음
             // 문제 파악을 위한 로그를 남김
