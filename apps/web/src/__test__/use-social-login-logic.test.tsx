@@ -19,7 +19,7 @@ jest.mock('react-router-dom', () => ({
 	useSearchParams: jest.fn(),
 }));
 
-jest.mock('../hooks/auth/use-social-login', () => ({
+jest.mock('../hooks/auth/queries/use-social-login', () => ({
 	useSocialLogin: jest.fn(),
 }));
 
@@ -29,10 +29,6 @@ jest.mock('../libs/axios', () => ({
 
 jest.mock('../store/auth', () => ({
 	useAuthStore: jest.fn(),
-}));
-
-jest.mock('../api/auth', () => ({
-	socialLogin: jest.fn(),
 }));
 
 describe('useSocialLoginLogic 유닛 테스트', () => {
@@ -118,7 +114,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 	});
 
 	describe('소셜 로그인 콜백 처리 (handleSocialCallback)', () => {
-		test('URL에 code가 없으면 경고 메시지를 설정하고 메인으로 이동해야 한다', () => {
+		test('URL에 code가 없으면 경고 메시지를 설정하고 에러 콜백을 호출해야 한다', () => {
 			// Given: URL 파라미터에 'code'가 없는 상태
 			(useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams('')]);
 			const { result } = renderHook(() =>
@@ -138,7 +134,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			expect(mockMutate).not.toHaveBeenCalled();
 		});
 
-		test('URL에 error가 있으면 에러 메시지를 설정하고 메인으로 이동해야 한다', () => {
+		test('URL에 error가 있으면 에러 메시지를 설정하고 에러 콜백을 호출해야 한다', () => {
 			// Given: URL 파라미터에 'error'가 있는 상태
 			(useSearchParams as jest.Mock).mockReturnValue([
 				new URLSearchParams('error=access_denied'),
@@ -173,10 +169,13 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			});
 
 			// Then: mutate 함수가 올바른 provider와 code로 호출됨
-			expect(mockMutate).toHaveBeenCalledWith({
-				provider: 'kakao',
-				code: 'test-auth-code',
-			});
+			expect(mockMutate).toHaveBeenCalledWith(
+				{
+					provider: 'kakao',
+					code: 'test-auth-code',
+				},
+				expect.any(Object),
+			);
 		});
 	});
 
@@ -190,7 +189,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			]);
 		});
 
-		test('로그인 성공(onSuccess) 시 토큰 저장, 스토어 업데이트, 페이지 이동이 수행되어야 한다', () => {
+		test('로그인 성공(onSuccess) 시 토큰 저장, 스토어 업데이트, 성공 콜백이 수행되어야 한다', () => {
 			// Given: API 성공 응답 데이터
 			const mockResponse = {
 				accessToken: 'new-access-token',
@@ -244,7 +243,7 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 			expect(mockOnSuccess).toHaveBeenCalled();
 		});
 
-		test('로그인 실패(onError) 시 에러 로그, 토스트 메시지, 페이지 이동이 수행되어야 한다', () => {
+		test('로그인 실패(onError) 시 에러 로그, 에러 콜백이 수행되어야 한다', () => {
 			// Given: API 실패를 나타내는 에러 객체
 			const mockError = new Error('API Error');
 			const { result } = renderHook(() =>
@@ -269,6 +268,64 @@ describe('useSocialLoginLogic 유닛 테스트', () => {
 				'로그인에 실패했습니다. 다시 시도해주세요.',
 			);
 			expect(mockOnSuccess).not.toHaveBeenCalled();
+		});
+
+		test('Props 없이 호출되어도 에러 발생 시 안전하게 처리되어야 한다', () => {
+			const mockError = new Error('API Error');
+			const { result } = renderHook(() => useSocialLoginLogic()); // No props
+
+			act(() => {
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			const options = mockMutate.mock.calls[0][1];
+			act(() => {
+				options.onError(mockError); // onError?.() 호출 테스트
+			});
+
+			expect(console.error).toHaveBeenCalled();
+			// 크래시 없이 실행 완료됨을 검증
+		});
+	});
+
+	describe('Feature: 콜백(Props) 미전달 시 분기 테스트', () => {
+		test('Scenario: 콜백 없이 소셜 로그인 프로세스 진행 시 크래시가 발생하지 않아야 한다', () => {
+			const { result } = renderHook(() => useSocialLoginLogic()); // No props
+
+			// 1. Error param (onError missing)
+			(useSearchParams as jest.Mock).mockReturnValue([
+				new URLSearchParams('error=access_denied'),
+			]);
+			act(() => {
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			// 2. No code/error (onError missing)
+			(useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams('')]);
+			act(() => {
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			// 3. Code exists
+			(useSearchParams as jest.Mock).mockReturnValue([
+				new URLSearchParams('code=123'),
+			]);
+
+			// Mutation Success (onSuccess missing)
+			mockMutate.mockImplementation((_data, options) => {
+				options.onSuccess({ accessToken: 'token', user: {} });
+			});
+			act(() => {
+				result.current.actions.handleSocialCallback('kakao');
+			});
+
+			// Mutation Error (onError missing)
+			mockMutate.mockImplementation((_data, options) => {
+				options.onError(new Error('Fail'));
+			});
+			act(() => {
+				result.current.actions.handleSocialCallback('kakao');
+			});
 		});
 	});
 });

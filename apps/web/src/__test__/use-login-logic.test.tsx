@@ -221,5 +221,115 @@ describe('useLoginLogic 유닛 테스트', () => {
 				);
 			});
 		});
+
+		test('유효하지 않은 데이터로 제출 시 onInvalid 콜백이 실행되어야 한다', async () => {
+			const { result } = renderLoginHook();
+			const consoleSpy = jest
+				.spyOn(console, 'error')
+				.mockImplementation(() => {});
+
+			// 필수값 미입력 상태에서 제출 (email, password 공란)
+			await act(async () => {
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+
+			// console.error 호출 확인
+			expect(consoleSpy).toHaveBeenCalledWith(
+				'로그인 유효성 검사 실패:',
+				expect.any(Object),
+			);
+			consoleSpy.mockRestore();
+		});
+
+		test('Props 없이 호출해도 에러 없이 동작하며, accessToken이 없으면 저장을 건너뛴다', async () => {
+			const { result } = renderHook(() => useLoginLogic()); // Default Props 테스트
+
+			// Mock success but no token
+			mockLoginMutate.mockImplementation((_data, options) => {
+				options.onSuccess({
+					data: { access_token: undefined }, // No token
+				});
+			});
+
+			await act(async () => {
+				result.current.formMethods.setValue('email', 'test@test.com');
+				result.current.formMethods.setValue('password', 'password123!');
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+
+			expect(setAccessToken).not.toHaveBeenCalled();
+		});
+
+		test('Props 없이 호출 시 에러가 발생해도 안전하게 처리되어야 한다', async () => {
+			const { result } = renderHook(() => useLoginLogic()); // Default Props 테스트
+
+			setupLoginError(400, 'Bad Request');
+
+			await act(async () => {
+				result.current.formMethods.setValue('email', 'test@test.com');
+				result.current.formMethods.setValue('password', 'password123!');
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+			// 에러 없이 종료됨을 확인 (onError?.() 호출 시 크래시 안남)
+		});
+
+		test('로그인 진행 중(isLoggingIn: true)일 때는 제출이 막혀야 한다', async () => {
+			(useLogin as jest.Mock).mockReturnValue({
+				mutate: mockLoginMutate,
+				isPending: true,
+			});
+
+			const { result } = renderLoginHook();
+
+			await act(async () => {
+				result.current.formMethods.setValue('email', 'test@test.com');
+				result.current.formMethods.setValue('password', 'password123!');
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+
+			expect(mockLoginMutate).not.toHaveBeenCalled();
+		});
+
+		test('onSuccess 호출 시 response.data가 null이어도 안전하게 처리된다', async () => {
+			const { result } = renderHook(() => useLoginLogic());
+
+			mockLoginMutate.mockImplementation((_data, options) => {
+				options.onSuccess({ data: null } as any);
+			});
+
+			await act(async () => {
+				result.current.formMethods.setValue('email', 'test@test.com');
+				result.current.formMethods.setValue('password', 'password123!');
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+
+			expect(setAccessToken).not.toHaveBeenCalled();
+		});
+
+		test('onError 호출 시 error 객체가 비어있어도 안전하게 처리된다', async () => {
+			const { result } = renderHook(() => useLoginLogic());
+
+			mockLoginMutate.mockImplementation((_data, options) => {
+				options.onError(null);
+			});
+
+			await act(async () => {
+				result.current.formMethods.setValue('email', 'test@test.com');
+				result.current.formMethods.setValue('password', 'password123!');
+				await result.current.actions.onSubmit({
+					preventDefault: () => {},
+				} as any);
+			});
+		});
 	});
 });
