@@ -28,7 +28,7 @@ public class StockMapper {
                 .build();
     }
 
-    public StockDataEntity toJpaEntity(RealTimeStockTradeEvent event, String stockName) {
+    public StockDataEntity toJpaEntity(RealTimeStockTradeEvent event) {
         return StockDataEntity.builder()
                 .stockCode(event.stockCode())
                 .price(event.currentPrice())
