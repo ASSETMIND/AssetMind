@@ -2,7 +2,7 @@
 
 ## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `extractor.upbit_extractor.UPBITExtractor`
+- **대상 모듈:** `extractor.providers.upbit_extractor.UPBITExtractor`
 - **복잡도 수준:** **최상 (Critical)** (외부 가상화폐 거래소 API 연동 및 시세 데이터 수집)
 - **커버리지 목표:** 분기 커버리지(Branch Coverage) 100%, 구문 커버리지(Statement Coverage) 100%
 - **적용 전략:**
@@ -11,7 +11,7 @@
   - [x] **Mocking & Stubbing:** `IHttpClient`, `IAuthStrategy`의 응답 제어를 통한 네트워크/인증 격리 테스트.
   - [x] **Data Integrity:** Request 파라미터의 Policy 덮어쓰기(Override) 및 에러 객체(`error`) 감지 로직 검증.
 
-## 2. BDD 테스트 시나리오 (전체 목록)
+## 2. BDD 테스트 시나리오
 
 **시나리오 요약:**
 
