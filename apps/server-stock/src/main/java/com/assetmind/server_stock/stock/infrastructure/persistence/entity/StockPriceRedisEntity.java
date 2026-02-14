@@ -24,6 +24,8 @@ public class StockPriceRedisEntity implements Serializable {
 
     private Double changeRate;      // 등락률
 
+    private String changeSign;      // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
+
     private Long cumulativeAmount;  // 누적 거래 대금
 
     private Long cumulativeVolume;  // 누적 거래량
@@ -32,12 +34,13 @@ public class StockPriceRedisEntity implements Serializable {
 
     @Builder
     public StockPriceRedisEntity(String stockCode, String stockName, Long currentPrice, Long priceChange,
-            Double changeRate, Long cumulativeAmount, Long cumulativeVolume, String time) {
+            Double changeRate, String changeSign, Long cumulativeAmount, Long cumulativeVolume, String time) {
         this.stockCode = stockCode;
         this.stockName = stockName;
         this.currentPrice = currentPrice;
         this.priceChange = priceChange;
         this.changeRate = changeRate;
+        this.changeSign = changeSign;
         this.cumulativeAmount = cumulativeAmount;
         this.cumulativeVolume = cumulativeVolume;
         this.time = time;
