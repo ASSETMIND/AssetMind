@@ -13,8 +13,11 @@ public record RealTimeStockTradeEvent(
 
         // --- 가격 정보 ---
         Long currentPrice,              // 현재가
+        Long openPrice,                 // 시가
+        Long highPrice,                 // 고가
+        Long lowPrice,                  // 저가
         Long priceChange,               // 전일 대비
-        String changeSign,                // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
+        String changeSign,              // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
         Double changeRate,              // 등락률
 
         // --- 가격 정보 ---

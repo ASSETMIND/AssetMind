@@ -10,6 +10,8 @@ import com.assetmind.server_stock.stock.exception.InvalidStockParameterException
 import com.assetmind.server_stock.stock.exception.StockNotFoundException;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
+import com.assetmind.server_stock.stock.presentation.dto.StockRankingResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,21 +49,27 @@ public class StockService {
     }
 
     // 누적 거래대금 순 조회
-    public List<StockPriceRedisEntity> getTopStocksByTradeValue(int limit) {
-        return stockSnapshotRepository.getTopStocksByTradeValue(limit);
+    public List<StockRankingResponse> getTopStocksByTradeValue(int limit) {
+        return stockSnapshotRepository.getTopStocksByTradeValue(limit).stream()
+                .map(StockRankingResponse::from)
+                .toList();
     }
 
     // 누적 거래량 순 조회
-    public List<StockPriceRedisEntity> getTopStocksByTradeVolume(int limit) {
-        return stockSnapshotRepository.getTopStocksByTradeVolume(limit);
+    public List<StockRankingResponse> getTopStocksByTradeVolume(int limit) {
+        return stockSnapshotRepository.getTopStocksByTradeVolume(limit).stream()
+                .map(StockRankingResponse::from)
+                .toList();
     }
 
     // 특정 주식의 시계열 데이터 조회
-    public List<StockDataEntity> getStockRecentHistory(String stockCode, int limit) {
+    public List<StockHistoryResponse> getStockRecentHistory(String stockCode, int limit) {
         if (stockCode == null || stockCode.isBlank()) {
             throw new InvalidStockParameterException(ErrorCode.INVALID_STOCK_PARAMETER);
         }
 
-        return stockHistoryRepository.findRecentData(stockCode, limit);
+        return stockHistoryRepository.findRecentData(stockCode, limit).stream()
+                .map(StockHistoryResponse::from)
+                .toList();
     }
 }

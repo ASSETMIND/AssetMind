@@ -7,6 +7,7 @@ import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTi
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.KisWebSocketHandler;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
+import com.assetmind.server_stock.stock.application.StockService;
 import com.assetmind.server_stock.stock.application.listener.StockTradeEventListener;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import java.util.List;
@@ -37,6 +38,9 @@ public class RealTimeStockEventLightTest {
 
     @MockitoBean
     private KisRealTimeDataParser parser;
+
+    @MockitoBean
+    private StockService stockService;
 
     @Test
     @DisplayName("이벤트 테스트용 컨텍스트에서 이벤트 발행 및 수신 검증")

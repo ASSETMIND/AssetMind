@@ -31,10 +31,16 @@ public class StockMapper {
     public StockDataEntity toJpaEntity(RealTimeStockTradeEvent event) {
         return StockDataEntity.builder()
                 .stockCode(event.stockCode())
-                .price(event.currentPrice())
-                .time(event.time())
-                .volume(event.cumulativeVolume())
+                .currentPrice(event.currentPrice())
+                .openPrice(event.openPrice())
+                .highPrice(event.highPrice())
+                .lowPrice(event.lowPrice())
+                .priceChange(event.priceChange())
                 .changeRate(event.changeRate())
+                .executionVolume(event.executionVolume())
+                .tradingVolume(event.cumulativeVolume())
+                .tradingAmount(event.cumulativeAmount())
+                .time(event.time())
                 .createdAt(event.eventTimeStamp())
                 .build();
     }

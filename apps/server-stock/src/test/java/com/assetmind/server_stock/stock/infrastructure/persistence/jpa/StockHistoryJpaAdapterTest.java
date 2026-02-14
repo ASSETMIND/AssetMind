@@ -57,12 +57,12 @@ class StockHistoryJpaAdapterTest {
         assertThat(result).hasSize(2);
 
         // 첫 번째는 가장 최신 데이터여야 함 (200원, now)
-        assertThat(result.get(0).getPrice()).isEqualTo(200L);
+        assertThat(result.get(0).getCurrentPrice()).isEqualTo(200L);
         assertThat(result.get(0).getCreatedAt()).isEqualTo(now);
 
         // 두 번째는 그 다음 최신 데이터여야 함 (100원, 10분 전)
         // (1시간 전 데이터는 limit에 걸려 제외되어야 함)
-        assertThat(result.get(1).getPrice()).isEqualTo(100L);
+        assertThat(result.get(1).getCurrentPrice()).isEqualTo(100L);
         assertThat(result.get(1).getCreatedAt()).isEqualTo(now.minusMinutes(10));
     }
 
@@ -87,11 +87,17 @@ class StockHistoryJpaAdapterTest {
     private StockDataEntity createEntity(String code, Long price, LocalDateTime time) {
         return StockDataEntity.builder()
                 .stockCode(code)
-                .price(price)
+                .currentPrice(price)
+                .openPrice(price)
+                .highPrice(price)
+                .lowPrice(price)
+                .priceChange(1000L)
+                .changeRate(10.0)
+                .executionVolume(10L)
+                .tradingVolume(30000L)
+                .tradingAmount(1000000L)
                 .time(time.toString())
                 .createdAt(time)
-                .volume(1000L)
-                .changeRate(10.0)
                 .build();
     }
 }

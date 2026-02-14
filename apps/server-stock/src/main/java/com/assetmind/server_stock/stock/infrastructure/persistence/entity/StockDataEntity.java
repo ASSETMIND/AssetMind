@@ -2,7 +2,6 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,26 +28,41 @@ public class StockDataEntity {
     @Column(nullable = false)
     private String stockCode;       // 종목 코드
 
+    // --- 가격 정보 ---
     @Column(nullable = false)
-    private Long price;             // 현재가
+    private Long currentPrice;      // 현재가 (Close)
+    private Long openPrice;         // 시가 (Open)
+    private Long highPrice;         // 고가 (High)
+    private Long lowPrice;          // 저가 (Low)
 
-    @Column(nullable = false)
-    private String time;            // 체결 시간 (HHmmss)
+    // --- 등락 정보 ---
+    private Long priceChange;       // 전일 대비 (+1000, -500)
+    private Double changeRate;      // 등락률 (+1.5, -0.5)
 
-    private Long volume;            // 누적 거래량
+    // --- 거래량 정보 ---
+    private Long executionVolume;   // 체결량
+    private Long tradingVolume;     // 누적 거래량 (Volume)
+    private Long tradingAmount;     // 누적 거래대금 (Trade Value)
 
-    private Double changeRate;      // 등락률
+    private String time;            // 체결시간 (HHmmss)
 
     @Column(updatable = false)
     private LocalDateTime createdAt; // DB 저장 시점 (데이터 수신 시점)
 
     @Builder
-    public StockDataEntity(String stockCode, Long price, String time, Long volume, Double changeRate, LocalDateTime createdAt) {
+    public StockDataEntity(String stockCode, Long currentPrice, Long openPrice, Long highPrice, Long lowPrice,
+            Long priceChange, Double changeRate, Long executionVolume, Long tradingVolume, Long tradingAmount, String time,LocalDateTime createdAt) {
         this.stockCode = stockCode;
-        this.price = price;
-        this.time = time;
-        this.volume = volume;
+        this.currentPrice = currentPrice;
+        this.openPrice = openPrice;
+        this.highPrice = highPrice;
+        this.lowPrice = lowPrice;
+        this.priceChange = priceChange;
         this.changeRate = changeRate;
+        this.executionVolume = executionVolume;
+        this.tradingVolume = tradingVolume;
+        this.tradingAmount = tradingAmount;
+        this.time = time;
         this.createdAt = (createdAt == null) ? LocalDateTime.now() : createdAt;
     }
 }

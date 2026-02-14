@@ -18,6 +18,8 @@ import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepositor
 import com.assetmind.server_stock.stock.exception.InvalidStockParameterException;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
+import com.assetmind.server_stock.stock.presentation.dto.StockRankingResponse;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +54,9 @@ class StockServiceTest {
                 stockCode,
                 "100000",
                 80000L,
+                79000L,
+                81000L,
+                78000L,
                 1000L,
                 "2",
                 1.5,
@@ -129,15 +134,19 @@ class StockServiceTest {
     class RankingTest {
 
         @Test
-        @DisplayName("성공: 거래대금 순 랭킹 조회 시 Redis Repository를 호출해서 올바른 RedisEntity를 리턴해야한다.")
+        @DisplayName("성공: 거래대금 순 랭킹 조회 시 Redis Repository를 호출해서 올바른 랭킹 응답(StockRankingResponse)을 리턴해야한다.")
         void givenLimit_whenGetTopStocksByTradeValue_ThenReturnRedisEntity() {
             // given
             int limit = 10;
-            List<StockPriceRedisEntity> expectedList = List.of(StockPriceRedisEntity.builder().build());
-            given(stockSnapshotRepository.getTopStocksByTradeValue(limit)).willReturn(expectedList);
+            List<StockPriceRedisEntity> repositoryDataList = List.of(StockPriceRedisEntity.builder().build());
+            given(stockSnapshotRepository.getTopStocksByTradeValue(limit)).willReturn(repositoryDataList);
+
+            List<StockRankingResponse> expectedList = repositoryDataList.stream()
+                    .map(StockRankingResponse::from)
+                    .toList();
 
             // when
-            List<StockPriceRedisEntity> result = stockService.getTopStocksByTradeValue(limit);
+            List<StockRankingResponse> result = stockService.getTopStocksByTradeValue(limit);
 
             // then
             assertThat(result).isEqualTo(expectedList);
@@ -145,15 +154,19 @@ class StockServiceTest {
         }
 
         @Test
-        @DisplayName("성공: 거래량 순 랭킹 조회 시 Repository를 호출해서 올바른 RedisEntity를 리턴해야한다.")
+        @DisplayName("성공: 거래량 순 랭킹 조회 시 Repository를 호출해서 올바른 랭킹 응답(StockRankingResponse)을 리턴해야한다.")
         void givenLimit_whenGetTopStocksByTradeVolume_ThenReturnRedisEntity() {
             // given
             int limit = 5;
-            List<StockPriceRedisEntity> expectedList = List.of(StockPriceRedisEntity.builder().build());
-            given(stockSnapshotRepository.getTopStocksByTradeVolume(limit)).willReturn(expectedList);
+            List<StockPriceRedisEntity> repositoryDataList = List.of(StockPriceRedisEntity.builder().build());
+            given(stockSnapshotRepository.getTopStocksByTradeVolume(limit)).willReturn(repositoryDataList);
+
+            List<StockRankingResponse> expectedList = repositoryDataList.stream()
+                    .map(StockRankingResponse::from)
+                    .toList();
 
             // when
-            List<StockPriceRedisEntity> result = stockService.getTopStocksByTradeVolume(limit);
+            List<StockRankingResponse> result = stockService.getTopStocksByTradeVolume(limit);
 
             // then
             assertThat(result).isEqualTo(expectedList);
@@ -171,12 +184,15 @@ class StockServiceTest {
             // given
             String stockCode = "005930";
             int limit = 20;
-            List<StockDataEntity> expectedHistory = List.of(StockDataEntity.builder().build());
+            List<StockDataEntity> repositoryDataList = List.of(StockDataEntity.builder().build());
+            given(stockHistoryRepository.findRecentData(stockCode, limit)).willReturn(repositoryDataList);
 
-            given(stockHistoryRepository.findRecentData(stockCode, limit)).willReturn(expectedHistory);
+            List<StockHistoryResponse> expectedHistory = repositoryDataList.stream()
+                    .map(StockHistoryResponse::from)
+                    .toList();
 
             // when
-            List<StockDataEntity> result = stockService.getStockRecentHistory(stockCode, limit);
+            List<StockHistoryResponse> result = stockService.getStockRecentHistory(stockCode, limit);
 
             // then
             assertThat(result).isEqualTo(expectedHistory);
