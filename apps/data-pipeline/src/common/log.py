@@ -22,7 +22,7 @@ import uuid
 from contextvars import ContextVar
 from pathlib import Path
 
-from src.common.config import get_config
+from src.common.config import ConfigManager
 
 # ==============================================================================
 # [Role 1] Context Variable Definition
@@ -114,7 +114,7 @@ class LogManager:
         
         # 1. 설정 로드 (Configuration Loading)
         # ConfigManager를 통해 통합 설정 객체(ConfigManager)를 가져옵니다.
-        config = get_config()
+        config = ConfigManager.get_config()
 
         # 설정 객체로부터 로깅에 필요한 속성을 추출합니다.
         task_name = getattr(config, "task_name", "TASK_DEFAULT")
