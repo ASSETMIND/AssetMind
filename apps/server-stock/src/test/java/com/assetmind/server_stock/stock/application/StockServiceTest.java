@@ -10,6 +10,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.assetmind.server_stock.global.error.ErrorCode;
+import com.assetmind.server_stock.stock.application.event.StockHistorySavedEvent;
+import com.assetmind.server_stock.stock.application.event.StockRankingUpdatedEvent;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class StockServiceTest {
@@ -44,6 +47,9 @@ class StockServiceTest {
 
     @Mock
     private StockMapper stockMapper;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private StockService stockService;
@@ -72,7 +78,7 @@ class StockServiceTest {
     class ProcessRealTimeTradeTest {
 
         @Test
-        @DisplayName("성공: 정상적인 이벤트가 들어오면 Redis와 DB에 저장되어야 한다")
+        @DisplayName("성공: 정상적인 이벤트가 들어오면 Redis와 DB에 저장하고 2개의 이벤트(History, Ranking)를 발행한다.")
         void givenEvent_whenProcessRealTImeTrade_thenSavedRepository() {
             // given
             String stockCode = "005930";
@@ -91,10 +97,14 @@ class StockServiceTest {
             // then
             // 메타데이터 조회 호출 확인
             verify(stockMetadataProvider).getStockName(stockCode);
-            // Redis 저장소 호출 확인
+
+            // Redis & DB 저장소 호출 확인
             verify(stockSnapshotRepository, times(1)).save(any(StockPriceRedisEntity.class));
-            // DB 저장소 호출 확인
             verify(stockHistoryRepository, times(1)).save(any(StockDataEntity.class));
+
+            // 2개의 이벤트(History, Ranking) 발행 확인
+            verify(eventPublisher, times(1)).publishEvent(any(StockHistorySavedEvent.class));
+            verify(eventPublisher, times(1)).publishEvent(any(StockRankingUpdatedEvent.class));
         }
 
         @Test

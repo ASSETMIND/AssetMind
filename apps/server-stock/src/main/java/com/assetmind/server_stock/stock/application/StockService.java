@@ -1,6 +1,8 @@
 package com.assetmind.server_stock.stock.application;
 
 import com.assetmind.server_stock.global.error.ErrorCode;
+import com.assetmind.server_stock.stock.application.event.StockHistorySavedEvent;
+import com.assetmind.server_stock.stock.application.event.StockRankingUpdatedEvent;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
@@ -14,6 +16,7 @@ import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
 import com.assetmind.server_stock.stock.presentation.dto.StockRankingResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,7 @@ public class StockService {
     private final StockHistoryRepository stockHistoryRepository;
     private final StockMetadataProvider stockMetadataProvider;
     private final StockMapper stockMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 실시간 주가 처리
     @Transactional // 쓰기 작업
@@ -42,10 +46,20 @@ public class StockService {
         String stockName = stockMetadataProvider.getStockName(event.stockCode());
 
         // 실시간 주식 데이터 캐싱
-        stockSnapshotRepository.save(stockMapper.toRedisEntity(event, stockName));
+        StockPriceRedisEntity redisEntity = stockMapper.toRedisEntity(event, stockName);
+        stockSnapshotRepository.save(redisEntity);
 
-        // 실시간 주식 데이터 저장
-        stockHistoryRepository.save(stockMapper.toJpaEntity(event));
+        // 메인 랭킹용(메인 차트 페이지) 이벤트 발행
+        StockRankingResponse rankingResponse = StockRankingResponse.from(redisEntity);
+        eventPublisher.publishEvent(new StockRankingUpdatedEvent(rankingResponse));
+
+        // 실시간 주식 시계열 데이터 저장
+        StockDataEntity jpaEntity = stockMapper.toJpaEntity(event);
+        stockHistoryRepository.save(jpaEntity);
+
+        // 상세 페이지용 이벤트 발행
+        StockHistoryResponse historyResponse = StockHistoryResponse.from(jpaEntity);
+        eventPublisher.publishEvent(new StockHistorySavedEvent(event.stockCode(), historyResponse));
     }
 
     // 누적 거래대금 순 조회
