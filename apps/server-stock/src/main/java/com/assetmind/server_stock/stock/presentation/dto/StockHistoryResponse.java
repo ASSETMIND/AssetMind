@@ -41,8 +41,8 @@ public record StockHistoryResponse(
                 .priceChange(String.valueOf(entity.getPriceChange()))
                 .changeRate(String.valueOf(entity.getChangeRate()))
                 .executionVolume(String.valueOf(entity.getExecutionVolume()))
-                .tradingAmount(String.valueOf(entity.getTradingAmount()))
-                .tradingVolume(String.valueOf(entity.getTradingVolume()))
+                .cumulativeAmount(String.valueOf(entity.getTradingAmount()))
+                .cumulativeVolume(String.valueOf(entity.getTradingVolume()))
                 .time(entity.getTime())
                 .build();
     }
