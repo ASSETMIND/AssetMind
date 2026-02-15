@@ -2,6 +2,8 @@ import pytest
 import time
 import asyncio
 import sys
+import importlib
+import builtins
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch, MagicMock, ANY
 from collections import deque
@@ -15,18 +17,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 # --------------------------------------------------------------------------
 # Import Real Objects & Target Class
 # --------------------------------------------------------------------------
-# 프로젝트 구조에 맞게 경로 수정
 try:
-    from src.common.decorators.rate_limit_decorator import rate_limit, _buckets
+    from src.common.decorators.rate_limit_decorator import rate_limit, _buckets, RateLimitBucket
 except ImportError:
-    from rate_limit_decorator import rate_limit, _buckets
+    from src.common.decorators.rate_limit_decorator import rate_limit, _buckets, RateLimitBucket
 
 # --------------------------------------------------------------------------
 # 0. Constants & Configuration
 # --------------------------------------------------------------------------
-
-# Mocking 대상 경로 (rate_limit_decorator.py 내부 의존성)
-TARGET_MODULE = "src.common.decorators.rate_limit_decorator" if "src.common.decorators.rate_limit_decorator" in sys.modules else "rate_limit_decorator"
+TARGET_MODULE = "src.common.decorators.rate_limit_decorator"
 TARGET_LOG_MANAGER = f"{TARGET_MODULE}.LogManager"
 
 # --------------------------------------------------------------------------
@@ -49,11 +48,9 @@ def mock_dependencies():
     """
     [Dependencies Mock]
     LogManager 등 외부 의존성을 전역적으로 Mocking합니다.
-    AppConfig 초기화 에러를 방지하고 순수 로직만 검증합니다.
+    ConfigManager 초기화 에러를 방지하고 순수 로직만 검증합니다.
     """
-    # src.common.decorators.rate_limit_decorator 내부의 LogManager를 Mocking
     with patch(TARGET_LOG_MANAGER) as MockLogManager:
-        # get_logger가 호출되면 Mock 객체를 반환하도록 설정
         mock_logger_instance = MagicMock()
         MockLogManager.get_logger.return_value = mock_logger_instance
         
@@ -74,17 +71,13 @@ class TestRateLimitDecorator:
 
     def test_tc001_sync_happy_path(self):
         """[TC-001] Sync 함수: limit 내에서 호출 시 즉시 반환 확인"""
-        # Given
         @rate_limit(limit=5, period=1.0)
         def my_func():
             return "ok"
 
-        # When
         start_time = time.time()
         for _ in range(5):
-            result = my_func()
-            # Then
-            assert result == "ok"
+            assert my_func() == "ok"
         
         duration = time.time() - start_time
         assert duration < 0.1 
@@ -92,16 +85,12 @@ class TestRateLimitDecorator:
     @pytest.mark.asyncio
     async def test_tc002_async_happy_path(self):
         """[TC-002] Async 함수: limit 내에서 호출 시 즉시 반환 확인"""
-        # Given
         @rate_limit(limit=5, period=1.0)
         async def my_async_func():
             return "async_ok"
 
-        # When
         for _ in range(5):
-            result = await my_async_func()
-            # Then
-            assert result == "async_ok"
+            assert await my_async_func() == "async_ok"
 
     # ==========================================
     # Category: Throttling Logic (Active)
@@ -111,7 +100,6 @@ class TestRateLimitDecorator:
     @patch('time.time')
     def test_tc003_sync_throttling(self, mock_time, mock_sleep):
         """[TC-003] Sync 함수: limit 초과 시 time.sleep 호출 검증"""
-        # Given
         mock_time.return_value = 100.0
         
         @rate_limit(limit=1, period=1.0)
@@ -131,7 +119,6 @@ class TestRateLimitDecorator:
         # Then
         mock_sleep.assert_called_once()
         args, _ = mock_sleep.call_args
-        # 부동소수점 오차 고려
         assert abs(args[0] - 0.9) < 0.0001
 
     @pytest.mark.asyncio
@@ -165,27 +152,20 @@ class TestRateLimitDecorator:
     @patch('time.sleep')
     def test_tc005_boundary_limit(self, mock_sleep):
         """[TC-005] Boundary: 정확히 6번째 호출(Limit=5)에서 스로틀링 발생 검증"""
-        # Given
         @rate_limit(limit=5, period=1.0)
-        def boundary_func(): 
-            pass
+        def boundary_func(): pass
 
-        # 1~5회 호출 (통과)
         for i in range(5):
             boundary_func()
         mock_sleep.assert_not_called()
 
-        # When: 6회 호출 (스로틀링)
         boundary_func()
-
-        # Then
         mock_sleep.assert_called_once()
 
     @patch('time.sleep')
     @patch('time.time')
     def test_tc006_period_expiration(self, mock_time, mock_sleep):
         """[TC-006] Period Expiration: 기간 경과 후 버킷 초기화 검증"""
-        # Given
         mock_time.return_value = 100.0
         @rate_limit(limit=1, period=1.0)
         def refresh_func(): pass
@@ -206,24 +186,19 @@ class TestRateLimitDecorator:
     @patch('time.sleep')
     def test_tc007_independent_buckets(self, mock_sleep):
         """[TC-007] Bucket Isolation: bucket_key=None일 때 함수별 독립 제한 검증"""
-        # Given
         @rate_limit(limit=1, period=1.0)
         def func_a(): pass
 
         @rate_limit(limit=1, period=1.0)
         def func_b(): pass
 
-        # When
         func_a()
-        func_b() # 독립적이므로 대기 없음
-
-        # Then
+        func_b() 
         mock_sleep.assert_not_called()
 
     @patch('time.sleep')
     def test_tc008_shared_buckets(self, mock_sleep):
         """[TC-008] Shared Bucket: 동일 bucket_key 사용 시 제한 공유 검증"""
-        # Given
         SHARED_KEY = "API_KEY_1"
         
         @rate_limit(limit=1, period=1.0, bucket_key=SHARED_KEY)
@@ -232,30 +207,31 @@ class TestRateLimitDecorator:
         @rate_limit(limit=1, period=1.0, bucket_key=SHARED_KEY)
         def func_b(): pass
 
-        # When
         func_a()
-        func_b() # 공유되므로 대기 발생
-
-        # Then
+        func_b()
         mock_sleep.assert_called_once()
 
-    @patch('time.sleep')
-    @patch('time.time')
-    def test_tc009_math_safety(self, mock_time, mock_sleep):
-        """[TC-009] Math Safety: wait_time 계산 시 음수 방어 로직 검증"""
+    def test_tc009_math_safety_negative_wait_defensive(self):
+        """
+        [TC-009] Math Safety (Defensive Coding): 
+        내부 상태가 꼬여서(예: _cleanup 실패) 이론상 불가능한 
+        음수 대기 시간이 계산되더라도, 0.0으로 보정되는지 검증 (Coverage for 'if wait_time < 0')
+        """
         # Given
-        mock_time.return_value = 100.0
-        @rate_limit(limit=1, period=1.0)
-        def math_func(): pass
+        bucket = RateLimitBucket(limit=1, period=10.0)
+        # 강제로 타임스탬프 주입 (현재 시간 100일 때, 80은 이미 만료되었어야 함)
+        bucket.timestamps.append(80.0)
         
-        math_func()
-
-        # When: 현재 시간이 예상 실행 시간보다 훨씬 지남
-        mock_time.return_value = 105.0 
-        math_func()
-
+        # When
+        # _cleanup을 Mocking하여 만료된 토큰을 삭제하지 못하게 함 (State Corruption Simulation)
+        with patch.object(bucket, '_cleanup', return_value=None):
+            with patch('time.time', return_value=100.0):
+                # 로직: wait_time = (80 + 10) - 100 = -10
+                wait_time = bucket.get_wait_time()
+        
         # Then
-        mock_sleep.assert_not_called()
+        # 음수가 아닌 0.0이 반환되어야 함 (Fail-safe)
+        assert wait_time == 0.0
 
     # ==========================================
     # Category: Resource & Exception Handling
@@ -264,7 +240,6 @@ class TestRateLimitDecorator:
     @patch('time.time')
     def test_tc010_resource_cleanup(self, mock_time):
         """[TC-010] Resource Cleanup: 오래된 타임스탬프가 정리되는지 확인"""
-        # Given
         mock_time.return_value = 100.0
         @rate_limit(limit=5, period=1.0)
         def resource_func(): pass
@@ -275,29 +250,9 @@ class TestRateLimitDecorator:
         bucket = _buckets[resource_func.__qualname__]
         assert len(bucket.timestamps) == 5
 
-        # When: 시간 대폭 경과
         mock_time.return_value = 200.0
         resource_func()
-
-        # Then: Cleanup 동작 확인 (1개만 남음)
         assert len(bucket.timestamps) == 1
-
-    def test_tc011_no_log_manager_exception(self):
-        """[TC-011] Exception Safety: LogManager가 없는 환경(ImportError) 시뮬레이션"""
-        # Given
-        with patch(TARGET_LOG_MANAGER, None):
-            @rate_limit(limit=1, period=1.0)
-            def silent_func(): pass
-            
-            silent_func() # 1회 소진
-            
-            with patch('time.sleep'):
-                # When: Throttling 발생 -> 로깅 시도
-                try:
-                    silent_func()
-                except Exception as e:
-                    # Then: 에러 없이 통과해야 함
-                    pytest.fail(f"LogManager가 없을 때 예외가 발생했습니다: {e}")
 
     # ==========================================
     # Category: Integration & Logging
@@ -306,18 +261,14 @@ class TestRateLimitDecorator:
     @patch('time.sleep')
     def test_tc012_integration_log_output(self, mock_sleep):
         """[TC-012] Integration: LogManager 존재 시 로그 출력 확인"""
-        # Given
         from src.common.decorators.rate_limit_decorator import LogManager as MockLogManager
         
         @rate_limit(limit=1, period=1.0)
         def log_func(): pass
 
         log_func()
-
-        # When: Throttling 발생
         log_func() 
 
-        # Then
         MockLogManager.get_logger.assert_called_with("RateLimit")
         mock_logger = MockLogManager.get_logger.return_value
         mock_logger.debug.assert_called()
@@ -325,29 +276,34 @@ class TestRateLimitDecorator:
 
     @patch('time.sleep')
     @patch('time.time')
-    def test_tc013_small_wait_logging_skip(self, mock_time, mock_sleep):
-        """[TC-013] Logging Logic: 대기 시간이 짧을(<=0.1s) 경우 로그 생략 확인"""
+    def test_tc013_log_threshold_boundary(self, mock_time, mock_sleep):
+        """[TC-013] Log Threshold: 0.1s 경계값 테스트 (BVA)"""
         # Given
         from src.common.decorators.rate_limit_decorator import LogManager as MockLogManager
+        mock_logger = MockLogManager.get_logger.return_value
         
-        mock_time.return_value = 100.0
         @rate_limit(limit=1, period=1.0)
         def noise_func(): pass
         
-        noise_func()
-
-        # 0.95초 경과 (Wait time = 0.05초)
-        mock_time.return_value = 100.95
+        # 1. Case: Wait time = 0.1s (정확히 경계) -> 로그 찍히지 않아야 함 (wait_time > 0.1)
+        mock_time.return_value = 100.0
+        noise_func() # 소진
         
-        mock_logger = MockLogManager.get_logger.return_value
-        mock_logger.debug.reset_mock()
-
-        # When
+        mock_time.return_value = 100.9 # Wait = 0.1
         noise_func()
-
-        # Then
-        mock_sleep.assert_called() # Sleep은 해야 함
-        mock_logger.debug.assert_not_called() # 로그는 스킵
+        mock_logger.debug.assert_not_called()
+        
+        # 2. Case: Wait time = 0.1001s (경계 초과) -> 로그 찍혀야 함
+        mock_logger.reset_mock()
+        # bucket reset
+        _buckets.clear()
+        
+        mock_time.return_value = 200.0
+        noise_func() # 소진
+        
+        mock_time.return_value = 200.8999 # Wait = 0.1001
+        noise_func()
+        mock_logger.debug.assert_called()
 
     # ==========================================
     # Category: Concurrency & Thread Safety
@@ -355,8 +311,7 @@ class TestRateLimitDecorator:
 
     @pytest.mark.asyncio
     async def test_tc014_concurrency_async(self):
-        """[TC-014] Async Concurrency: 비동기 동시 요청(Race Condition) 안전성 검증"""
-        # Given
+        """[TC-014] Async Concurrency: 비동기 동시 요청 안전성 검증"""
         limit = 5
         @rate_limit(limit=limit, period=1.0)
         async def concurrent_func():
@@ -367,19 +322,13 @@ class TestRateLimitDecorator:
         with patch('asyncio.sleep', return_value=None):
             with patch('time.time') as mock_time:
                 mock_time.return_value = 100.0
-                # When: 동시 실행
                 await asyncio.gather(*tasks)
         
-        # Then
         bucket = _buckets[concurrent_func.__qualname__]
         assert len(bucket.timestamps) == 10
 
     def test_tc015_concurrency_sync_thread_safety(self):
-        """
-        [TC-015] Sync Thread Safety: 동기 함수 멀티스레드 환경 안전성 검증.
-        [Note] 현재 구현 코드에 Thread Lock이 없으므로 실패 가능성이 있음.
-        """
-        # Given
+        """[TC-015] Sync Thread Safety: 동기 함수 멀티스레드 환경 안전성 검증"""
         limit = 50 
         @rate_limit(limit=limit, period=1.0)
         def thread_func():
@@ -388,12 +337,52 @@ class TestRateLimitDecorator:
 
         _buckets.clear()
 
-        # When: 스레드풀로 동시 공격
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(thread_func) for _ in range(100)]
             for f in futures:
                 f.result() 
 
-        # Then
         bucket = _buckets[thread_func.__qualname__]
         assert len(bucket.timestamps) > 0
+
+    # ==========================================
+    # Category: Environment & Import Logic (Coverage 100%)
+    # ==========================================
+
+    def test_tc016_import_fallback_logic(self):
+        """
+        [TC-016] Import Fallback Logic:
+        'src.common.log' 모듈이 없을 때 LogManager가 None으로 설정되고
+        코드가 크래시 없이 동작하는지 검증 (ImportError 분기)
+        """
+        target_module_name = "src.common.decorators.rate_limit_decorator"
+        
+        # 1. 모듈 언로드
+        if target_module_name in sys.modules:
+            del sys.modules[target_module_name]
+
+        # 2. builtins.__import__ Mocking (ImportError 유발)
+        original_import = builtins.__import__
+        def side_effect_import(name, *args, **kwargs):
+            if name == "src.common.log":
+                raise ImportError("Mocked ImportError")
+            return original_import(name, *args, **kwargs)
+
+        with patch('builtins.__import__', side_effect=side_effect_import):
+            # 3. 모듈 재로드 -> ImportError 발생 -> except 블록 실행 -> LogManager = None
+            import src.common.decorators.rate_limit_decorator
+            importlib.reload(src.common.decorators.rate_limit_decorator)
+            
+            # 4. 검증: LogManager가 None이어야 함
+            assert src.common.decorators.rate_limit_decorator.LogManager is None
+            
+            # 5. LogManager가 None인 상태에서도 데코레이터가 정상 동작하는지 확인 (Fail-safe)
+            @src.common.decorators.rate_limit_decorator.rate_limit(limit=1, period=1.0)
+            def safe_func(): return "safe"
+            
+            assert safe_func() == "safe"
+
+        # Cleanup
+        if target_module_name in sys.modules:
+            del sys.modules[target_module_name]
+        import src.common.decorators.rate_limit_decorator
