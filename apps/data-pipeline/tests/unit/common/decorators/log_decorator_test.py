@@ -2,6 +2,8 @@ import pytest
 import asyncio
 import sys
 import json
+import importlib
+import builtins
 from pathlib import Path
 from unittest.mock import MagicMock, patch, ANY
 
@@ -255,11 +257,11 @@ class TestLoggingDecorator:
             assert "(Serialization Failed)" in deps["Logger"].warning.call_args[0][0]
 
     # ==========================================
-    # Category: Logical Exceptions
+    # Category: Logical Exceptions (Sync & Async)
     # ==========================================
 
-    def test_tc011_exception_reraise(self, mock_dependencies):
-        """[TC-011] Exception Re-raise: suppress_error=False일 때 예외 전파"""
+    def test_tc011_sync_exception_reraise(self, mock_dependencies):
+        """[TC-011] Sync Exception Re-raise: suppress_error=False일 때 예외 전파"""
         # Given
         deps = mock_dependencies
         
@@ -271,12 +273,14 @@ class TestLoggingDecorator:
         with pytest.raises(ValueError, match="Boom"):
             faulty()
         
-        # Error 로그 기록 확인
+        # Error 로그 기록 및 스택 트레이스 확인
         deps["Logger"].error.assert_called_once()
         assert "ValueError - Boom" in deps["Logger"].error.call_args[0][0]
+        # exc_info=True가 전달되었는지 확인
+        assert deps["Logger"].error.call_args[1].get('exc_info') is True
 
-    def test_tc012_exception_suppress(self, mock_dependencies):
-        """[TC-012] Exception Suppress: suppress_error=True일 때 예외 무시 및 None 반환"""
+    def test_tc012_sync_exception_suppress(self, mock_dependencies):
+        """[TC-012] Sync Exception Suppress: suppress_error=True일 때 예외 무시 및 None 반환"""
         # Given
         deps = mock_dependencies
         
@@ -291,12 +295,47 @@ class TestLoggingDecorator:
         assert result is None
         deps["Logger"].error.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_tc013_async_exception_reraise(self, mock_dependencies):
+        """[TC-013] Async Exception Re-raise: 비동기 함수 예외 전파 확인"""
+        # Given
+        deps = mock_dependencies
+
+        @LoggingDecorator(suppress_error=False)
+        async def async_faulty():
+            raise RuntimeError("Async Boom")
+
+        # When & Then
+        with pytest.raises(RuntimeError, match="Async Boom"):
+            await async_faulty()
+        
+        # 로그 확인
+        deps["Logger"].error.assert_called_once()
+        assert "RuntimeError - Async Boom" in deps["Logger"].error.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_tc014_async_exception_suppress(self, mock_dependencies):
+        """[TC-014] Async Exception Suppress: 비동기 함수 예외 억제 및 None 반환 확인"""
+        # Given
+        deps = mock_dependencies
+
+        @LoggingDecorator(suppress_error=True)
+        async def async_faulty():
+            raise RuntimeError("Async Boom")
+
+        # When
+        result = await async_faulty()
+
+        # Then
+        assert result is None
+        deps["Logger"].error.assert_called_once()
+
     # ==========================================
     # Category: Resource & State
     # ==========================================
 
-    def test_tc013_context_preservation(self, mock_dependencies):
-        """[TC-013] Context 보존: 이미 ID가 존재할 경우 덮어쓰지 않음(Idempotency)"""
+    def test_tc015_context_preservation(self, mock_dependencies):
+        """[TC-015] Context 보존: 이미 ID가 존재할 경우 덮어쓰지 않음(Idempotency)"""
         # Given
         deps = mock_dependencies
         # 기존 Context가 설정된 상태 시뮬레이션
@@ -312,8 +351,8 @@ class TestLoggingDecorator:
         # set_context가 호출되지 않아야 함
         deps["LogManager"].set_context.assert_not_called()
 
-    def test_tc014_custom_logger_name(self, mock_dependencies):
-        """[TC-014] Custom Logger: 지정된 이름으로 로거 인스턴스 생성"""
+    def test_tc016_custom_logger_name(self, mock_dependencies):
+        """[TC-016] Custom Logger: 지정된 이름으로 로거 인스턴스 생성"""
         # Given
         deps = mock_dependencies
         custom_name = "custom.logger"
@@ -326,3 +365,68 @@ class TestLoggingDecorator:
         
         # Then
         deps["LogManager"].get_logger.assert_called_with(custom_name)
+
+    def test_tc017_default_logger_name_resolution(self, mock_dependencies):
+        """[TC-017] Default Logger Name: 이름 미지정 시 함수의 __module__ 사용 검증"""
+        # Given
+        deps = mock_dependencies
+        
+        @LoggingDecorator()
+        def action(): pass
+        
+        # When
+        action()
+        
+        # Then
+        # action 함수가 정의된 현재 테스트 모듈의 이름을 사용해야 함
+        expected_name = action.__module__
+        deps["LogManager"].get_logger.assert_called_with(expected_name)
+
+    # ==========================================
+    # Category: Environment & Import Logic (Coverage 100%)
+    # ==========================================
+    
+    def test_tc018_import_fallback_logic(self):
+        """
+        [TC-018] Import Fallback Logic:
+        모듈 로드 시 'src.common.log'를 찾을 수 없을 때(ImportError),
+        sys.path를 수정하여 다시 import를 시도하는 except 블록(lines 35-40)을 검증합니다.
+        """
+        target_module_name = "src.common.decorators.log_decorator"
+        
+        # 1. 현재 로드된 모듈 제거 (재로딩을 위해)
+        if target_module_name in sys.modules:
+            del sys.modules[target_module_name]
+
+        # 2. builtins.__import__ Mocking
+        # 목적: 첫 번째 'from src.common.log ...' 시도에서 ImportError 발생 유도
+        original_import = builtins.__import__
+
+        def side_effect_import(name, globals=None, locals=None, fromlist=(), level=0):
+            # 타겟 모듈이 'src.common.log'를 import 하려 할 때
+            if name == "src.common.log" and fromlist:
+                # 상태 플래그를 함수 속성으로 저장하여 1회만 실패하도록 설정
+                # (except 블록에서 재시도할 때는 성공해야 함)
+                if not getattr(side_effect_import, 'failed_once', False):
+                    side_effect_import.failed_once = True
+                    raise ImportError("Forced ImportError for Coverage")
+            return original_import(name, globals, locals, fromlist, level)
+
+        # 3. Patch 적용 및 모듈 Import 수행
+        with patch('builtins.__import__', side_effect=side_effect_import):
+            # 이때 log_decorator.py가 실행되면서:
+            # try: import src.common.log -> ImportError (side_effect)
+            # except: sys.path.append -> 다시 import src.common.log -> 성공 (failed_once=True)
+            try:
+                import src.common.decorators.log_decorator
+                importlib.reload(src.common.decorators.log_decorator)
+            except ImportError:
+                pytest.fail("Module import failed even after fallback logic")
+
+        # 4. 검증: 모듈이 정상적으로 로드되었는지 확인
+        assert "src.common.decorators.log_decorator" in sys.modules
+        
+        # 5. Cleanup: 다음 테스트를 위해 모듈을 정상 상태로 다시 로드
+        if target_module_name in sys.modules:
+            del sys.modules[target_module_name]
+        import src.common.decorators.log_decorator
