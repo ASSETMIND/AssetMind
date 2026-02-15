@@ -1,41 +1,83 @@
-# 테스트 명세서: Retry Decorator Module
+# Rate Limit Decorator 테스트 문서
 
-## 1. 개요 (Overview)
+## 1. 문서 정보 및 전략
 
-- **대상 모듈:** `retry_decorator.py`
-- **작성 목적:** \* 재시도 로직(Exponential Backoff, Jitter)의 수학적 정확성 검증.
-  - 동기(Sync) 및 비동기(Async) 함수의 투명한 래핑(Wrapping) 보장.
-  - 예외 처리 전략(Whitelist, Blacklist) 및 로깅 동작 확인.
-- **테스트 범위:** \* `RetryDecorator` 클래스의 단위 테스트(Unit Test).
-  - 시간 지연(`time.sleep`, `asyncio.sleep`) 및 로깅(`LogManager`)은 Mocking을 통해 검증하여 테스트 속도와 격리성 확보.
+- **대상 모듈:** `src.common.decorators.RetryDecorator`
+- **복잡도 수준:** **상 (High)** (지수 백오프 계산, 비동기 루프 제어, 예외 선택적 처리, 모듈 리로드 대응)
+- **커버리지 목표:** **분기 커버리지 100%**, 구문 커버리지 100%
+- **적용 전략:**
+  - [x] **탄력성 검증 (Resilience):** 일시적 오류 발생 시 정의된 지수 백오프(Exponential Backoff) 전략에 따라 정상 복구되는지 검증.
+  - [x] **지터 적용 (Jittering):** Thundering Herd 현상 방지를 위해 대기 시간에 무작위성(Jitter)이 올바르게 가산되는지 검증.
+  - [x] **예외 필터링 (Selective Retry):** 특정 예외 타입에 대해서만 재시도가 트리거되고, 그 외의 예외는 즉시 전파되는지 검증.
+  - [x] **루프 건너뛰기 (Loop Skipping):** `max_retries` 설정이 음수일 때 루프를 타지 않고 비정상 종료되는 경계 조건 검증.
+  - [x] **참조 무결성 (Import Fallback):** `src.common.log` 누락 시의 복구 로직 및 모듈 재로딩 후의 클래스 참조 일관성 검증.
 
-## 2. 테스트 환경 및 전략 (Test Environment & Strategy)
+# 2. 로직 흐름도
 
-- **Test Framework:** `pytest`, `pytest-asyncio`
-- **Mocking:** `unittest.mock.MagicMock`, `pytest-mock`을 사용하여 외부 의존성 제거.
-- **Validation Strategy:**
-  - **Behavior Verification:** 함수가 `max_retries`만큼 호출되었는가? (`call_count`)
-  - **State Verification:** 반환된 대기 시간이 수식과 일치하는가?
-  - **Logging Verification:** 경고(Warning) 및 에러(Error) 로그가 적절한 시점에 기록되었는가?
+```mermaid
+stateDiagram-v2
+    [*] --> Init: @retry(max_retries, exceptions)
+    Init --> CallWrapper: Call Wrapper(*args)
 
-## 3. 테스트 케이스 명세 (Test Case Specification)
+    state CallWrapper {
+        [*] --> SetupLogger: Get Logger (Custom or Module Name)
+        SetupLogger --> RetryLoop: for attempt in range(max_retries + 1)
 
-| Test ID |  Category   | Given (Preconditions)                                               | When (Action)                                                              | Then (Expected Outcome)                                                                              | Input Data             | Priority |
-| :-----: | :---------: | :------------------------------------------------------------------ | :------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- | :--------------------- | :------- |
-| TC-001  | Happy Path  | 동기(Sync) 함수가 정상 동작하도록 설정됨                            | 데코레이터가 적용된 동기 함수를 호출함                                     | 1. 원본 함수가 정확히 1회 실행됨<br>2. 원본 반환값을 리턴함<br>3. 재시도 로직(sleep)이 수행되지 않음 | `args=(10, 20)`        | High     |
-| TC-002  | Happy Path  | 비동기(Async) 코루틴이 정상 동작하도록 설정됨                       | 데코레이터가 적용된 비동기 함수를 `await`로 호출함                         | 1. 원본 코루틴이 정확히 1회 실행됨<br>2. 원본 반환값을 리턴함<br>3. `await`가 정상 처리됨            | `args=("data",)`       | High     |
-| TC-003  | Happy Path  | 동기 함수가 2회 실패 후 3회째 성공하도록 설정됨 (`max_retries=3`)   | 데코레이터가 적용된 함수를 호출함                                          | 1. 원본 함수가 총 3회 실행됨<br>2. 최종적으로 성공 결과를 반환함<br>3. 예외가 외부로 전파되지 않음   | `Fail, Fail, Success`  | High     |
-| TC-004  | Happy Path  | 비동기 함수가 1회 실패 후 2회째 성공하도록 설정됨 (`max_retries=3`) | 데코레이터가 적용된 비동기 함수를 호출함                                   | 1. 원본 코루틴이 총 2회 실행됨<br>2. 최종적으로 성공 결과를 반환함                                   | `Fail, Success`        | High     |
-| TC-005  |  Boundary   | 재시도 횟수가 0으로 설정됨 (`max_retries=0`)                        | 함수가 무조건 예외를 발생시키도록 호출함                                   | 1. 함수가 단 1회만 실행됨<br>2. 즉시 예외가 발생함 (재시도 없음)                                     | `max_retries=0`        | Medium   |
-| TC-006  |  Boundary   | 최대 대기 시간이 0.5초로 제한됨 (`max_delay=0.5`)                   | 계산된 백오프 시간이 제한을 초과하는 차수(예: 10회차)의 대기 시간을 계산함 | 1. 반환된 대기 시간이 `0.5 + jitter`를 초과하지 않음                                                 | `base=1, factor=2`     | Medium   |
-| TC-007  |  Boundary   | 기본 대기 시간 1초, 배수 2.0으로 설정됨                             | 3번째 시도(attempt=3)의 대기 시간을 계산함                                 | 1. 대기 시간이 `1.0 * (2.0 ^ 2) = 4.0초` 근사값인지 확인함 (Jitter 고려)                             | `attempt=3`            | Medium   |
-| TC-008  | Null & Type | 인자를 그대로 반환하는 함수가 정의됨                                | 위치 인자(`args`)와 키워드 인자(`kwargs`)를 섞어서 호출함                  | 1. 원본 함수에 인자가 변형 없이 그대로 전달됨을 확인함                                               | `(1, b=2)`             | High     |
-| TC-009  | Null & Type | `None` 또는 복잡한 객체를 반환하는 함수가 정의됨                    | 함수를 호출하여 반환값을 받음                                              | 1. 데코레이터가 반환값을 가로채거나 변경하지 않고 그대로 반환함                                      | `return None`          | Medium   |
-| TC-010  | Null & Type | 인자 없이 데코레이터 클래스를 초기화함                              | 인스턴스의 속성(`max_retries`, `base_delay`)을 확인함                      | 1. 정의된 상수(Constants) 값이 기본값으로 설정됨                                                     | `RetryDecorator()`     | Low      |
-| TC-011  |  Exception  | 함수가 `max_retries` 횟수보다 많이 실패하도록 설정됨                | 함수를 호출함                                                              | 1. `max_retries + 1`회 실행됨 (최초 + 재시도)<br>2. 마지막에 발생한 예외가 호출자에게 전파됨         | `All Fail`             | High     |
-| TC-012  |  Exception  | `ValueError`에 대해서만 재시도하도록 설정됨                         | 함수가 `ValueError`를 발생시키다가 성공하도록 호출함                       | 1. 정상적으로 재시도를 수행하고 성공함                                                               | `exception=ValueError` | Medium   |
-| TC-013  |  Exception  | `ValueError`에 대해서만 재시도하도록 설정됨                         | 함수가 `KeyError` (설정되지 않은 예외)를 발생시킴                          | 1. 재시도 없이 즉시 `KeyError`가 전파됨<br>2. 실행 횟수는 1회여야 함                                 | `exception=ValueError` | Medium   |
-| TC-014  |  Exception  | `(ValueError, KeyError)` 두 가지 예외를 허용하도록 설정됨           | 함수가 `KeyError` 발생 후 성공하도록 호출함                                | 1. `KeyError`를 잡아서 재시도를 수행하고 성공함                                                      | `exceptions=(VE, KE)`  | Medium   |
-| TC-015  |  Resource   | `jitter=True`로 설정됨                                              | 동일한 차수(attempt=1)로 대기 시간을 2회 계산함                            | 1. 두 결과값이 서로 달라야 함 (Randomness 검증)<br>2. 차이가 0.1초 이내여야 함                       | `jitter=True`          | Low      |
-| TC-016  |  Resource   | 로거(Logger)가 Mocking 됨                                           | 함수가 1회 실패 후 재시도하도록 호출함                                     | 1. `logger.warning`이 호출됨<br>2. 로그 메시지에 "RETRY", 현재 횟수, 대기 시간이 포함됨              | `LogManager`           | Medium   |
-| TC-017  |  Resource   | 로거(Logger)가 Mocking 됨                                           | 함수가 모든 재시도를 실패하도록 호출함                                     | 1. 마지막에 `logger.error`가 호출됨<br>2. 로그 메시지에 "GAVE UP"이 포함됨                           | `LogManager`           | Medium   |
+        state RetryLoop {
+            [*] --> Execute: func(*args) / await func(*args)
+            Execute --> Success: Success
+            Execute --> HandleError: Catch Specified Exceptions
+
+            state HandleError {
+                [*] --> IsLastAttempt: attempt == max_retries?
+                IsLastAttempt --> GiveUp: Yes
+                IsLastAttempt --> CalcDelay: No
+
+                CalcDelay --> LogRetry: Warning Log
+                LogRetry --> Wait: time.sleep / await asyncio.sleep
+                Wait --> NextAttempt: attempt + 1
+            }
+        }
+
+        Success --> [*]: Return Result
+        GiveUp --> RaiseError: Log Error & Raise last_exception
+    }
+
+    RaiseError --> [*]
+```
+
+## 3. BDD 테스트 시나리오
+
+**시나리오 요약 (총 22건):**
+
+1.  **기능 성공 (Happy Path):** 4건 (동기/비동기 즉시 성공 및 재시도 후 복구)
+2.  **경계값 분석 (Boundary):** 3건 (재시도 0회, 최대 지연 제한, 백오프 공식 검증)
+3.  **데이터 및 타입 (Type Safety):** 3건 (인자 전달, 반환값 보존, 기본 설정값)
+4.  **예외 제어 (Logical Exceptions):** 4건 (재시도 소진, 특정 예외 선택/불일치, 다중 예외 처리)
+5.  **상태 및 로깅 (State & Log):** 3건 (지터 무작위성, 재시도/포기 로그 출력)
+6.  **커버리지 특화 (Branch Coverage):** 5건 (비동기 소진 분기, 기본 로거 이름, 임포트 폴백, 커스텀 로거 이름, 루프 스킵)
+
+| 테스트 ID  | 분류 |  기법  | 전제 조건 (Given)       | 수행 (When)                    | 검증 (Then)                                                | 입력 데이터 / 상황           |
+| :--------: | :--: | :----: | :---------------------- | :----------------------------- | :--------------------------------------------------------- | :--------------------------- |
+| **TC-001** | 단위 |  표준  | `max_retries=3`         | **[Sync]** 첫 시도 성공        | 재시도 없이 결과 즉시 반환                                 | `return "Success"`           |
+| **TC-002** | 단위 | 비동기 | `max_retries=3`         | **[Async]** 첫 시도 성공       | `await` 정상 처리 및 결과 반환                             | `await async_echo()`         |
+| **TC-003** | 단위 |  복구  | 2회 실패 시뮬레이션     | **[Sync]** 함수 호출           | 1. 2회 실패 후 3회차 성공<br>2. `time.sleep` 2회 호출 확인 | `side_effect=[Err, Err, OK]` |
+| **TC-004** | 단위 |  복구  | 1회 실패 시뮬레이션     | **[Async]** 함수 `await`       | 1. `asyncio.sleep` 1회 호출<br>2. 비동기 복구 성공 확인    | `side_effect=[Err, OK]`      |
+| **TC-005** | 단위 |  BVA   | `max_retries=0`         | 실패 함수 호출                 | 재시도 없이 즉시 예외 발생 확인                            | `max_retries=0`              |
+| **TC-006** | 단위 |  BVA   | `max_delay=0.5`         | 지수 백오프 계산 유도          | 계산된 대기 시간이 상한선(0.5s)을 넘지 않음                | `attempt=10`                 |
+| **TC-007** | 단위 |  BVA   | `jitter=False`          | 백오프 계산 (1, 2, 3회차)      | 공식(`base * factor^(att-1)`)에 따른 정확한 값 확인        | `1.0, 2.0, 4.0`              |
+| **TC-008** | 단위 |  표준  | -                       | 인자(`*args`, `**kwargs`) 전달 | 원본 함수로 인자가 손실 없이 전달됨 확인                   | `(1, "B", key="v")`          |
+| **TC-009** | 단위 |  표준  | 복잡한 객체 반환        | 함수 호출                      | 반환값(None 또는 객체)이 그대로 보존됨                     | `complex_obj`                |
+| **TC-010** | 단위 |  표준  | 인자 미지정 초기화      | 데코레이터 생성                | 기본값(`max_retries=3` 등) 적용 확인                       | `Default Config`             |
+| **TC-011** | 예외 | MC/DC  | `max_retries=2`         | **[Sync]** 모든 시도 실패      | 1. 총 3회 실행<br>2. 마지막 예외가 호출자에게 전파         | `raise RuntimeError`         |
+| **TC-012** | 예외 |  필터  | `exceptions=ValueError` | `ValueError` 발생              | 지정된 예외이므로 재시도 수행 확인                         | `raise ValueError`           |
+| **TC-013** | 예외 |  필터  | `exceptions=ValueError` | `KeyError` 발생                | 재시도 없이 **즉시 예외 전파**                             | `raise KeyError`             |
+| **TC-014** | 예외 |  필터  | 다중 예외 지정          | 지정된 예외 중 하나 발생       | Tuple로 지정된 여러 예외에 대해 재시도 작동                | `(ValueError, KeyError)`     |
+| **TC-015** | 상태 | 무작위 | `jitter=True`           | 대기 시간 2회 계산             | 동일 시도 차수에서도 두 대기 시간이 서로 다름              | `attempt=1`                  |
+| **TC-016** | 상태 |  로깅  | 재시도 상황 발생        | 함수 호출                      | `RETRY` 문구가 포함된 Warning 로그 기록                    | `Warning Log`                |
+| **TC-017** | 상태 |  로깅  | 모든 재시도 실패        | 함수 호출                      | `GAVE UP` 문구가 포함된 Error 로그 기록                    | `Error Log`                  |
+| **TC-018** | 예외 | MC/DC  | `max_retries=2`         | **[Async]** 모든 시도 실패     | 1. `GAVE UP` 로그 기록<br>2. 마지막 예외 비동기 전파       | `raise RuntimeError`         |
+| **TC-019** | 설정 |  분기  | `logger_name` 미지정    | 함수 호출                      | 함수의 모듈명(`__module__`)을 로거 이름으로 사용           | `Default Logger`             |
+| **TC-020** | 환경 |  폴백  | 모듈 임포트 실패 유도   | 모듈 최초 로드 시도            | 1. `ImportError` 처리<br>2. `sys.path` 수정 후 재로드 성공 | Mock `__import__`            |
+| **TC-021** | 설정 |  분기  | `logger_name="Custom"`  | 데코레이터 초기화 및 실행      | 함수 모듈명이 아닌 지정된 이름으로 로거 생성               | `logger_name="Custom"`       |
+| **TC-022** | 경계 |  분기  | `max_retries=-1`        | 함수 호출 (Sync/Async)         | 루프 미진입으로 인한 `TypeError` 발생 확인                 | `max_retries=-1`             |
