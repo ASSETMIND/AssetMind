@@ -24,9 +24,6 @@ interface CodeSnippetProps {
   language?: CodeLanguage;
   showLineNumbers?: boolean;
   className?: string;
-  /**
-   * 제목 (선택사항)
-   */
   title?: string;
 }
 

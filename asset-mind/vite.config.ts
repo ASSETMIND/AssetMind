@@ -11,7 +11,6 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 export default defineConfig({
   plugins: [react()],
   
-  // 빌드 최적화 추가
   build: {
     rollupOptions: {
       output: {
@@ -21,7 +20,7 @@ export default defineConfig({
         },
       },
     },
-    chunkSizeWarningLimit: 1000, // 경고 임계값 상향
+    chunkSizeWarningLimit: 1000,
   },
   
   test: {

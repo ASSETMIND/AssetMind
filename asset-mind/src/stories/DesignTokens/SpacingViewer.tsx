@@ -14,7 +14,7 @@ interface SpacingViewerProps {
 export const SpacingViewer: React.FC<SpacingViewerProps> = ({ 
   title = 'Spacing System'
 }) => {
-  // AssetMind 실제 디자인 spacing (피그마 기준)
+
   const spacingTokens: SpacingToken[] = [
     { name: '0', value: '0px', pixels: 0, usage: '간격 없음' },
     { name: '1', value: '4px', pixels: 4, usage: '최소 간격' },
@@ -43,7 +43,7 @@ export const SpacingViewer: React.FC<SpacingViewerProps> = ({
           {title}
         </h1>
         <p className="text-text-secondary">
-          AssetMind 디자인 시스템 spacing 스케일 (Figma 실측값 기준)
+          AssetMind 디자인 시스템 spacing 스케일
         </p>
       </div>
 

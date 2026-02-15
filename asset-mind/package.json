@@ -1,12 +1,37 @@
 {
-  "name": "asset-mind",
+  "name": "assetmind-design-system",
+  "version": "1.0.0",
+  "description": "AssetMind Design System - React component library and design tokens built with Tailwind CSS",
+  "keywords": [
+    "design-system",
+    "react",
+    "storybook",
+    "tailwindcss",
+    "typescript",
+    "components",
+    "ui-library"
+  ],
+  "author": "AssetMind",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ASSETMIND"
+  },
+  "homepage": "https://your-storybook-url.vercel.app",
+  "bugs": {
+    "url": "https://github.com/ASSETMIND"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build --disable-telemetry",

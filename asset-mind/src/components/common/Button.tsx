@@ -9,9 +9,6 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
-  /**
-   * [접근성] 로딩 상태
-   */
   isLoading?: boolean;
   loadingText?: string;
 }
@@ -45,7 +42,6 @@ export const Button = ({
     icon: "w-12 h-12 rounded-full flex items-center justify-center p-0",
   };
 
-  // [접근성] icon 버튼 경고
   if (process.env.NODE_ENV === 'development' && size === 'icon' && !ariaLabel) {
     console.warn('Button: icon 크기의 버튼은 aria-label이 필요합니다.');
   }

@@ -29,7 +29,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     ...props 
   }, ref) => {
     
-    // [접근성] 고유 ID 생성 (label-input 연결용)
     const generatedId = useId();
     const inputId = providedId || generatedId;
     const messageId = `${inputId}-message`;
