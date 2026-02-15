@@ -11,12 +11,12 @@ Usage:
 # Logging Decorator
 # logging.py 파일에서 메인 클래스와 편의용 alias 함수를 가져옵니다.
 from .log import LogManager
-from .config import get_config
+from .config import ConfigManager
 
 
 # Export List
 # `from src.common.decorators import *` 사용 시 노출될 항목을 정의합니다.
 __all__ = [
     "LogManager",
-    "get_config",
+    "ConfigManager",
 ]

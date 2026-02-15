@@ -128,6 +128,7 @@ class ConfigManager(BaseSettings):
     task_name: str = "default_task"
     log_level: str = "INFO"
     log_dir: str = "logs"
+    log_filename: str = "app.log"
 
     # Rationale: Composition(합성) 패턴을 사용하여 설정을 계층화함.
     kis: KISSettings = Field(default_factory=KISSettings)
@@ -203,7 +204,9 @@ class ConfigManager(BaseSettings):
                         config.log_level = raw_data["log_level"]
                     if "log_dir" in raw_data:
                         config.log_dir = raw_data["log_dir"]
-                    
+                    if "log_filename" in raw_data:
+                        config.log_filename = raw_data["log_filename"]
+
                     # 정책(Policy) 파싱 및 검증
                     raw_policies = raw_data.get("policy", {})
                     validated_policies = {}
