@@ -2,7 +2,7 @@ spring:
   application:
     name: stock-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local} # ???? local, ?? ? ????? ????
+    active: ${SPRING_PROFILES_ACTIVE:local} # application 설정 local
 
 kis:
-  token-expiration: 86400 # KIS Open API? access_token ???? 24??
+  token-expiration: 86400 # KIS Open API의 access_token 만료시간 24

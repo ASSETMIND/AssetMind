@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
+import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
 import java.io.IOException;
 import okhttp3.mockwebserver.MockResponse;
@@ -128,5 +129,61 @@ class KisAuthAdapterTest {
         assertThatThrownBy(() -> kisAuthAdapter.fetchToken())
                 .isInstanceOf(MarketAccessFailedException.class)
                 .hasMessageContaining("KIS 서버 연결 불가");
+    }
+
+    @Test
+    @DisplayName("KIS 접속키(Approval Key) 발급 API 성공 시 올바른 ApprovalKey를 반환해야한다.")
+    void whenFetchApprovalKeySuccess_thenReturnCorrectApproveKey() throws InterruptedException {
+        // KIS 실시간 (웹소켓) 접속키 발급 API 실제 응답 포맷
+        mockWebServer.enqueue(new MockResponse()
+                .setBody("{\"approval_key\": \"test-approval-key-123\"}")
+                .setHeader("Content-type", "application/json"));
+
+        // when
+        ApiApprovalKey approvalKey = kisAuthAdapter.fetchApprovalKey();
+
+        // then
+        // 응답 데이터 검증
+        assertThat(approvalKey).isNotNull();
+        assertThat(approvalKey.value()).isEqualTo("test-approval-key-123");
+
+        // 요청 데이터 검증
+        RecordedRequest recordedRequest = mockWebServer.takeRequest();
+        assertThat(recordedRequest.getMethod()).isEqualTo("POST"); // HTTP 메서드 확인
+        assertThat(recordedRequest.getPath()).isEqualTo("/oauth2/Approval"); // 요청 경로 확인
+        assertThat(recordedRequest.getHeader("Content-type")).contains("application/json"); // 헤더 확인
+
+        String body = recordedRequest.getBody().readUtf8();
+        assertThat(body).isEqualTo("{\"grant_type\":\"client_credentials\",\"appkey\":\"test-app-key\",\"secretkey\":\"test-app-secret\"}");
+    }
+
+    @Test
+    @DisplayName("KIS 접속키(Approval Key) 발급 API 호출 시 API 응답이 4xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
+    void whenFetchApprovalKey400_thenThrowMarketAccessFailedException() {
+        // 가짜 응답 데이터 설정
+        mockWebServer.enqueue(new MockResponse()
+                .setResponseCode(400)
+                .setBody("{\"error_description\": \"유효하지 않은 AppKey입니다.\", \"error_code\": \"E1234\"}")
+                .addHeader("Content-type", "application/json"));
+
+        // when & then
+        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey())
+                .isInstanceOf(MarketAccessFailedException.class)
+                .hasMessageContaining("KIS WebSocket API Error");
+    }
+
+    @Test
+    @DisplayName("KIS 접속키(Approval Key) 발급 API 호출 시 API 응답이 5xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
+    void whenFetchApprovalKey500_thenThrowMarketAccessFailedException() {
+        // 가짜 응답 데이터 설정
+        mockWebServer.enqueue(new MockResponse()
+                .setResponseCode(500)
+                .setBody("{\"error_description\": \"서버 내부에서 에러가 발생했습니다.\", \"error_code\": \"E1234\"}")
+                .addHeader("Content-type", "application/json"));
+
+        // when & then
+        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey())
+                .isInstanceOf(MarketAccessFailedException.class)
+                .hasMessageContaining("KIS WebSocket API Error");
     }
 }

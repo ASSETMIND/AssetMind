@@ -1,8 +1,11 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis;
 
 import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
+import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
+import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprovalKeyRequest;
+import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprovalKeyResponse;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenResponse;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +43,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
     public ApiAccessToken fetchToken() {
         WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
 
-        KisTokenRequest request = KisTokenRequest.createKisTokenReq(appKey, appSecret);
+        KisTokenRequest request = KisTokenRequest.of(appKey, appSecret);
 
         try {
             // 접근토큰발급 API
@@ -61,7 +64,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
             }
 
             // KIS 응답을 우리 도메인 AccessToken으로 변환해서 반환
-            return ApiAccessToken.createApiAccessToken(response.accessToken(), response.expiresIn());
+            return ApiAccessToken.of(response.accessToken(), response.expiresIn());
         } catch (MarketAccessFailedException e) {
             // onStatus()에서 던진 예외를 잡고 로그 출력 후 상위 서비스로 다시 던짐
             log.error("KIS API 접근 권한 획득 실패: {}", e.getMessage());
@@ -69,6 +72,46 @@ public class KisAuthAdapter implements MarketTokenProvider {
         } catch (Exception e) {
             // 네트워크 아웃, 연결 거부 등 onStatus()로 못 잡는 에러
             log.error("KIS API 접근 권한 획득 중 알 수 없는 에러", e);
+            throw new MarketAccessFailedException("KIS 서버 연결 불가, 알 수 없음", e);
+        }
+    }
+
+    /**
+     * KIS(한국투자증권) 실시간(웹소켓) 접속키 발급 API를 사용하여 실시간 웹소켓에 접속하기 위한 approval_key를 받음
+     * @return 문자열 타입의 approval_key
+     */
+    @Override
+    public ApiApprovalKey fetchApprovalKey() {
+        WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+
+        KisApprovalKeyRequest request = KisApprovalKeyRequest.of(appKey, appSecret);
+
+        try {
+            KisApprovalKeyResponse response = webClient.post()
+                    .uri("/oauth2/Approval")
+                    .bodyValue(request)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, clientResponse ->
+                            clientResponse.bodyToMono(String.class)
+                                    .flatMap(errorBody -> Mono.error(
+                                            new MarketAccessFailedException(
+                                                    "KIS WebSocket API Error: " + errorBody)))
+                    )
+                    .bodyToMono(KisApprovalKeyResponse.class)
+                    .block();
+
+            if (response == null) {
+                throw new MarketAccessFailedException("KIS WebSocket API 응답이 비어있습니다.");
+            }
+
+            return ApiApprovalKey.from(response.approvalKey());
+        } catch (MarketAccessFailedException e) {
+            // onStatus()에서 던진 예외를 잡고 로그 출력 후 상위 서비스로 다시 던짐
+            log.error("KIS WebSocket 접근 권한 획득 실패: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            // 네트워크 아웃, 연결 거부 등 onStatus()로 못 잡는 에러
+            log.error("KIS WebSocket 접근 권한 획득 중 알 수 없는 에러", e);
             throw new MarketAccessFailedException("KIS 서버 연결 불가, 알 수 없음", e);
         }
     }

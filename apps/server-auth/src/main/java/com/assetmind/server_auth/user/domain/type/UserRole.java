@@ -11,5 +11,9 @@ public enum UserRole {
      * USER: 본인 인증을 완료한 정식 사용자
      * 모든 일반적인 서비스 접근 가능
      */
-    USER
+    USER;
+
+    public String getAuthority() {
+        return "ROLE_" + this.name();
+    }
 }

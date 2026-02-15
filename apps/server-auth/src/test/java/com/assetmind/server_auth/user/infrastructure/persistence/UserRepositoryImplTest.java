@@ -12,6 +12,8 @@ import com.assetmind.server_auth.user.domain.vo.Password;
 import com.assetmind.server_auth.user.domain.vo.SocialID;
 import com.assetmind.server_auth.user.domain.vo.UserInfo;
 import com.assetmind.server_auth.user.domain.vo.Username;
+import com.assetmind.server_auth.user.infrastructure.persistence.jpa.UserEntityMapper;
+import com.assetmind.server_auth.user.infrastructure.persistence.jpa.UserRepositoryImpl;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.exception.ConstraintViolationException;
@@ -22,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * JPA를 이용한 UserRepository의 구현체가
@@ -198,6 +199,60 @@ class UserRepositoryImplTest {
 
             // when
             Optional<User> found = userRepository.findBySocialId(invalidSocialId);
+
+            // then
+            assertThat(found).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("성공: 해당 이메일이 존재하는지 조회한다. 존재하면 True를, 존재하지 않으면 False를 반환한다.")
+    void givenEmail_whenExistsByEmail_thenReturnBoolean() {
+        // given
+        UUID uuid = UUID.randomUUID();
+        User testUser = createTestUser(uuid, "test@test.com", "테스트001", "test1234",
+                Provider.GOOGLE, "google-123", UserRole.USER);
+        userRepository.save(testUser);
+
+        // when
+        boolean resultTrue = userRepository.existsByEmail(testUser.getEmailValue());
+        boolean resultFalse = userRepository.existsByEmail("NotExsist@email.com");
+
+        // then
+        assertThat(resultTrue).isTrue();
+        assertThat(resultFalse).isFalse();
+    }
+
+    @Nested
+    @DisplayName("Email를 통해 User 조회 (findByEmail)")
+    class FindByEmail {
+        @Test
+        @DisplayName("성공: 저장된 User를 Email로 성공적으로 조회한다.")
+        void givenSavedUser_whenFindByEmail_thenReturnSavedUser() {
+            // given
+            UUID uuid = UUID.randomUUID();
+            String email = "test@test.com";
+            User testUser = createTestUser(uuid, email, "테스트001", "test1234",
+                    Provider.GOOGLE, "google-123", UserRole.USER);
+            userRepository.save(testUser);
+
+            // when
+            Optional<User> found = userRepository.findByEmail(email);
+
+            // then
+            assertThat(found).isPresent();
+            assertThat(found.get().getId()).isEqualTo(testUser.getId());
+            assertThat(found.get().getUsernameValue()).isEqualTo(testUser.getUsernameValue());
+        }
+
+        @Test
+        @DisplayName("실패: 저장된 User를 잘못된 Email로 조회하면 빈 객체를 반환한다.")
+        void givenInvalidEmail_whenFindById_thenReturnEmpty() {
+            // given
+            String invalidEmail = "invalid@test.com";
+
+            // when
+            Optional<User> found = userRepository.findByEmail(invalidEmail);
 
             // then
             assertThat(found).isEmpty();

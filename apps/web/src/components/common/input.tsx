@@ -3,7 +3,7 @@ import { twMerge } from 'tailwind-merge';
 
 // 다음의 타입 정의
 type Props = Omit<React.ComponentPropsWithRef<'input'>, 'type'> & {
-	type: 'text' | 'password' | 'email' | 'search' | 'tel';
+	type: 'text' | 'password' | 'email' | 'search' | 'tel' | 'name';
 };
 
 /*
@@ -22,12 +22,12 @@ const Input = forwardRef(
 				className={twMerge(
 					'h-12 w-full px-4 text-sm font-medium',
 					'border outline-none',
-					className
+					className,
 				)}
 				{...rest}
 			/>
 		);
-	}
+	},
 );
 
 Input.displayName = 'Input';

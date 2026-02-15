@@ -21,7 +21,8 @@ import json
 import uuid
 from contextvars import ContextVar
 from pathlib import Path
-from .config import get_config
+
+from src.common.config import get_config
 
 # ==============================================================================
 # [Role 1] Context Variable Definition
@@ -112,11 +113,10 @@ class LogManager:
             return
         
         # 1. 설정 로드 (Configuration Loading)
-        # ConfigManager를 통해 통합 설정 객체(AppConfig)를 가져옵니다.
+        # ConfigManager를 통해 통합 설정 객체(ConfigManager)를 가져옵니다.
         config = get_config()
 
-        # 설정 객체로부터 로깅에 필요한 속성을 추출합니다. 
-        # (getattr을 사용하여 필드 누락 시 기본값으로 안전하게 폴백합니다)
+        # 설정 객체로부터 로깅에 필요한 속성을 추출합니다.
         task_name = getattr(config, "task_name", "TASK_DEFAULT")
         log_level = getattr(config, "log_level", "INFO")
         log_dir_path = getattr(config, "log_dir", "logs")
@@ -141,12 +141,21 @@ class LogManager:
         # 4. 파일 핸들러 설정 (File Handler)
         # 로컬 환경에서의 디버깅이나 로그 영구 저장을 위해 파일로도 기록합니다.
         log_dir = Path(log_dir_path)
-        log_dir.mkdir(exist_ok=True)
-        
-        file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
-        file_handler.setFormatter(json_formatter)
-        file_handler.addFilter(ctx_filter)
-        self.logger.addHandler(file_handler)
+        try:
+            # parents=True를 통해 상위 디렉토리(logs)가 없어도 생성되도록 보장
+            log_dir.mkdir(parents=True, exist_ok=True)
+            
+            log_file_path = log_dir / "app.log"
+            file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+            file_handler.setFormatter(json_formatter)
+            file_handler.addFilter(ctx_filter)
+            self.logger.addHandler(file_handler)
+            
+            # 로그 파일 생성 위치를 명시적으로 알림
+            print(f" [LogManager] Log file created at: {log_file_path.absolute()}")
+            
+        except Exception as e:
+            print(f" [LogManager] Failed to create log file handler: {e}")
 
         self._initialized = True
 
@@ -162,7 +171,7 @@ class LogManager:
             logging.Logger: 설정이 완료된 로거 객체.
         """
         manager = cls()
-        if name:
+        if name and name != manager.logger.name:
             return manager.logger.getChild(name)
         return manager.logger
 

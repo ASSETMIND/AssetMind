@@ -1,3 +1,6 @@
+.env
+.coverage
+
 # Logs
 logs
 *.log
@@ -76,9 +79,10 @@ storybook-static/
 *.sw?
 .vscode/
 
-# ===== 추가 설정 =====
+<<<<<<< HEAD
+# ===== 추가 설정 (Merged) =====
 
-# Storybook
+# Storybook & Frontend
 storybook-static/
 .storybook/addon-visual-tests-assets
 
@@ -87,11 +91,9 @@ storybook-static/
 .env.local
 .env.*.local
 
-# OS
+# OS & Editor
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/
 .idea/
 *.swp
@@ -106,3 +108,17 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Java & Gradle & Spring
+.gradle/
+build/
+out/
+bin/
+*.class
+*.pid
+**/db
+
+# DB & Local Config
+db/
+*.db
+*.sqlite

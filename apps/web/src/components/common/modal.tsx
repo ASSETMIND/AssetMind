@@ -4,7 +4,7 @@ import Portal from './portal';
 // props로 클로즈 버튼과 내용을 정의
 type Props = {
 	children: React.ReactNode;
-	onClose: () => void;
+	onClose?: () => void;
 };
 
 /*

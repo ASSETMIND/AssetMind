@@ -34,4 +34,18 @@ public interface UserRepository {
      * @return User 도메인 객체
      */
     Optional<User> findBySocialId(SocialID socialId);
+
+    /**
+     * DB에 해당 이메일이 존재하는지 조회
+     * @param email - 찾으려는 email
+     * @return true(존재 o) / false(존재 x)
+     */
+    boolean existsByEmail(String email);
+
+    /**
+     * User 도메인 객체를 DB에서 Email로 조회
+     * @param email - User 도메인 객체의 email
+     * @return Ussr 도메인 객체
+     */
+    Optional<User> findByEmail(String email);
 }

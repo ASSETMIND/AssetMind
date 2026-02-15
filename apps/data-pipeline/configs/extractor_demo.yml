@@ -1,0 +1,61 @@
+# ==============================================================================
+# Adapter Integration Test Configuration
+# 파일 경로: configs/extractor_demo.yml
+# 목적: 인프라 계층(Auth, Http)이 4종의 외부 API 서버와 정상 통신하는지 검증
+# ==============================================================================
+
+# [System Settings]
+log_level: "INFO"
+log_dir: "logs/extractor_demo"
+
+# [Test Policies]
+# 실제 Extractor 로직을 타지 않지만, Adapter가 요청을 조립하기 위해 참조할 메타데이터입니다.
+# 각 Provider별로 가장 가볍고, 읽기 전용(Read-Only)이며, 대표적인 API를 선정했습니다.
+policy:
+  # ----------------------------------------------------------------------------
+  # 1. KIS (한국투자증권) - OAuth2 Token + Header 방식
+  # ----------------------------------------------------------------------------
+  test_kis_connectivity:
+    provider: "KIS"
+    description: "KIS API: Access Token 발급 및 국내주식(삼성전자) 호가 조회"
+    path: "/uapi/domestic-stock/v1/quotations/inquire-price"
+    tr_id: "FHKST01010100" # 주식 현재가 시세 조회
+    params:
+      FID_COND_MRKT_DIV_CODE: "J"
+      FID_INPUT_ISCD: "005930" # 삼성전자
+
+  # ----------------------------------------------------------------------------
+  # 2. FRED (St. Louis Fed) - Query Param Key 방식
+  # ----------------------------------------------------------------------------
+  test_fred_connectivity:
+    provider: "FRED"
+    description: "FRED API: GDP 시리즈 메타데이터 조회 (JSON)"
+    path: "/series"
+    params:
+      series_id: "GDP" # Gross Domestic Product
+
+  # ----------------------------------------------------------------------------
+  # 3. ECOS (한국은행) - Path Variable 방식
+  # ----------------------------------------------------------------------------
+  test_ecos_connectivity:
+    provider: "ECOS"
+    description: "ECOS API: 기준금리 통계 조회 (Path Variable 구조 검증)"
+    path: "/StatisticSearch"
+    # ECOS는 URL Path 구성을 위해 아래 파라미터 순서가 매우 중요함
+    params:
+      stat_code: "722Y001" # 한국은행 기준금리 및 여수신금리
+      cycle: "D" # 일별
+      start_date: "20240101"
+      end_date: "20240110"
+      item_code1: "0101000" # 한국은행 기준금리
+
+  # ----------------------------------------------------------------------------
+  # 4. UPBIT (업비트) - JWT Token (Authorization Header) 방식
+  # ----------------------------------------------------------------------------
+  test_upbit_connectivity:
+    provider: "UPBIT"
+    description: "UPBIT API: BTC-KRW 마켓 캔들 조회 (JWT 인증 검증)"
+    path: "/v1/candles/days"
+    params:
+      market: "KRW-BTC"
+      count: 1

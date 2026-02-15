@@ -1,7 +1,7 @@
 // 일반 자체 로그인
 export interface LoginParams {
-	id: string;
-	password: string;
+	email: string;
+	password: string; // LoginResponse는 AuthResponse를 확장
 }
 
 // 소셜로그인
@@ -12,9 +12,18 @@ export interface SocialLoginParams {
 
 // 회원가입
 export interface SignupParams {
-	id: string;
+	user_name: string;
+	email: string;
 	password: string;
-	identityVerificationId: string;
+	sign_up_token?: string;
+}
+
+export interface VerifyEmailResponse {
+	success: boolean;
+	message: string;
+	data: {
+		sign_up_token: string;
+	};
 }
 
 // 아이디 찾기
@@ -38,11 +47,19 @@ export interface ResetPasswordParams {
 // 통합 인증 성공 응답 로그인, 회원가입, 소셜로그인
 export interface AuthResponse {
 	accessToken: string;
-	refreshToken: string;
 	user: {
 		id: number;
 		email: string;
 		name: string;
+	};
+}
+
+// LoginResponse와 RefreshTokenResponse가 AuthResponse를 확장
+export interface LoginResponse {
+	success: boolean;
+	message: string | null;
+	data: {
+		access_token: string;
 	};
 }
 
@@ -56,7 +73,23 @@ export interface FindIdResponse {
 	email: string;
 }
 
-// 토큰 갱신 응답
-export interface RefreshTokenResponse {
-	accessToken: string;
+// 이메일 인증 검증 응답 (회원가입용 임시 토큰)
+export interface EmailVerificationResponse {
+	sign_up_token: string;
+}
+
+// 토큰 갱신 (재발급) 응답
+export interface ReissueTokenResponse {
+	success: boolean;
+	message: string | null;
+	data: {
+		access_token: string;
+	};
+}
+
+// 로그아웃 응답
+export interface LogoutResponse {
+	success: boolean;
+	message: string;
+	data: null;
 }

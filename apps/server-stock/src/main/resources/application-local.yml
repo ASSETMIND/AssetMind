@@ -1,4 +1,29 @@
 kis:
-  base-url: "https://openapivts.koreainvestment.com:29443" # 모의 투자 URL
+  base-url: "https://openapivts.koreainvestment.com:29443" # [모의 투자] REST URL
+  websocket-url: "ws://ops.koreainvestment.com:31000" # [모의투자] WebSocket URL
   app-key: ${KIS_APP_KEY}
   app-secret: ${KIS_APP_SECRET_KEY}
+
+jpa:
+  hibernate:
+    ddl-auto: update
+  show-sql: true
+  properties:
+    hibernate:
+      format_sql: true
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+  database: postgresql
+  database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+datasource:
+  driver-class-name: org.postgresql.Driver
+  # Auth 데이터베이스와 Stock 데이터베이스를 격리
+  url: jdbc:postgresql://${DB_HOST:localhost}:5432/${POSTGRES_DB:assetmind_stock}
+  username: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+
+data:
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: 6379
+    database: 1  #Auth와 Stock 모듈 간 Redis 키 충돌 방지
