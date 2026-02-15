@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
-from .dtos import RequestDTO, ResponseDTO
+from src.common.dtos import RequestDTO, ExtractedDTO
 
 class IHttpClient(ABC):
     """HTTP 통신을 담당하는 어댑터 인터페이스.
@@ -65,7 +65,7 @@ class IExtractor(ABC):
     """
 
     @abstractmethod
-    async def extract(self, request: RequestDTO) -> ResponseDTO:
+    async def extract(self, request: RequestDTO) -> ExtractedDTO:
         """데이터 추출 작업을 수행합니다.
         
         검증, 인증, 요청, 파싱의 전 과정을 수행하고 표준화된 결과를 반환합니다.
@@ -74,7 +74,7 @@ class IExtractor(ABC):
             request (RequestDTO): 데이터 추출 요청 객체.
 
         Returns:
-            ResponseDTO: 추출된 데이터 결과 객체.
+            ExtractedDTO: 추출된 데이터 결과 객체.
             
         Raises:
             ExtractorError: 추출 과정에서 발생한 모든 예외.
