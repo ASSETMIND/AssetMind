@@ -1,33 +1,94 @@
-# Rate Limit Decorator - Test Specification
+# Retry Decorator 테스트 문서
 
-## 1. 개요
+## 1. 문서 정보 및 전략
 
-- **Target Module:** `rate_limit_decorator.py`
-- **Purpose:** API 호출 속도 제한(Throttling) 기능의 정확성, 동시성 안전성, 자원 관리 효율성을 검증.
-- **Scope:** 동기(Sync)/비동기(Async) 래퍼, 전역 상태 관리(Bucket Sharing), 에러 핸들링.
+- **대상 모듈:** `src.common.decorators.RateLimitDecorator`
+- **복잡도 수준:** **상 (High)** (전역 상태 관리, 시간 제어, 비동기 락/동시성 제어, 토큰 버킷 알고리즘)
+- **커버리지 목표:** 분기 커버리지 100%, 구문 커버리지 100%
+- **적용 전략:**
+  - [x] **트래픽 제어 검증 (Traffic Shaping):** 제한된 횟수(Limit)와 기간(Period) 내에서 정확히 스로틀링(Throttling)이 발생하는지 검증.
+  - [x] **상태 격리 및 공유 (State Isolation & Sharing):** 함수별 독립 버킷 생성과 `bucket_key`를 통한 제한 공유 기능을 검증.
+  - [x] **동시성 제어 (Concurrency Safety):** 비동기(`asyncio`) 환경에서의 경쟁 조건(Race Condition) 방지와 동기 멀티스레드 안전성 검증.
+  - [x] **방어적 코딩 (Defensive Programming):** 시간 역행, 부동소수점 오차로 인한 음수 대기 시간, 외부 의존성(`LogManager`) 누락에 대한 방어 로직 검증.
+  - [x] **자원 관리 (Resource Management):** 오래된 타임스탬프의 자동 정리(Cleanup) 및 메모리 누수 방지 로직 검증.
 
-## 2. 테스트 전략
+## 2. 로직 흐름도
 
-- **Mocking:** `time.time`, `time.sleep`, `asyncio.sleep`을 Mocking하여 실제 시간을 기다리지 않고 밀리초 단위로 제어 및 검증.
-- **Concurrency:** `asyncio.gather` 및 `ThreadPoolExecutor`를 사용하여 Race Condition 시뮬레이션.
-- **Verification:** 실행 시간(Duration) 측정 및 내부 `Bucket` 상태 검사를 통한 검증.
+```mermaid
+stateDiagram-v2
+    [*] --> Init: @rate_limit(limit, period)
+    Init --> CheckWrapper: Call Wrapper(*args)
 
-## 3. 테스트 케이스 명세
+    state CheckWrapper {
+        [*] --> GetBucket: Identify Bucket (Key/Name)
+        GetBucket --> AsyncLock: If Async Function
+        GetBucket --> SyncCalc: If Sync Function
 
-|  Test ID   |      Category       | Given (Preconditions)                                           | When (Action)                                                            | Then (Expected Outcome)                                                                                                  | Input Data                | Priority |
-| :--------: | :-----------------: | :-------------------------------------------------------------- | :----------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------ | :------: |
-| **TC-001** |     Unit (Sync)     | `limit=5`, `period=1.0`으로 설정된 동기 함수.                   | 루프를 통해 함수를 **5회 연속** 호출한다.                                | 1. 모든 호출이 즉시 반환된다.<br>2. 총 소요 시간이 0.1초 미만이다.                                                       | `limit=5`, `period=1.0`   |   High   |
-| **TC-002** |    Unit (Async)     | `limit=5`, `period=1.0`으로 설정된 **비동기** 함수.             | `await`를 사용하여 함수를 **5회 연속** 호출한다.                         | 1. 모든 호출이 즉시 반환된다.<br>2. `asyncio.sleep`이 호출되지 않는다.                                                   | `limit=5`, `period=1.0`   |   High   |
-| **TC-003** |     Unit (Sync)     | `limit=1`, `period=1.0`으로 설정된 동기 함수.                   | 함수를 **2회 연속** 호출한다.                                            | 1. 첫 번째 호출은 즉시 반환된다.<br>2. 두 번째 호출은 약 1.0초 지연 후 반환된다.<br>3. `time.sleep`이 1회 호출된다.      | `limit=1`, `period=1.0`   |   High   |
-| **TC-004** |    Unit (Async)     | `limit=1`, `period=1.0`으로 설정된 **비동기** 함수.             | `await`를 사용하여 함수를 **2회 연속** 호출한다.                         | 1. 두 번째 호출 시 지연이 발생한다.<br>2. `asyncio.sleep`이 정확한 대기 시간만큼 호출된다.                               | `limit=1`, `period=1.0`   |   High   |
-| **TC-005** |      Boundary       | `limit=5`인 함수.                                               | 함수를 **6회** 호출한다.                                                 | 1. 1~5회 호출은 즉시 성공한다.<br>2. **정확히 6번째** 호출에서만 스로틀링이 발생한다 (Off-by-one 체크).                  | `limit=5`, `period=1.0`   | Critical |
-| **TC-006** |      Boundary       | `limit` 횟수만큼 호출하여 버킷을 소진한 상태.                   | `period` 시간이 **지난 후** 다시 호출한다 (Time Travel).                 | 버킷이 초기화되어, 즉시 실행되어야 한다 (대기 시간 0).                                                                   | `limit=1`, `period=1.0`   |   High   |
-| **TC-007** |   Logic (Config)    | `bucket_key=None`으로 설정된 서로 다른 두 함수 A, B.            | A를 `limit`만큼 호출한 뒤, 즉시 B를 호출한다.                            | A의 호출 횟수가 B에 영향을 주지 않아, B는 즉시 실행된다 (독립 버킷).                                                     | `key=None`                |   Med    |
-| **TC-008** |   Logic (Config)    | `bucket_key="API_KEY_1"`을 **공유**하는 서로 다른 두 함수 A, B. | A를 `limit`만큼 호출한 뒤, 즉시 B를 호출한다.                            | B는 A와 제한을 공유하므로, **실행이 지연(Throttle)**되어야 한다.                                                         | `key="SHARED"`            |   High   |
-| **TC-009** |    Logic (Math)     | 이미 `limit`에 도달한 상태.                                     | 현재 시간이 타임스탬프보다 아주 미세하게 경과함 (`wait_time` 계산 검증). | `wait_time`이 음수가 되지 않고, `0.0` 또는 양수로 보정되어 반환된다.                                                     | `limit=1`                 |   Med    |
-| **TC-010** |      Resource       | `limit`가 매우 크고, `period`가 긴 상황.                        | 장시간 동안 수천 번 호출을 시뮬레이션한다.                               | 내부 `deque`의 크기가 무한히 늘어나지 않고, `_cleanup`에 의해 관리된다.                                                  | `limit=100`               |   Low    |
-| **TC-011** |      Exception      | `LogManager` 모듈이 없는 환경 (ImportError).                    | 스로틀링을 유발하여 로그 출력을 시도한다.                                | 예외(Crash) 없이 함수가 정상 실행되어야 한다 (Silent Fail).                                                              | `limit=1`                 |   Med    |
-| **TC-012** |     Integration     | `LogManager`가 정상적으로 존재하는 환경.                        | 스로틀링을 유발한다.                                                     | `LogManager.get_logger`가 호출되고, "Throttling active" 로그가 기록된다.                                                 | `limit=1`                 |   Low    |
-| **TC-013** |    Logic (Wait)     | `wait_time`이 매우 짧은 경우 (예: 0.0001초).                    | 함수를 호출한다.                                                         | `_log_throttling` 내부 로직에 의해 로그가 남지 않아야 한다 (Noise 감소).                                                 | `wait_time=0.05`          |   Low    |
-| **TC-014** | Concurrency (Async) | `limit=5`인 비동기 함수.                                        | `asyncio.gather`로 **10개의 요청을 동시**에 보낸다.                      | 1. 5개는 즉시 완료, 5개는 지연된다.<br>2. 내부 `timestamps` 덱의 길이가 10을 초과하지 않고 꼬이지 않는다.                | `limit=5`, `Concurrent`   | Critical |
-| **TC-015** | Concurrency (Sync)  | `limit=5`인 동기 함수.                                          | `ThreadPoolExecutor`로 **10개의 스레드**에서 동시에 호출한다.            | 1. (현재 코드의 결함 예상) Race Condition 없이 정확히 5개만 즉시 통과하는지 검증.<br>2. `timestamps` 데이터 무결성 확인. | `limit=5`, `Multi-Thread` | Critical |
+        state AsyncLock {
+            [*] --> AcquireLock: await lock
+            AcquireLock --> CalcWait_Async: get_wait_time()
+            CalcWait_Async --> ReleaseLock
+        }
+
+        state SyncCalc {
+            [*] --> CalcWait_Sync: get_wait_time()
+        }
+
+        CalcWait_Async --> CheckWait
+        CalcWait_Sync --> CheckWait
+
+        state CheckWait {
+            [*] --> CleanUp: Remove Expired Timestamps
+            CleanUp --> CheckCount: len(timestamps) < limit
+
+            CheckCount --> Immediate: Yes (0.0s)
+            CheckCount --> CalculateDelay: No (Target - Now)
+
+            CalculateDelay --> MathCheck: Defensive (wait < 0 -> 0)
+            MathCheck --> AppendFuture: Add Future Timestamp
+        }
+
+        CheckWait --> Decision: wait_time > 0?
+
+        Decision --> Sleep: Yes
+        Decision --> Execute: No
+
+        state Sleep {
+            [*] --> LogThrottle: If wait > 0.1s
+            LogThrottle --> DoSleep: time.sleep / await asyncio.sleep
+        }
+
+        DoSleep --> Execute
+        Execute --> [*]: Return Result
+    }
+```
+
+## 3. BDD 테스트 시나리오
+
+**시나리오 요약 (총 15건):**
+
+1.  **기능 성공 (Happy Path):** 2건 (동기/비동기 제한 내 호출 성공)
+2.  **스로틀링 로직 (Throttling Logic):** 2건 (제한 초과 시 대기 시간 계산 및 지연 수행)
+3.  **경계값 분석 (Boundary Analysis):** 2건 (정확한 Limit 경계, Period 만료 시점)
+4.  **버킷 상태 관리 (Bucket Logic):** 3건 (독립 버킷, 공유 버킷, 계산 방어 로직)
+5.  **자원 및 예외 (Resource & Exception):** 2건 (타임스탬프 정리, 의존성 누락 방어)
+6.  **로깅 및 통합 (Logging & Integration):** 2건 (로그 출력 조건, 임계값)
+7.  **동시성 (Concurrency):** 2건 (비동기 Race Condition, 스레드 안전성)
+
+| 테스트 ID  | 분류 |    기법    | 전제 조건 (Given)                     | 수행 (When)                              | 검증 (Then)                                                                       | 입력 데이터 / 상황     |
+| :--------: | :--: | :--------: | :------------------------------------ | :--------------------------------------- | :-------------------------------------------------------------------------------- | :--------------------- |
+| **TC-001** | 단위 |    표준    | `limit=5`, `period=1.0`               | **[Sync]** 5회 연속 호출                 | 1. 모든 호출 즉시 성공<br>2. 총 소요시간 < 0.1s (대기 없음)                       | Loop 5 times           |
+| **TC-002** | 단위 |   비동기   | `limit=5`, `period=1.0`               | **[Async]** 5회 연속 `await` 호출        | 모든 호출 즉시 성공 및 결과 반환                                                  | Loop 5 times           |
+| **TC-003** | 단위 |   MC/DC    | `limit=1`, 1회 호출 완료              | **[Sync]** `period` 내에 재호출          | 1. `time.sleep` 호출됨<br>2. 대기 시간 = `잔여 period` (정확도 검증)              | Mock `time.time`       |
+| **TC-004** | 단위 |   MC/DC    | `limit=1`, 1회 호출 완료              | **[Async]** `period` 내에 재호출         | 1. `asyncio.sleep` 호출됨<br>2. 대기 시간 = `잔여 period`                         | Mock `time.time`       |
+| **TC-005** | 단위 |    BVA     | `limit=5`                             | 6회 연속 호출 (경계값 초과)              | 1~5회는 대기 없음, **6회째** 호출에서만 스로틀링(Sleep) 발생                      | Loop 6 times           |
+| **TC-006** | 단위 |    BVA     | `limit=1`, 호출 후 `period` 경과      | 함수 재호출                              | 기간이 만료되었으므로 버킷이 초기화되어 **대기 없이** 즉시 실행됨                 | Time += 2.0s           |
+| **TC-007** | 상태 |    격리    | `limit=1`, 서로 다른 함수 A, B        | A 호출 후 즉시 B 호출                    | `bucket_key`가 다르므로 B는 A의 호출에 영향받지 않고 즉시 실행됨                  | `func_a()`, `func_b()` |
+| **TC-008** | 상태 |    공유    | `limit=1`, `bucket_key="SHARED"` 설정 | A 호출 후 즉시 B 호출                    | 같은 키를 공유하므로 B 호출 시 스로틀링 발생                                      | `key="API_KEY_1"`      |
+| **TC-009** | 단위 |    방어    | 시스템 시간 오류 등 가정              | 계산된 대기 시간이 음수가 되는 상황 유도 | 대기 시간이 0.0s로 보정되어 `sleep`이 호출되지 않음 (Crash 방지)                  | Mock Time Skew         |
+| **TC-010** | 자원 |    자원    | 5회 호출 기록 존재                    | 시간 경과 후 함수 호출                   | 오래된 타임스탬프가 `deque`에서 제거(Cleanup)되어 메모리 누수 방지 확인           | Time += Period         |
+| **TC-011** | 예외 |   견고성   | `LogManager` 모듈 임포트 실패 상황    | 스로틀링이 발생하는 상황 연출            | 로깅 시도 시 `ImportError`나 `AttributeError` 없이 함수가 정상 실행됨 (Fail-Safe) | Mock `LogManager=None` |
+| **TC-012** | 통합 |    통합    | `LogManager` 정상 동작                | 스로틀링 발생 시점                       | "Throttling active" 및 대기 시간이 포함된 Debug 로그 기록                         | Wait > 0.1s            |
+| **TC-013** | 통합 |    BVA     | `limit=1`                             | 대기 시간이 매우 짧은(0.05s) 상황 연출   | Sleep은 수행하되, 로그 부하 방지를 위해 **로그는 기록되지 않음**                  | Wait = 0.05s           |
+| **TC-014** | 통합 | **동시성** | `limit=5`, **[Async]** 10개 동시 요청 | `asyncio.gather`로 동시 실행             | `asyncio.Lock`에 의해 Race Condition 없이 타임스탬프가 정확히 10개 기록됨         | 10 Tasks Concurrently  |
+| **TC-015** | 통합 |   동시성   | `limit=50`, **[Sync]** 100개 스레드   | `ThreadPoolExecutor`로 동시 호출         | 스레드 환경에서도 데코레이터 내부 상태가 깨지지 않고 버킷 기록이 수행됨           | 100 Threads            |
