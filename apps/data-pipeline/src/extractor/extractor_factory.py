@@ -1,7 +1,7 @@
 """
 데이터 수집기 팩토리 모듈 (Data Extractor Factory)
 
-설정(AppConfig)과 작업 ID(Job ID)를 기반으로 적절한 데이터 수집기(Extractor) 인스턴스를
+설정(ConfigManager)과 작업 ID(Job ID)를 기반으로 적절한 데이터 수집기(Extractor) 인스턴스를
 생성하고, 필요한 의존성(AuthStrategy, HttpClient)을 주입하여 조립(Assemble)합니다.
 Simple Factory 패턴을 사용하여 클라이언트가 구체적인 클래스(KISExtractor 등)를 알 필요 없이
 인터페이스(IExtractor)에만 의존하게 합니다.
@@ -34,19 +34,19 @@ Trade-off:
 import logging
 from typing import Dict, Optional, Type
 
-from ..common.config import AppConfig
-from ..common.log import LogManager
-from .domain.interfaces import IExtractor, IHttpClient, IAuthStrategy
-from .domain.exceptions import ExtractorError
+from src.common.config import ConfigManager
+from src.common.log import LogManager
+from src.common.interfaces import IExtractor, IHttpClient, IAuthStrategy
+from src.common.exceptions import ExtractorError
 
 # [Extractor Implementations]
-from .providers.kis_extractor import KISExtractor
-from .providers.fred_extractor import FREDExtractor
-from .providers.ecos_extractor import ECOSExtractor
-from .providers.upbit_extractor import UPBITExtractor
+from src.extractor.providers.kis_extractor import KISExtractor
+from src.extractor.providers.fred_extractor import FREDExtractor
+from src.extractor.providers.ecos_extractor import ECOSExtractor
+from src.extractor.providers.upbit_extractor import UPBITExtractor
 
 # [Auth Strategy Implementations]
-from .adapters.auth import KISAuthStrategy, UPBITAuthStrategy
+from src.extractor.adapters.auth import KISAuthStrategy, UPBITAuthStrategy
 
 
 class ExtractorFactory:
@@ -72,7 +72,7 @@ class ExtractorFactory:
         return cls._logger
 
     @classmethod
-    def _get_or_create_auth(cls, provider: str, config: AppConfig) -> IAuthStrategy:
+    def _get_or_create_auth(cls, provider: str, config: ConfigManager) -> IAuthStrategy:
         """인증 전략 인스턴스를 반환하거나 없으면 생성하여 캐싱합니다."""
         # 1. Cache Hit: 이미 생성된 전략이 있다면 재사용 (Token 재활용)
         if provider in cls._auth_cache:
@@ -96,14 +96,14 @@ class ExtractorFactory:
         cls, 
         job_id: str, 
         http_client: IHttpClient, 
-        config: AppConfig
+        config: ConfigManager
     ) -> IExtractor:
         """주어진 Job ID에 매핑된 정책을 확인하여 적절한 Extractor를 생성합니다.
 
         Args:
-            job_id (str): 실행할 수집 작업의 식별자. (AppConfig.policy 키)
+            job_id (str): 실행할 수집 작업의 식별자. (ConfigManager.extraction_policy 키)
             http_client (IHttpClient): 공유되는 HTTP 클라이언트 인스턴스.
-            config (AppConfig): 애플리케이션 전역 설정 객체.
+            config (ConfigManager): 애플리케이션 전역 설정 객체.
 
         Returns:
             IExtractor: 초기화가 완료된 수집기 인스턴스.
