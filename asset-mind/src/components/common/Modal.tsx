@@ -7,13 +7,7 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   className?: string;
-  /**
-   * [접근성] 모달 제목 (스크린 리더용)
-   */
   title?: string;
-  /**
-   * [접근성] 모달 설명 (스크린 리더용)
-   */
   description?: string;
 }
 
@@ -125,7 +119,6 @@ export const Modal = ({
           <CloseIcon className="w-6 h-6" />
         </button>
 
-        {/* [접근성] 제목/설명 (스크린 리더 전용) */}
         {title && (
           <h2 id="modal-title" className="sr-only">
             {title}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LoginModal } from './components/auth/LoginModal';
-import { SignUpModal } from './components/auth/SignUpModal'; // 방금 만든 파일
+import { SignUpModal } from './components/auth/SignUpModal';
 import { Button } from './components/common/Button';
 import { useToast } from './context/ToastContext';
 
@@ -37,7 +37,7 @@ function App() {
         isOpen={currentView === 'login'} 
         onClose={() => setCurrentView('none')} 
         onLogin={handleLogin}
-        // 로그인 모달 안에 "회원가입" 버튼이 있다면 이 함수를 연결해줘야 함 (필요 시 LoginModal 수정)
+        
       />
 
       {/* 2. 회원가입 모달 */}

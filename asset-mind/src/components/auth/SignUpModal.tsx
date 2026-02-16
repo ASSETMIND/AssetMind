@@ -29,7 +29,6 @@ export const SignUpModal = ({ isOpen, onClose, onSwitchToLogin }: SignUpModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      {/* [수정] rounded-[24px] -> rounded-[40px] */}
       <div className="relative w-[480px] bg-[#1C1D21] rounded-[40px] px-[40px] py-[50px] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         
         <button onClick={onClose} className="absolute top-6 right-6 text-text-secondary hover:text-white transition-colors">

@@ -1,0 +1,29 @@
+# Build outputs
+dist
+build
+storybook-static
+
+# Dependencies
+node_modules
+
+# Storybook stories (React Hooks 에러 무시)
+**/*.stories.tsx
+**/*.stories.ts
+**/*.stories.jsx
+**/*.stories.js
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Config files
+*.config.js
+*.config.ts
+.storybook
+
+# Generated files
+coverage
+.vite
+.turbo

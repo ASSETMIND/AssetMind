@@ -35,7 +35,7 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
-# Dependency directories (가장 중요!!!)
+# Dependency directories
 node_modules/
 jspm_packages/
 
@@ -57,7 +57,7 @@ typings/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file (보안상 중요)
+# dotenv environment variables file 
 .env
 .env.local
 .env.development.local
@@ -79,21 +79,46 @@ storybook-static/
 *.sw?
 .vscode/
 
-### Java & Gradle Ignore Rule ###
+<<<<<<< HEAD
+# ===== 추가 설정 (Merged) =====
+
+# Storybook & Frontend
+storybook-static/
+.storybook/addon-visual-tests-assets
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Java & Gradle & Spring
 .gradle/
 build/
 out/
 bin/
 *.class
-
-# --- Spring Boot & Java ---
-**/logs/
-*.log
 *.pid
 **/db
 
-### DB & Local Config ###
+# DB & Local Config
 db/
 *.db
 *.sqlite
-*.log

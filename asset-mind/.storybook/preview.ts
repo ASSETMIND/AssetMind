@@ -2,7 +2,7 @@ import type { Preview } from "@storybook/react";
 import "../src/index.css";
 
 // ----------------------------------------------------------------------
-// 1. 스타일 주입 (기존 CSS 유지)
+// 1. 스타일 주입
 // ----------------------------------------------------------------------
 const style = document.createElement("style");
 style.innerHTML = `
@@ -34,15 +34,14 @@ style.innerHTML = `
 document.head.appendChild(style);
 
 // ----------------------------------------------------------------------
-// 2. Preview 설정 (정렬 로직 강화)
+// 2. Preview 설정
 // ----------------------------------------------------------------------
 const preview: Preview = {
   parameters: {
-    // ✅ 정렬 설정: 화면에 보이는 대문자/하이픈 이름까지 모두 포함시켰습니다.
     options: {
       storySort: {
         order: [
-          // 1순위: Getting Started (가능한 모든 변형 포함)
+          // 1순위: Getting Started 
           "Getting Started", "GETTING-STARTED", "Getting-Started", "getting-started",
           
           // 2순위: Foundation
