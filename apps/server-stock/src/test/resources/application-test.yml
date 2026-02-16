@@ -1,0 +1,34 @@
+# 통합 테스트시에 사용하는 설정 파일
+spring:
+  application:
+    name: server-stock
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop # 테스트 시작 시 생성, 끝나면 삭제
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  datasource:
+    # Auth 데이터베이스와 Stock 데이터베이스를 격리
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${POSTGRES_DB:assetmind_stock}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+      database: 1 #Auth와 Stock 모듈 간 Redis 키 충돌 방지
+
+kis:
+  base-url: "http://localhost:8089" # KIS Mock server url
+  websocket-url: "ws://localhost:8089"
+  app-key: "dummy-key-for-test"
+  app-secret: "dummy-secret-for-test"
