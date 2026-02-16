@@ -13,8 +13,8 @@ import lombok.Builder;
  * @param priceChange       - 전일 대비 (+1000, -500)
  * @param changeRate        - 등락률 (+1.5, -2)
  * @param executionVolume   - 체결량
- * @param tradingAmount     - 누적 거래 대금
- * @param tradingVolume     - 누적 거래량
+ * @param cumulativeAmount     - 누적 거래 대금
+ * @param cumulativeVolume     - 누적 거래량
  * @param time              - 체결 시간
  */
 @Builder
