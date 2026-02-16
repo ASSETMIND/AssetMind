@@ -1,14 +1,14 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call  # [Fix] call 추가
+from unittest.mock import AsyncMock, MagicMock, patch, call
 from typing import Any
 
 # [Real Imports]
 from src.extractor.providers.abstract_extractor import AbstractExtractor
-from src.extractor.domain.dtos import RequestDTO, ResponseDTO
-from src.extractor.domain.exceptions import ExtractorError, NetworkError
-from src.extractor.domain.interfaces import IHttpClient
-from src.common.config import AppConfig
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ConfigurationError, ETLError, ExtractorError, NetworkConnectionError
+from src.common.interfaces import IHttpClient
+from src.common.config import ConfigManager
 
 # ========================================================================================
 # [Test Stub] 추상 클래스 테스트를 위한 구체화 (Stub)
@@ -17,12 +17,10 @@ from src.common.config import AppConfig
 class StubExtractor(AbstractExtractor):
     """
     AbstractExtractor의 템플릿 메서드 로직을 검증하기 위한 테스트용 구현체.
-    각 추상 메서드는 내부의 Mock 객체에게 위임(Delegate)하여 행위를 제어합니다.
     """
-    def __init__(self, http_client: IHttpClient, config: AppConfig):
+    def __init__(self, http_client: IHttpClient, config: ConfigManager):
         super().__init__(http_client, config)
         
-        # 행위 검증 및 제어를 위한 내부 Mock 정의
         self.validate_mock = MagicMock()
         self.fetch_mock = AsyncMock()
         self.create_mock = MagicMock()
@@ -33,7 +31,7 @@ class StubExtractor(AbstractExtractor):
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         return await self.fetch_mock(request)
 
-    def _create_response(self, raw_data: Any) -> ResponseDTO:
+    def _create_response(self, raw_data: Any, job_id: str = "") -> ExtractedDTO:
         return self.create_mock(raw_data)
 
 # ========================================================================================
@@ -43,7 +41,6 @@ class StubExtractor(AbstractExtractor):
 @pytest.fixture(autouse=True)
 def mock_external_deps():
     """모든 테스트에 공통적으로 적용되는 Logger Mock 설정"""
-    # 실제 모듈 경로에 맞춰 patch 적용
     with patch("src.extractor.providers.abstract_extractor.LogManager.get_logger") as mock_logger:
         yield mock_logger
 
@@ -57,14 +54,14 @@ def mock_http_client():
 
 @pytest.fixture
 def mock_config():
-    return MagicMock(spec=AppConfig)
+    return MagicMock(spec=ConfigManager)
 
 @pytest.fixture
 def extractor(mock_http_client, mock_config):
     """테스트 대상 StubExtractor 인스턴스 (Happy Path 기본 설정 포함)"""
     stub = StubExtractor(mock_http_client, mock_config)
     stub.fetch_mock.return_value = {"raw": "data"}
-    stub.create_mock.return_value = ResponseDTO(data={"raw": "data"})
+    stub.create_mock.return_value = ExtractedDTO(data={"raw": "data"})
     return stub
 
 # ========================================================================================
@@ -72,22 +69,22 @@ def extractor(mock_http_client, mock_config):
 # ========================================================================================
 
 def test_init_01_config_none(mock_http_client):
-    """[INIT-01] config가 None이면 ExtractorError 발생 (Fail-Fast)"""
-    with pytest.raises(ExtractorError, match="'AppConfig' cannot be None"):
+    """[INIT-01] config가 None이면 ConfigurationError 발생 (Fail-Fast)"""
+    with pytest.raises(ConfigurationError, match="초기화 실패: ConfigManager 인스턴스가 필요합니다."):
         StubExtractor(mock_http_client, None) # type: ignore
 
 @pytest.mark.asyncio
 async def test_init_02_request_none_handling(extractor, mock_logger):
     """[INIT-02] request가 None일 때 로깅 안전성 및 Validate 에러 검증"""
     # Given
-    extractor.validate_mock.side_effect = ExtractorError("Invalid Request")
+    extractor.validate_mock.side_effect = ETLError("Invalid Request")
     
     # When
-    with pytest.raises(ExtractorError, match="Invalid Request"):
+    with pytest.raises(ETLError, match="Invalid Request"):
         await extractor.extract(None) # type: ignore
     
     # Then
-    mock_logger.info.assert_any_call("Starting extraction task. Job: Unknown")
+    mock_logger.info.assert_any_call("[StubExtractor] 추출 시작 | Job: Unknown")
 
 # ========================================================================================
 # 2. 흐름 제어 및 상태 테스트 (Flow Control & State)
@@ -106,7 +103,7 @@ async def test_flow_01_happy_path(extractor):
     extractor.validate_mock.assert_called_once_with(request)
     extractor.fetch_mock.assert_called_once_with(request)
     extractor.create_mock.assert_called_once()
-    assert isinstance(result, ResponseDTO)
+    assert isinstance(result, ExtractedDTO)
 
 @pytest.mark.asyncio
 async def test_flow_02_validation_failure_stops_execution(extractor):
@@ -139,7 +136,6 @@ async def test_flow_03_statelessness(extractor):
     
     # Then
     assert extractor.fetch_mock.call_count == 2
-    # [Fix] pytest.call -> call (unittest.mock)
     extractor.fetch_mock.assert_has_calls([call(req1), call(req2)])
 
 # ========================================================================================
@@ -147,24 +143,24 @@ async def test_flow_03_statelessness(extractor):
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_err_01_network_error_wrapping(extractor, mock_logger):
-    """[ERR-01] NetworkError 발생 시 로그 ERROR 기록 및 ExtractorError 래핑"""
+async def test_err_01_network_error_propagation(extractor, mock_logger):
+    """[ERR-01] ETLError(Network 등) 발생 시 ERROR 로그 기록 및 원본 예외 전파 (Re-raise)"""
     # Given
-    extractor.fetch_mock.side_effect = NetworkError("Connection Timeout")
+    extractor.fetch_mock.side_effect = NetworkConnectionError("Connection Timeout")
     request = RequestDTO(job_id="job_net")
     
     # When
-    with pytest.raises(ExtractorError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await extractor.extract(request)
     
     # Then
-    assert "Network failure" in str(exc_info.value)
-    assert isinstance(exc_info.value.__cause__, NetworkError)
-    mock_logger.error.assert_called_with("Network error during extraction: Connection Timeout")
+    assert "Connection Timeout" in str(exc_info.value)
+    # [Fix] 실제 로그에는 예외 클래스 이름이 포함됨: '[NetworkConnectionError] Connection Timeout'
+    mock_logger.error.assert_called_with("[StubExtractor] 도메인 로직 실패 | Job: job_net | Error: [NetworkConnectionError] Connection Timeout")
 
 @pytest.mark.asyncio
-async def test_err_02_domain_error_propagation(extractor, mock_logger):
-    """[ERR-02] ExtractorError 발생 시 로그 WARNING 기록 및 그대로 전파"""
+async def test_err_02_common_error_propagation(extractor, mock_logger):
+    """[ERR-02] ExtractorError 발생 시 로그 ERROR 기록 및 그대로 전파"""
     # Given
     origin_error = ExtractorError("Business Logic Fail")
     extractor.fetch_mock.side_effect = origin_error
@@ -176,22 +172,23 @@ async def test_err_02_domain_error_propagation(extractor, mock_logger):
     
     # Then
     assert exc_info.value is origin_error
-    mock_logger.warning.assert_called_with("Extraction logic failed: Business Logic Fail")
+    # [Fix] 실제 로그에는 예외 클래스 이름이 포함됨: '[ExtractorError] Business Logic Fail'
+    mock_logger.error.assert_called_with("[StubExtractor] 도메인 로직 실패 | Job: job_biz | Error: [ExtractorError] Business Logic Fail")
 
 @pytest.mark.asyncio
 async def test_err_03_unknown_exception_handling(extractor, mock_logger):
-    """[ERR-03] 알 수 없는 예외(KeyError 등) 발생 시 로그 ERROR(Stack Trace) 및 래핑"""
+    """[ERR-03] 알 수 없는 예외(KeyError 등) 발생 시 로그 ERROR(Stack Trace) 및 ExtractorError 래핑"""
     # Given
     extractor.fetch_mock.side_effect = KeyError("Unexpected Key")
     request = RequestDTO(job_id="job_bug")
     
     # When
-    with pytest.raises(ExtractorError, match="Extraction failed"):
+    with pytest.raises(ExtractorError, match="작업 중 알 수 없는 시스템 오류 발생"):
         await extractor.extract(request)
     
     # Then
     mock_logger.error.assert_called_with(
-        "Unexpected error during extraction: 'Unexpected Key'", 
+        "[StubExtractor] 작업 중 알 수 없는 시스템 오류 발생 | Job: job_bug | Error: 'Unexpected Key'", 
         exc_info=True
     )
 
@@ -203,7 +200,7 @@ async def test_err_03_unknown_exception_handling(extractor, mock_logger):
 async def test_data_01_response_packaging(extractor):
     """[DATA-01] _create_response가 반환한 DTO가 최종 반환되는지 확인"""
     # Given
-    expected_response = ResponseDTO(data={"valid": True})
+    expected_response = ExtractedDTO(data={"valid": True})
     extractor.create_mock.return_value = expected_response
     request = RequestDTO(job_id="job_data")
     
@@ -224,5 +221,5 @@ async def test_log_01_logging_sequence(extractor, mock_logger):
     await extractor.extract(request)
     
     # Then
-    mock_logger.info.assert_any_call("Starting extraction task. Job: job_log")
-    mock_logger.info.assert_any_call("Extraction completed successfully. Job: job_log")
+    mock_logger.info.assert_any_call("[StubExtractor] 추출 시작 | Job: job_log")
+    mock_logger.info.assert_any_call("[StubExtractor] 추출 완료 | Job: job_log")
