@@ -8,6 +8,8 @@ from pydantic import ValidationError
 # 실제 프로젝트 구조에 맞춰 import 경로 수정 필요 (예: src.common.config)
 from src.common.config import ConfigManager, JobPolicy, KISSettings
 
+from src.common.exceptions import ConfigurationError
+
 # ========================================================================================
 # [Fixtures]
 # ========================================================================================
@@ -114,7 +116,8 @@ def test_fact_01_factory_load(mock_env, config_file_helper, patch_config_path):
     # Given
     config_file_helper("task_A", {
         "log_level": "DEBUG",
-        "log_dir": "custom_logs" 
+        "log_dir": "custom_logs",
+        "log_filename": "task_a.log"
     })
     
     # When
@@ -275,7 +278,7 @@ def test_err_01_uninitialized_access(mock_env):
     # Given: 캐시가 비어있는 상태 (reset_config_state fixture)
     
     # When & Then
-    with pytest.raises(RuntimeError, match="CRITICAL"):
+    with pytest.raises(ConfigurationError, match="치명적 오류"):
         ConfigManager.get_config()
 
 def test_state_01_isolation(mock_env, config_file_helper, patch_config_path):

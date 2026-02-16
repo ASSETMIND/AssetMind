@@ -20,7 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 try:
     from src.common.decorators.rate_limit_decorator import rate_limit, _buckets, RateLimitBucket
 except ImportError:
-    from src.common.decorators.rate_limit_decorator import rate_limit, _buckets, RateLimitBucket
+    # 경로 문제 시 대비, fixture 등에서 처리됨
+    pass
+
+from src.common.exceptions import RateLimitError, ETLError
 
 # --------------------------------------------------------------------------
 # 0. Constants & Configuration
@@ -261,49 +264,58 @@ class TestRateLimitDecorator:
     @patch('time.sleep')
     def test_tc012_integration_log_output(self, mock_sleep):
         """[TC-012] Integration: LogManager 존재 시 로그 출력 확인"""
-        from src.common.decorators.rate_limit_decorator import LogManager as MockLogManager
+        # 현재 모듈을 가져와서 Patch (test_tc016의 reload 영향 방지)
+        import src.common.decorators.rate_limit_decorator as current_module
         
-        @rate_limit(limit=1, period=1.0)
-        def log_func(): pass
-
-        log_func()
-        log_func() 
-
-        MockLogManager.get_logger.assert_called_with("RateLimit")
-        mock_logger = MockLogManager.get_logger.return_value
-        mock_logger.debug.assert_called()
-        assert "Throttling active" in mock_logger.debug.call_args[0][0]
+        with patch.object(current_module, "LogManager") as MockLM:
+            mock_logger = MagicMock()
+            MockLM.get_logger.return_value = mock_logger
+            
+            # 대기 시간 0.1초 초과를 유도하기 위해 limit=1, period=1.0 설정
+            @current_module.rate_limit(limit=1, period=1.0)
+            def log_func(): pass
+            
+            log_func() # 1회: 즉시 실행
+            log_func() # 2회: 대기 발생
+            
+            MockLM.get_logger.assert_called_with("RateLimit")
+            mock_logger.debug.assert_called()
+            log_msg = mock_logger.debug.call_args[0][0]
+            assert "Throttling: Waiting" in log_msg
 
     @patch('time.sleep')
     @patch('time.time')
     def test_tc013_log_threshold_boundary(self, mock_time, mock_sleep):
         """[TC-013] Log Threshold: 0.1s 경계값 테스트 (BVA)"""
         # Given
-        from src.common.decorators.rate_limit_decorator import LogManager as MockLogManager
-        mock_logger = MockLogManager.get_logger.return_value
+        # 모듈을 안전하게 임포트하여 Mocking
+        import src.common.decorators.rate_limit_decorator as target_mod
         
-        @rate_limit(limit=1, period=1.0)
-        def noise_func(): pass
-        
-        # 1. Case: Wait time = 0.1s (정확히 경계) -> 로그 찍히지 않아야 함 (wait_time > 0.1)
-        mock_time.return_value = 100.0
-        noise_func() # 소진
-        
-        mock_time.return_value = 100.9 # Wait = 0.1
-        noise_func()
-        mock_logger.debug.assert_not_called()
-        
-        # 2. Case: Wait time = 0.1001s (경계 초과) -> 로그 찍혀야 함
-        mock_logger.reset_mock()
-        # bucket reset
-        _buckets.clear()
-        
-        mock_time.return_value = 200.0
-        noise_func() # 소진
-        
-        mock_time.return_value = 200.8999 # Wait = 0.1001
-        noise_func()
-        mock_logger.debug.assert_called()
+        with patch.object(target_mod, "LogManager") as MockLogManager:
+            mock_logger = MockLogManager.get_logger.return_value
+            
+            @target_mod.rate_limit(limit=1, period=1.0)
+            def noise_func(): pass
+            
+            # 1. Case: Wait time = 0.1s (정확히 경계) -> 로그 찍히지 않아야 함 (wait_time > 0.1)
+            mock_time.return_value = 100.0
+            noise_func() # 소진
+            
+            mock_time.return_value = 100.9 # Wait = 0.1
+            noise_func()
+            mock_logger.debug.assert_not_called()
+            
+            # 2. Case: Wait time = 0.1001s (경계 초과) -> 로그 찍혀야 함
+            mock_logger.reset_mock()
+            # bucket reset
+            _buckets.clear()
+            
+            mock_time.return_value = 200.0
+            noise_func() # 소진
+            
+            mock_time.return_value = 200.8999 # Wait = 0.1001
+            noise_func()
+            mock_logger.debug.assert_called()
 
     # ==========================================
     # Category: Concurrency & Thread Safety
@@ -386,3 +398,110 @@ class TestRateLimitDecorator:
         if target_module_name in sys.modules:
             del sys.modules[target_module_name]
         import src.common.decorators.rate_limit_decorator
+
+    def test_tc017_sync_unexpected_error_wrapping(self):
+        """[TC-017] [Branch] 동기 래퍼: 예기치 못한 에러 발생 시 ETLError로 래핑 (Line 173-179)"""
+        # Given
+        @rate_limit(limit=5)
+        def broken_func():
+            raise RuntimeError("Unexpected internal error")
+        
+        # When & Then: RateLimitError가 아닌 에러는 ETLError로 래핑되어야 함
+        with pytest.raises(ETLError) as excinfo:
+            broken_func()
+        
+        assert "Unexpected error in rate limit decorator" in str(excinfo.value)
+        assert isinstance(excinfo.value.original_exception, RuntimeError)
+
+    @pytest.mark.asyncio
+    async def test_tc018_async_unexpected_error_wrapping(self):
+        """[TC-018] [Branch] 비동기 래퍼: 예기치 못한 에러 발생 시 ETLError로 래핑 (Line 205-209)"""
+        # Given
+        @rate_limit(limit=5)
+        async def broken_async_func():
+            raise RuntimeError("Async internal error")
+        
+        # When & Then
+        with pytest.raises(ETLError) as excinfo:
+            await broken_async_func()
+        
+        assert "Unexpected error in async rate limit decorator" in str(excinfo.value)
+
+    def test_tc019_log_throttling_short_wait_branch(self):
+        """[TC-019] [Branch] 대기 시간이 0.1초 이하일 때 로그 생략 분기 검증 (BrPart 1)"""
+        # Given
+        import src.common.decorators.rate_limit_decorator as current_module
+        
+        with patch.object(current_module, "LogManager") as MockLM:
+            mock_logger = MagicMock()
+            MockLM.get_logger.return_value = mock_logger
+            
+            # 0.05초 대기를 유도 (구현부의 0.1초 기준 미만)
+            @current_module.rate_limit(limit=1, period=0.05)
+            def quick_func(): pass
+            
+            # When
+            quick_func()
+            with patch('time.sleep'):
+                quick_func()
+            
+            # Then: wait_time <= 0.1 이므로 debug 로그가 호출되지 않아야 함
+            mock_logger.debug.assert_not_called()
+
+    def test_tc020_log_manager_none_branch_fixed(self):
+        """
+        [TC-020] [Branch] LogManager가 None일 때 크래시 없이 로직이 수행되는지 확인
+        
+        NOTE: test_tc016의 importlib.reload 영향으로 파일 상단에서 import한 rate_limit 객체는
+        stale(오래된) 모듈 객체를 참조할 수 있음. 따라서 이 테스트 내부에서 
+        현재 활성화된 모듈을 동적으로 가져와서 patch 해야 함.
+        """
+        # 1. 현재 메모리에 로드된 모듈 가져오기
+        import src.common.decorators.rate_limit_decorator as current_module
+        
+        # 2. 해당 모듈의 LogManager를 None으로 패치
+        with patch.object(current_module, "LogManager", None):
+            
+            # 3. 반드시 현재 모듈의 데코레이터를 사용해야 패치된 LogManager를 바라봄
+            @current_module.rate_limit(limit=1, period=1.0)
+            def no_log_func(): return "success"
+            
+            # 4. 실행 검증
+            no_log_func() # 1회 (Wait=0)
+            
+            with patch('time.sleep'):
+                # When: Throttling이 발생해도 LogManager가 None이므로 로깅 없이 성공해야 함
+                result = no_log_func()
+                assert result == "success"
+
+    @pytest.mark.asyncio
+    async def test_tc021_async_rate_limit_error_details(self):
+        """[TC-021] [Logic] 비동기 래퍼에서 RateLimitError 발생 시 버킷 정보 주입 확인"""
+        # Given
+        @rate_limit(limit=1, period=1.0, max_wait_seconds=0.1) 
+        async def fast_fail_func(): pass
+        
+        # When
+        await fast_fail_func() 
+        
+        # Then: 대기시간(1.0s)이 max_wait(0.1s)보다 크므로 에러 발생
+        with pytest.raises(RateLimitError) as excinfo:
+            await fast_fail_func()
+        
+        # details에 bucket_key가 포함되었는지 확인
+        assert excinfo.value.details["bucket_key"] is not None
+
+    def test_tc022_sync_rate_limit_error_propagation(self):
+        """[TC-022] [Coverage] Sync Wrapper: RateLimitError 발생 시 context update 및 re-raise 확인 (Line 175-176)"""
+        # Given: max_wait_seconds를 0으로 설정하여 즉시 실패 유도
+        @rate_limit(limit=1, period=10.0, max_wait_seconds=0.0)
+        def sync_fail_func(): pass
+        
+        sync_fail_func() # 1회 성공
+        
+        # When & Then: 2회 호출 시 대기시간 발생 -> max_wait 초과 -> RateLimitError 발생
+        with pytest.raises(RateLimitError) as excinfo:
+            sync_fail_func()
+        
+        # Verify: catch block (Line 175-176) 실행 여부 확인 (details 업데이트)
+        assert excinfo.value.details.get("bucket_key") is not None
