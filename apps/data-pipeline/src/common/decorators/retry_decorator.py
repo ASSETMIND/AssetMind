@@ -33,6 +33,7 @@ except ImportError:
     sys.path.append(str(Path(__file__).parents[3]))
     from src.common.log import LogManager
 
+from src.common.exceptions import ETLError
 
 # ==============================================================================
 # [Configuration] Constants
@@ -117,16 +118,18 @@ class RetryDecorator:
 
     def _log_retry(self, logger, func_name, attempt, error, next_delay):
         """재시도 발생 사실을 경고(Warning) 레벨로 로깅합니다."""
+        error_detail = error.to_dict() if isinstance(error, ETLError) else str(error)
         logger.warning(
             f"[{func_name}] RETRY ({attempt}/{self.max_retries}) | "
-            f"Error: {error} | Next Retry in {next_delay:.2f}s"
+            f"Error: {error_detail} | Next Retry in {next_delay:.2f}s"
         )
 
     def _log_giveup(self, logger, func_name, error):
         """최대 재시도 초과 시 에러(Error) 레벨로 로깅합니다."""
+        error_detail = error.to_dict() if isinstance(error, ETLError) else str(error)
         logger.error(
             f"[{func_name}] GAVE UP after {self.max_retries} retries | "
-            f"Final Error: {error}"
+            f"Final Error: {error_detail}"
         )
 
     # --------------------------------------------------------------------------
@@ -148,16 +151,15 @@ class RetryDecorator:
                 except self.exceptions as e:
                     last_exception = e
                     
-                    # 마지막 시도였다면 루프 종료 후 에러 전파
-                    if attempt == self.max_retries:
+                    # [Design Intent] ETLError 명세에 따라 should_retry가 False(예: AuthError)면 즉시 중단
+                    should_retry_attr = getattr(e, "should_retry", True)
+                    
+                    if attempt == self.max_retries or not should_retry_attr:
                         self._log_giveup(logger, func_name, e)
                         break
                     
-                    # 대기 시간 계산 및 로깅
-                    # attempt는 0부터 시작하므로, delay 계산 시에는 attempt+1을 사용
                     delay = self._calculate_delay(attempt + 1)
                     self._log_retry(logger, func_name, attempt + 1, e, delay)
-                    
                     time.sleep(delay)
             
             # 모든 시도 실패 시 마지막 예외 발생
@@ -183,13 +185,14 @@ class RetryDecorator:
                 except self.exceptions as e:
                     last_exception = e
                     
-                    if attempt == self.max_retries:
+                    should_retry_attr = getattr(e, "should_retry", True)
+                    
+                    if attempt == self.max_retries or not should_retry_attr:
                         self._log_giveup(logger, func_name, e)
                         break
                     
                     delay = self._calculate_delay(attempt + 1)
                     self._log_retry(logger, func_name, attempt + 1, e, delay)
-                    
                     await asyncio.sleep(delay)
             
             raise last_exception

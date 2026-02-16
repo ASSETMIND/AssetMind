@@ -29,6 +29,8 @@ import yaml
 from pydantic import Field, SecretStr, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.common.exceptions import ConfigurationError
+
 # ==============================================================================
 # 1. Provider별 설정 모델 (Provider Specific Settings)
 # ==============================================================================
@@ -154,14 +156,14 @@ class ConfigManager(BaseSettings):
             ConfigManager: 설정 객체.
 
         Raises:
-            RuntimeError: 초기화된 설정이 없는 상태에서 인자 없이 호출된 경우.
+            ConfigurationError: 초기화된 설정이 없는 상태에서 인자 없이 호출된 경우.
         """
         # Case 1: 인자 없이 호출된 경우 (Active Config 반환)
         if task_name is None:
             if cls._active_task_name is None:
-                raise RuntimeError(
-                    "CRITICAL: ConfigManager is not initialized. "
-                    "Call ConfigManager.get_config(task_name='...') at least once before accessing it without arguments."
+                raise ConfigurationError(
+                    "치명적 오류: ConfigManager가 초기화되지 않았습니다. "
+                    "인자 없이 호출하기 전에 ConfigManager.get_config(task_name='...')를 반드시 호출해야 합니다."
                 )
             return cls._cache[cls._active_task_name]
 

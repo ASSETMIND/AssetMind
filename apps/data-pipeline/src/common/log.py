@@ -59,6 +59,7 @@ from typing import Optional, Dict, Any
 # ==============================================================================
 # 설정 모듈 의존성. 부재 시 ImportError를 발생시켜 배포 시점에 문제를 인지하도록 함(Fail Fast).
 from src.common.config import ConfigManager
+from src.common.exceptions import ETLError
 
 # ==============================================================================
 # Constants & Configuration
@@ -131,9 +132,18 @@ class JsonFormatter(logging.Formatter):
             "pid": PROCESS_ID    # 프로세스 레벨 식별자 (어느 워커인가?)
         }
         
-        # Exception 정보(Stack Trace)가 있는 경우 포함
+        # 4. Exception 정보 처리 (ETLError의 구조화된 필드 우선)
         if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
+            _, exc_value, _ = record.exc_info
+            
+            # ETLError인 경우 to_dict()의 구조화된 필드를 로그 최상위에 병합
+            if isinstance(exc_value, ETLError):
+                log_record.update(exc_value.to_dict())
+                # 스택 트레이스는 별도 필드로 분리하여 가독성 확보
+                log_record["stack_trace"] = self.formatException(record.exc_info)
+            else:
+                # 일반 예외는 기존 방식 유지
+                log_record["exception"] = self.formatException(record.exc_info)
             
         try:
             # [Fail-Safe] default=str 옵션을 통해 직렬화 불가능 객체(Set, Object 등)가 와도
@@ -143,7 +153,7 @@ class JsonFormatter(logging.Formatter):
             # JSON 변환조차 실패하는 최악의 경우, 안전한 텍스트로 폴백하여 시스템 크래시 방지
             return json.dumps({
                 "level": "ERROR",
-                "message": "CRITICAL: Failed to serialize log message to JSON",
+                "message": "치명적 오류: 로그 메시지 직렬화 실패",
                 "raw_message": str(record.getMessage())
             })
 
@@ -231,7 +241,7 @@ class LogManager:
             
         except OSError as e:
             # 파일 시스템 권한 문제 등으로 실패 시 stderr로 경고 (App Crash 방지)
-            sys.stderr.write(f"[LogManager] Critical Error: Failed to setup file handler. {e}\n")
+            sys.stderr.write(f"[LogManager] 치명적 오류: 파일 핸들러 설정 실패. {e}\n")
 
     @classmethod
     def get_logger(cls, name: Optional[str] = None) -> logging.Logger:
