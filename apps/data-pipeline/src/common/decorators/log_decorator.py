@@ -39,6 +39,7 @@ except ImportError:
     sys.path.append(str(Path(__file__).parents[3]))  # src 상위로 경로 추가
     from src.common.log import LogManager, request_id_ctx
 
+from src.common.exceptions import ETLError
 
 # ==============================================================================
 # [Configuration] Constants
@@ -185,13 +186,24 @@ class LoggingDecorator:
         )
 
     def _log_error(self, logger, func_name, error, elapsed_time):
-        """에러 발생(Failure) 로그를 기록합니다."""
-        logger.error(
-            f"[{func_name}] FAILED | Time: {elapsed_time:.4f}s | "
-            f"Error: {type(error).__name__} - {str(error)}",
-            exc_info=True  # 스택 트레이스(Stack Trace) 포함
-        )
+        """에러 발생(Failure) 로그를 기록합니다 (Structured Logging 적용)."""
+        if isinstance(error, ETLError):
+            # [Rationale] ETLError 계열은 to_dict()를 통해 ELK/Datadog 최적화 데이터를 제공함
+            error_info = error.to_dict()
+            error_msg = (
+                f"[{func_name}] FAILED | Time: {elapsed_time:.4f}s | "
+                f"Type: {error_info['error_type']} | "
+                f"Retry: {error_info['should_retry']} | "
+                f"Details: {json.dumps(error_info['details'], ensure_ascii=False)}"
+            )
+        else:
+            # 일반 Exception 처리
+            error_msg = (
+                f"[{func_name}] FAILED | Time: {elapsed_time:.4f}s | "
+                f"Error: {type(error).__name__} - {str(error)}"
+            )
 
+        logger.error(error_msg, exc_info=True)
     # --------------------------------------------------------------------------
     # [Wrapper 1] Sync Wrapper (일반 함수용)
     # --------------------------------------------------------------------------
@@ -220,12 +232,21 @@ class LoggingDecorator:
                 
             except Exception as e:
                 elapsed = time.perf_counter() - start_time
+                
+                # [Design Intent] 이미 ETLError인 경우 그대로 사용, 아닐 경우 래핑하여 문맥(Context) 추가
+                if not isinstance(e, ETLError):
+                    e = ETLError(
+                        message=f"Unhandled exception in {func_name}",
+                        details={"raw_error": str(e)},
+                        original_exception=e,
+                        should_retry=False
+                    )
+                
                 self._log_error(logger, func_name, e, elapsed)
                 
-                # 에러 억제 옵션이 켜져있으면 None 반환
                 if self.suppress_error:
                     return None
-                raise  # 기본 동작: 에러 상위 전파
+                raise e # 래핑된 또는 원본 ETLError 전파
 
         return wrapper
 
@@ -256,11 +277,18 @@ class LoggingDecorator:
                 
             except Exception as e:
                 elapsed = time.perf_counter() - start_time
+                if not isinstance(e, ETLError):
+                    e = ETLError(
+                        message=f"Unhandled exception in {func_name}",
+                        details={"raw_error": str(e)},
+                        original_exception=e
+                    )
                 self._log_error(logger, func_name, e, elapsed)
                 
                 if self.suppress_error:
                     return None
-                raise
+                
+                raise e
 
         return wrapper
 
