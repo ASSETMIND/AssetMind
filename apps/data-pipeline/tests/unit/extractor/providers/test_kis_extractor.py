@@ -5,10 +5,10 @@ from typing import Dict, Any, Optional
 
 # [Target Modules] 테스트 대상 및 의존성 모듈
 from src.extractor.providers.kis_extractor import KISExtractor
-from src.extractor.domain.dtos import RequestDTO, ResponseDTO
-from src.extractor.domain.exceptions import ExtractorError
-from src.extractor.domain.interfaces import IHttpClient, IAuthStrategy
-from src.common.config import AppConfig
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ExtractorError
+from src.common.interfaces import IHttpClient, IAuthStrategy
+from src.common.config import ConfigManager
 
 # ========================================================================================
 # [Mocks & Stubs] 외부 의존성 격리를 위한 모의 객체 정의
@@ -39,7 +39,7 @@ class MockJobPolicy:
 def mock_logger():
     """
     [Core Fix] 
-    LogManager가 초기화될 때 전역 AppConfig를 참조하여 발생하는 RuntimeError를 근본적으로 방지합니다.
+    LogManager가 초기화될 때 전역 ConfigManager를 참조하여 발생하는 RuntimeError를 근본적으로 방지합니다.
     LogManager.get_logger 메서드 자체를 Mocking하여 설정 로딩 프로세스를 우회합니다.
     """
     # src.common.log.LogManager.get_logger를 패치하여 실제 로거 초기화(Config 참조)를 막음
@@ -72,7 +72,7 @@ def mock_auth_strategy():
 @pytest.fixture
 def mock_config():
     """정상 상태의 Config 객체 (Happy Path 기준)"""
-    config = MagicMock(spec=AppConfig)
+    config = MagicMock(spec=ConfigManager)
     
     # KIS 섹션 설정
     config.kis = MagicMock()
@@ -98,7 +98,7 @@ def extractor(mock_http_client, mock_auth_strategy, mock_config):
 # ========================================================================================
 
 def test_init_01_critical_config_error(mock_http_client, mock_auth_strategy, mock_config):
-    """[INIT-01] kis.base_url이 비어있으면 초기화 단계에서 즉시 실패 (Fail-Fast)"""
+    """[INIT-01] kis.base_url이 비어있는 경우 초기화 단계에서 즉시 실패 (Fail-Fast)"""
     # Given: 잘못된 설정 주입 (Base URL 누락)
     mock_config.kis.base_url = ""
     
@@ -162,7 +162,7 @@ async def test_flow_01_happy_path_e2e(extractor, mock_http_client):
     response = await extractor.extract(request)
     
     # Then: 응답 객체 구조 및 데이터 일치 여부 검증
-    assert isinstance(response, ResponseDTO)
+    assert isinstance(response, ExtractedDTO)
     assert response.data == mock_response
     assert response.meta["job_id"] == "job_valid"
     mock_http_client.get.assert_called_once()
@@ -269,14 +269,16 @@ async def test_data_02_missing_rt_cd(extractor, mock_http_client):
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_err_01_system_error_wrapping(extractor, mock_http_client):
+async def test_err_01_system_error_wrapping(extractor):
     """[ERR-01] 실행 중 예상치 못한 에러(ValueError) 발생 시 ExtractorError로 래핑"""
-    # Given: HTTP 클라이언트 레벨의 시스템 에러 발생
-    mock_http_client.get.side_effect = ValueError("Parsing Error")
+    # Given: _fetch_raw_data 메서드를 직접 Mocking하여 데코레이터(@rate_limit 등)를 우회
+    # 이를 통해 AbstractExtractor.extract 메서드의 'except Exception' 블록 로직을 격리하여 검증
+    extractor._fetch_raw_data = AsyncMock(side_effect=ValueError("Parsing Error"))
+    
     request = RequestDTO(job_id="job_valid")
     
     # When & Then: 도메인 예외로 래핑되어 던져지는지 확인
-    with pytest.raises(ExtractorError, match="System Error"):
+    with pytest.raises(ExtractorError, match="작업 중 알 수 없는 시스템 오류 발생"):
         await extractor.extract(request)
 
 def test_dec_01_decorator_application(extractor):
