@@ -10,7 +10,7 @@ from typing import Optional
 
 # 실제 프로젝트 경로에 맞게 임포트
 from src.extractor.adapters.auth import KISAuthStrategy, UPBITAuthStrategy
-from src.extractor.domain.exceptions import AuthError, NetworkError
+from src.common.exceptions import AuthError, NetworkConnectionError
 
 # --- [Constants] 테스트용 상수 (보안 경고 방지를 위해 32바이트 이상 설정) ---
 # HS256 알고리즘은 보안상 256비트(32바이트) 이상의 키 길이를 권장합니다.
@@ -51,7 +51,7 @@ class MockUpbitConfig:
 def mock_external_dependencies():
     """
     [핵심 수정] 
-    @log_decorator가 실행될 때 LogManager가 전역 Config(AppConfig)를 
+    @log_decorator가 실행될 때 LogManager가 전역 Config(ConfigManager)를 
     참조하지 못하도록 LogManager.get_logger 메서드 자체를 Mocking합니다.
     이 픽스처는 autouse=True로 설정되어 모든 테스트에 자동 적용됩니다.
     """
@@ -278,7 +278,7 @@ async def test_kis_api_04_mcdc_invalid_date_format(kis_strategy, mock_http_clien
 async def test_kis_err_01_fail_fast_401(kis_strategy, mock_http_client):
     """[KIS-ERR-01] 401 Unauthorized 발생 시 재시도 없이 AuthError 발생 (Fail-Fast)"""
     # Given
-    mock_http_client.post.side_effect = NetworkError("401 Unauthorized")
+    mock_http_client.post.side_effect = NetworkConnectionError("401 Unauthorized")
     
     # When & Then
     with pytest.raises(AuthError, match="Invalid Credentials"):
@@ -288,7 +288,7 @@ async def test_kis_err_01_fail_fast_401(kis_strategy, mock_http_client):
 async def test_kis_err_02_fail_fast_403(kis_strategy, mock_http_client):
     """[KIS-ERR-02] 403 Forbidden 발생 시 재시도 없이 AuthError 발생 (Fail-Fast)"""
     # Given
-    mock_http_client.post.side_effect = NetworkError("403 Forbidden")
+    mock_http_client.post.side_effect = NetworkConnectionError("403 Forbidden")
     
     # When & Then
     with pytest.raises(AuthError, match="Invalid Credentials"):
@@ -319,12 +319,12 @@ async def test_kis_err_04_token_none_logic(kis_strategy, mock_http_client):
 
 @pytest.mark.asyncio
 async def test_kis_err_05_retry_logic_500(kis_strategy, mock_http_client):
-    """[KIS-ERR-05] 500 에러 발생 시 NetworkError가 그대로 전파됨 (Retry 데코레이터 트리거용)"""
+    """[KIS-ERR-05] 500 에러 발생 시 NetworkConnectionError가 그대로 전파됨 (Retry 데코레이터 트리거용)"""
     # Given
-    mock_http_client.post.side_effect = NetworkError("500 Internal Server Error")
+    mock_http_client.post.side_effect = NetworkConnectionError("500 Internal Server Error")
     
     # When & Then
-    with pytest.raises(NetworkError, match="500"):
+    with pytest.raises(NetworkConnectionError, match="500"):
         await kis_strategy._issue_token(mock_http_client)
 
 # ========================================================================================

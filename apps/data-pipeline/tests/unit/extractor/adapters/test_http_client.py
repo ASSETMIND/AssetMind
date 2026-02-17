@@ -6,7 +6,7 @@ from typing import Optional
 
 # 실제 파일 경로에 맞게 Import
 from src.extractor.adapters.http_client import AsyncHttpAdapter
-from src.extractor.domain.exceptions import NetworkError
+from src.common.exceptions import NetworkConnectionError
 
 # ========================================================================================
 # [Fixtures] 테스트 환경 설정 및 Mocking
@@ -193,55 +193,55 @@ async def test_data_04_mcdc_missing_header(adapter, mock_session):
 
 @pytest.mark.asyncio
 async def test_err_01_http_404(adapter, mock_session):
-    """[ERR-01] HTTP 404 응답 시 NetworkError 발생"""
+    """[ERR-01] HTTP 404 응답 시 NetworkConnectionError 발생"""
     mock_resp = mock_session.get.return_value.__aenter__.return_value
     mock_resp.status = 404
     mock_resp.text.return_value = "Not Found"
     
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await adapter.get("url")
     
     assert "404" in str(exc_info.value)
 
 @pytest.mark.asyncio
 async def test_err_02_http_500(adapter, mock_session):
-    """[ERR-02] HTTP 500 응답 시 NetworkError 발생"""
+    """[ERR-02] HTTP 500 응답 시 NetworkConnectionError 발생"""
     mock_resp = mock_session.post.return_value.__aenter__.return_value
     mock_resp.status = 500
     mock_resp.text.return_value = "Server Error"
     
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await adapter.post("url")
     assert "500" in str(exc_info.value)
 
 @pytest.mark.asyncio
 async def test_err_03_connection_error_get(adapter, mock_session):
-    """[ERR-03] GET 연결 실패 시 NetworkError로 래핑"""
+    """[ERR-03] GET 연결 실패 시 NetworkConnectionError로 래핑"""
     mock_session.get.side_effect = aiohttp.ClientConnectorError(
         connection_key=MagicMock(), os_error=OSError("Refused")
     )
     
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await adapter.get("url")
     assert "failed" in str(exc_info.value)
 
 @pytest.mark.asyncio
 async def test_err_04_timeout_error(adapter, mock_session):
-    """[ERR-04] 타임아웃 시 NetworkError로 래핑"""
+    """[ERR-04] 타임아웃 시 NetworkConnectionError로 래핑"""
     mock_session.get.side_effect = asyncio.TimeoutError
     
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await adapter.get("url")
     assert "failed" in str(exc_info.value)
 
 @pytest.mark.asyncio
 async def test_err_05_post_connection_error(adapter, mock_session):
-    """[ERR-05] POST 연결 실패(ClientError) 시 NetworkError로 래핑 검증 (Missing Line Coverage)"""
+    """[ERR-05] POST 연결 실패(ClientError) 시 NetworkConnectionError로 래핑 검증 (Missing Line Coverage)"""
     # Given
     mock_session.post.side_effect = aiohttp.ClientError("Post Failed")
     
     # When & Then
-    with pytest.raises(NetworkError) as exc_info:
+    with pytest.raises(NetworkConnectionError) as exc_info:
         await adapter.post("https://api.test.com/submit", data={"k": "v"})
         
     assert "POST" in str(exc_info.value)
