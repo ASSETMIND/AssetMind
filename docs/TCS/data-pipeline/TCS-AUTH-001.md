@@ -84,7 +84,7 @@ flowchart LR
 
 |     테스트 ID      | 분류 |   기법   | 전제 조건 (Given)                           | 수행 (When)                               | 검증 (Then)                                                                        | 입력 데이터 / 상황          |
 | :----------------: | :--: | :------: | :------------------------------------------ | :---------------------------------------- | :--------------------------------------------------------------------------------- | :-------------------------- |
-|  **KIS-INIT-01**   | 단위 |   표준   | 유효한 `AppConfig` 객체                     | `KISAuthStrategy(config)` 초기화          | 인스턴스 정상 생성 및 `base_url` 매핑 확인                                         | `base_url="https://api..."` |
+|  **KIS-INIT-01**   | 단위 |   표준   | 유효한 `ConfigManager` 객체                 | `KISAuthStrategy(config)` 초기화          | 인스턴스 정상 생성 및 `base_url` 매핑 확인                                         | `base_url="https://api..."` |
 |  **KIS-INIT-02**   | 단위 |   BVA    | `base_url`이 비어있는 설정                  | `KISAuthStrategy(config)` 초기화          | `ValueError` 발생 (방어 로직 작동)                                                 | `base_url=""` 또는 `None`   |
 |  **KIS-INIT-03**   | 단위 |   보안   | `SecretStr` 타입의 키/비밀값                | `KISAuthStrategy(config)` 초기화          | 내부 변수(`self.app_key`)에는 **평문(str)**으로 복호화되어 저장됨                  | `app_key=SecretStr("xyz")`  |
 |  **KIS-LIFE-01**   | 단위 |   상태   | `_access_token`이 `None` (초기 구동)        | `get_token(client)` 호출                  | 1. API 호출 발생<br>2. 토큰 및 만료시간 갱신<br>3. 유효한 토큰 문자열 반환         | Mock API: `200 OK`          |
