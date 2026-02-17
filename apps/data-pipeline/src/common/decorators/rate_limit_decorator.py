@@ -147,7 +147,7 @@ class RateLimitDecorator:
         # 설계 의도: Fail-fast 원칙에 따라 무의미한 자원 점유 방지
         if wait_time > self.max_wait_seconds:
             raise RateLimitError(
-                message=f"Local rate limit threshold exceeded. Max allowed wait: {self.max_wait_seconds}s",
+                message=f"로컬 허용 대기 시간 초과. 최대 허용 대기 시간: {self.max_wait_seconds}s",
                 retry_after=int(wait_time)
             )
         
@@ -177,7 +177,7 @@ class RateLimitDecorator:
             except Exception as e:
                 # 설계 의도: 정의되지 않은 에러는 최상위 ETLError로 래핑하여 규격 준수
                 raise ETLError(
-                    message=f"Unexpected error in rate limit decorator: {str(e)}",
+                    message=f"RateLimitDecorator 실행 중 예기치 못한 오류 발생: {str(e)}",
                     original_exception=e,
                     details={"bucket_key": self.bucket_key}
                 ) from e
@@ -207,7 +207,7 @@ class RateLimitDecorator:
                 raise e
             except Exception as e:
                 raise ETLError(
-                    message=f"Unexpected error in async rate limit decorator: {str(e)}",
+                    message=f"RateLimitDecorator 실행 중 예기치 못한 오류 발생: {str(e)}",
                     original_exception=e,
                     details={"bucket_key": self.bucket_key}
                 ) from e

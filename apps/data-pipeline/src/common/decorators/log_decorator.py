@@ -233,10 +233,10 @@ class LoggingDecorator:
             except Exception as e:
                 elapsed = time.perf_counter() - start_time
                 
-                # [Design Intent] 이미 ETLError인 경우 그대로 사용, 아닐 경우 래핑하여 문맥(Context) 추가
+                # 이미 ETLError인 경우 그대로 사용, 아닐 경우 래핑하여 문맥(Context) 추가
                 if not isinstance(e, ETLError):
                     e = ETLError(
-                        message=f"Unhandled exception in {func_name}",
+                        message=f"{func_name} 실행 중 예기치 못한 오류 발생",
                         details={"raw_error": str(e)},
                         original_exception=e,
                         should_retry=False
@@ -279,7 +279,7 @@ class LoggingDecorator:
                 elapsed = time.perf_counter() - start_time
                 if not isinstance(e, ETLError):
                     e = ETLError(
-                        message=f"Unhandled exception in {func_name}",
+                        message=f"{func_name} 실행 중 예기치 못한 오류 발생",
                         details={"raw_error": str(e)},
                         original_exception=e
                     )
