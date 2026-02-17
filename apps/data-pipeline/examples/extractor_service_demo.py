@@ -5,7 +5,7 @@
 데이터 수집 요청을 정상적으로 수행하는지 검증합니다.
 
 데이터 흐름 (Data Flow):
-Client -> ExtractorService (Facade) -> Factory -> Extractor -> ResponseDTO (Normalized)
+Client -> ExtractorService (Facade) -> Factory -> Extractor -> ExtractedDTO (Normalized)
 
 검증 시나리오:
 1. Lifecycle: `async with`를 통한 HTTP 세션 자동 관리.
@@ -23,22 +23,22 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
 # [Internal Modules]
-from src.common.config import get_config
+from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.extractor.extractor_service import ExtractorService
-from src.extractor.domain.dtos import ResponseDTO
+from src.common.dtos import ExtractedDTO
 
 # 전역 로거
 logger = None
 
-def log_result(job_id: str, result: Union[ResponseDTO, Exception]):
+def log_result(job_id: str, result: Union[ExtractedDTO, Exception]):
     """
     결과 로깅 함수 (Factory Demo Style)
     
     복잡한 구조 대신, 성공/실패 여부와 데이터 요약만 간결하게 출력합니다.
     Service Layer가 이미 응답을 정규화(Normalization)했으므로 로직이 단순합니다.
     """
-    if isinstance(result, ResponseDTO):
+    if isinstance(result, ExtractedDTO):
         # Service Layer가 'status_code'를 확인하여 'status: success'로 변환해 둠
         if result.meta.get("status") == "success":
             # 데이터가 길면 100자로 자름
@@ -58,7 +58,7 @@ async def main():
     
     # 1. Config & Log Init
     try:
-        config = get_config("extractor_demo")
+        config = ConfigManager.get_config("extractor_demo")
         logger = LogManager.get_logger("ServiceDemo")
         logger.info(">>> [Start] Extractor Service Demo initialized.")
     except Exception as e:

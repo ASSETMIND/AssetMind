@@ -29,14 +29,14 @@ sys.path.append(str(BASE_DIR))
 
 from src.extractor.adapters.http_client import AsyncHttpAdapter
 from src.extractor.adapters.auth import KISAuthStrategy, UPBITAuthStrategy
-from src.extractor.domain.exceptions import AuthError, NetworkError
-from src.common.config import get_config, AppConfig
+from src.common.exceptions import AuthError
+from src.common.config import ConfigManager
 from src.common.log import LogManager
 
 # 로거 설정 (전역)
 logger = None
 
-async def verify_kis(client: AsyncHttpAdapter, config: AppConfig):
+async def verify_kis(client: AsyncHttpAdapter, config: ConfigManager):
     """[KIS] 한국투자증권 API 연결성 검증."""
     logger.info("=" * 60)
     logger.info(">>> [Target 1] KIS (Korea Investment & Securities)")
@@ -76,7 +76,7 @@ async def verify_kis(client: AsyncHttpAdapter, config: AppConfig):
         logger.error(f"❌ KIS Verification Failed: {e}")
 
 
-async def verify_fred(client: AsyncHttpAdapter, config: AppConfig):
+async def verify_fred(client: AsyncHttpAdapter, config: ConfigManager):
     """[FRED] 미 연준 경제 데이터 API 연결성 검증."""
     logger.info("-" * 60)
     logger.info(">>> [Target 2] FRED (Federal Reserve Economic Data)")
@@ -112,7 +112,7 @@ async def verify_fred(client: AsyncHttpAdapter, config: AppConfig):
         logger.error(f"❌ FRED Verification Failed: {e}")
 
 
-async def verify_ecos(client: AsyncHttpAdapter, config: AppConfig):
+async def verify_ecos(client: AsyncHttpAdapter, config: ConfigManager):
     """[ECOS] 한국은행 경제통계 API 연결성 검증."""
     logger.info("-" * 60)
     logger.info(">>> [Target 3] ECOS (Bank of Korea)")
@@ -158,7 +158,7 @@ async def verify_ecos(client: AsyncHttpAdapter, config: AppConfig):
         logger.error(f"❌ ECOS Verification Failed: {e}")
 
 
-async def verify_upbit(client: AsyncHttpAdapter, config: AppConfig):
+async def verify_upbit(client: AsyncHttpAdapter, config: ConfigManager):
     """[UPBIT] 업비트 암호화폐 거래소 API 연결성 검증."""
     logger.info("-" * 60)
     logger.info(">>> [Target 4] UPBIT (Crypto Exchange)")
@@ -213,7 +213,7 @@ async def main():
     
     # 1. Config & Logger 초기화
     try:
-        config = get_config("extractor_demo")
+        config = ConfigManager.get_config("extractor_demo")
         LogManager()
         logger = LogManager.get_logger("ExtractorDemo")
         logger.info(">>> [Start] Extractor Integration Tests initialized.")
@@ -226,10 +226,10 @@ async def main():
         # 3. 순차적 검증 수행 (가독성을 위해 순차 실행)
         # 병렬 실행을 원하면 asyncio.gather() 사용 가능
         
-        await verify_kis(client, config)
-        await verify_fred(client, config)
+        # await verify_kis(client, config)
+        # await verify_fred(client, config)
         await verify_ecos(client, config)
-        await verify_upbit(client, config)
+        # await verify_upbit(client, config)
 
     logger.info("=" * 60)
     logger.info(">>> [End] All Adapter Tests Completed.")

@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
 # [Internal Modules]
-from src.common.config import get_config, AppConfig
+from src.common.config import get_config, ConfigManager
 from src.common.log import LogManager
 from src.extractor.adapters.http_client import AsyncHttpAdapter
 from src.extractor.domain.dtos import RequestDTO
@@ -36,7 +36,7 @@ logger = None
 async def run_integration_test(
     job_id: str, 
     http_client: AsyncHttpAdapter, 
-    config: AppConfig
+    config: ConfigManager
 ):
     """개별 수집 작업(Job)에 대한 통합 테스트를 수행합니다.
 
@@ -45,7 +45,7 @@ async def run_integration_test(
     Args:
         job_id (str): 테스트할 작업 식별자 (YAML Policy Key).
         http_client (AsyncHttpAdapter): 공유 HTTP 클라이언트.
-        config (AppConfig): 통합 설정 객체.
+        config (ConfigManager): 통합 설정 객체.
     """
     logger.info(f">>> Testing Job: {job_id}")
 
