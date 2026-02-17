@@ -5,9 +5,9 @@ from typing import Dict, Any, List, Union
 
 # [Target Modules]
 from src.extractor.extractor_service import ExtractorService
-from src.extractor.domain.dtos import RequestDTO, ResponseDTO
-from src.extractor.domain.exceptions import ExtractorError
-from src.common.config import AppConfig
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ConfigurationError, ExtractorError
+from src.common.config import ConfigManager
 
 # [Dependencies & Interfaces]
 from src.extractor.adapters.http_client import AsyncHttpAdapter
@@ -18,12 +18,12 @@ from src.extractor.extractor_factory import ExtractorFactory
 # ========================================================================================
 
 class MockPolicy:
-    """AppConfig.extraction_policy의 Value 객체 모방"""
+    """ConfigManager.extraction_policy의 Value 객체 모방"""
     def __init__(self, params: Dict[str, Any] = None):
         self.params = params or {}
 
 class MockConfig:
-    """AppConfig 객체 모방 (프로덕션 환경과 동일한 속성 구조 제공)"""
+    """ConfigManager 객체 모방 (프로덕션 환경과 동일한 속성 구조 제공)"""
     def __init__(self, policies: Dict[str, MockPolicy] = None):
         self.extraction_policy = policies or {}
 
@@ -135,7 +135,7 @@ def test_norm_01_fast_path_optimization(config_with_jobs):
     """[NORM-01] [Optimization] 이미 status='success'인 경우 로직 건너뜀"""
     # Given
     service = ExtractorService(config_with_jobs)
-    response = ResponseDTO(data=[], meta={"status": "success", "status_code": "000"})
+    response = ExtractedDTO(data=[], meta={"status": "success", "status_code": "000"})
     
     # When
     result = service._normalize_response(response)
@@ -151,7 +151,7 @@ def test_norm_02_standard_code_mapping(config_with_jobs):
     cases = ["200", "OK", "ok", "Success", "0", " 200 "]
     
     for code in cases:
-        response = ResponseDTO(data=[], meta={"status_code": code})
+        response = ExtractedDTO(data=[], meta={"status_code": code})
         
         # When
         result = service._normalize_response(response)
@@ -166,7 +166,7 @@ def test_norm_03_robustness_empty_code(config_with_jobs):
     cases = [None, ""]
     
     for code in cases:
-        response = ResponseDTO(data=[], meta={"status_code": code})
+        response = ExtractedDTO(data=[], meta={"status_code": code})
         
         # When
         result = service._normalize_response(response)
@@ -182,7 +182,7 @@ def test_norm_04_safety_failure_preservation(config_with_jobs):
     cases = ["404", "500", "ERROR", "fail"]
     
     for code in cases:
-        response = ResponseDTO(data=[], meta={"status_code": code})
+        response = ExtractedDTO(data=[], meta={"status_code": code})
         
         # When
         result = service._normalize_response(response)
@@ -196,12 +196,12 @@ def test_norm_04_safety_failure_preservation(config_with_jobs):
 
 @pytest.mark.asyncio
 async def test_job_01_policy_not_found(config_with_jobs):
-    """[JOB-01] 설정에 없는 Job ID 요청 시 ExtractorError 발생"""
+    """[JOB-01] 설정에 없는 Job ID 요청 시 ConfigurationError 발생"""
     # Given
     service = ExtractorService(config_with_jobs, http_client=MagicMock())
     
     # When & Then
-    with pytest.raises(ExtractorError, match="Job ID 'GHOST_JOB' not found"):
+    with pytest.raises(ConfigurationError, match="Job ID 'GHOST_JOB'를 찾을 수 없습니다."):
         await service.extract_job("GHOST_JOB")
 
 @pytest.mark.asyncio
@@ -210,7 +210,7 @@ async def test_job_02_param_merging_priority(mock_factory, config_with_jobs):
     # Given
     service = ExtractorService(config_with_jobs, http_client=MagicMock())
     mock_extractor = AsyncMock()
-    mock_extractor.extract.return_value = ResponseDTO(data=[], meta={"status": "success"})
+    mock_extractor.extract.return_value = ExtractedDTO(data=[], meta={"status": "success"})
     mock_factory.create_extractor.return_value = mock_extractor
     
     override = {"p1": "overridden", "p2": "new"}
@@ -246,7 +246,7 @@ async def test_job_04_system_exception_wrapping(mock_factory, config_with_jobs):
     mock_factory.create_extractor.return_value = mock_extractor
     
     # When & Then
-    with pytest.raises(ExtractorError, match="Unexpected failure in job_error_system"):
+    with pytest.raises(ExtractorError, match="Job 'job_error_system' 작업 중 예상치 못한 오류가 발생."):
         await service.extract_job("job_error_system")
 
 # ========================================================================================
@@ -261,7 +261,7 @@ async def test_batch_01_mixed_input_structure(config_with_jobs):
     
     # Mock extract_job using patch.object to avoid real logic
     with patch.object(service, 'extract_job', new=AsyncMock()) as mock_extract:
-        mock_extract.return_value = ResponseDTO(data=[], meta={"status": "success"})
+        mock_extract.return_value = ExtractedDTO(data=[], meta={"status": "success"})
         
         requests = ["job_normal", ("job_normal", {"p": "v"})]
         
@@ -299,7 +299,7 @@ async def test_batch_03_isolation_partial_success(config_with_jobs):
     service = ExtractorService(config_with_jobs, http_client=MagicMock())
     
     # Mock extract_job to return [Success, Error, Success]
-    success_dto = ResponseDTO(data="ok", meta={"status": "success"})
+    success_dto = ExtractedDTO(data="ok", meta={"status": "success"})
     fail_exc = ExtractorError("Fail")
     
     with patch.object(service, 'extract_job', side_effect=[success_dto, fail_exc, success_dto]):
@@ -310,9 +310,9 @@ async def test_batch_03_isolation_partial_success(config_with_jobs):
         
         # Then
         assert len(results) == 3
-        assert isinstance(results[0], ResponseDTO)
+        assert isinstance(results[0], ExtractedDTO)
         assert isinstance(results[1], ExtractorError) # Exception 객체 존재 확인
-        assert isinstance(results[2], ResponseDTO)
+        assert isinstance(results[2], ExtractedDTO)
 
 @pytest.mark.asyncio
 async def test_batch_04_bva_empty_list(config_with_jobs):
@@ -338,7 +338,7 @@ async def test_fact_01_factory_delegation(mock_factory, config_with_jobs):
     service = ExtractorService(config_with_jobs, http_client=mock_client)
     
     mock_extractor = AsyncMock()
-    mock_extractor.extract.return_value = ResponseDTO(data=[], meta={"status": "success"})
+    mock_extractor.extract.return_value = ExtractedDTO(data=[], meta={"status": "success"})
     mock_factory.create_extractor.return_value = mock_extractor
     
     # When

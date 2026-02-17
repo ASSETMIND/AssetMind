@@ -2,7 +2,7 @@
 KIS(한국투자증권) 데이터 수집기 구현체 (KIS Extractor)
 
 이 모듈은 한국투자증권 오픈 API를 사용하여 데이터를 수집하는 역할을 담당합니다.
-모든 API 호출 정보(URL, TR_ID 등)를 코드 내 상수가 아닌 외부 설정(AppConfig)에서
+모든 API 호출 정보(URL, TR_ID 등)를 코드 내 상수가 아닌 외부 설정(ConfigManager)에서
 동적으로 로드하여 유연성을 확보했습니다.
 
 데이터 흐름 (Data Flow):
@@ -24,84 +24,46 @@ Trade-off:
 from datetime import datetime
 from typing import Any
 
-# [Decorator Imports]
-from ...common.decorators.log_decorator import log_decorator
-from ...common.decorators.rate_limit_decorator import rate_limit
-from ...common.decorators.retry_decorator import retry
+from src.common.config import ConfigManager
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ExtractorError
+from src.common.interfaces import IHttpClient, IAuthStrategy
 
-from ...common.config import AppConfig
-from ..domain.dtos import RequestDTO, ResponseDTO
-from ..domain.exceptions import ExtractorError
-from ..domain.interfaces import IAuthStrategy, IHttpClient
-from .abstract_extractor import AbstractExtractor
+from src.common.decorators.log_decorator import log_decorator
+from src.common.decorators.rate_limit_decorator import rate_limit
+from src.common.decorators.retry_decorator import retry
 
+from src.extractor.providers.abstract_extractor import AbstractExtractor
 
 class KISExtractor(AbstractExtractor):
     """설정(Config)에 정의된 정책을 기반으로 동작하는 한국투자증권 데이터 수집기.
 
     Attributes:
         auth_strategy (IAuthStrategy): 토큰 발급 및 갱신을 담당하는 전략 객체.
-        config (AppConfig): 애플리케이션의 전체 설정 정보를 담고 있는 객체.
+        config (ConfigManager): 애플리케이션의 전체 설정 정보를 담고 있는 객체.
     """
 
     def __init__(
         self, 
         http_client: IHttpClient, 
         auth_strategy: IAuthStrategy, 
-        config: AppConfig
+        config: ConfigManager
     ):
         """KISExtractor를 초기화합니다.
 
         Args:
             http_client (IHttpClient): HTTP 요청 클라이언트.
             auth_strategy (IAuthStrategy): KIS 인증 토큰 발급 전략.
-            config (AppConfig): 앱 설정 객체.
+            config (ConfigManager): 앱 설정 객체.
         """
         # 부모 클래스(AbstractExtractor) 초기화 (여기서 config 기본 검증 수행됨)
         super().__init__(http_client, config)
         self.auth_strategy = auth_strategy
         
-        # Rationale: AppConfig가 Pydantic 모델이므로 kis 필드의 존재는 보장되지만, 
+        # Rationale: ConfigManager가 Pydantic 모델이므로 kis 필드의 존재는 보장되지만, 
         # 명시적으로 base_url이 비어있는지 체크하여 Fail-Fast를 유도함.
         if not config.kis.base_url:
-            raise ExtractorError("Critical Config Error: 'kis.base_url' is empty in AppConfig.")
-
-    async def extract(self, request: RequestDTO) -> ResponseDTO:
-        """데이터 수집을 수행하는 공개 메서드 (Template Method).
-
-        검증 -> 데이터 인출 -> 응답 생성의 표준 흐름을 제어합니다.
-
-        Args:
-            request (RequestDTO): 수집 요청 정보 (job_id, params 포함).
-
-        Returns:
-            ResponseDTO: 수집된 원본 데이터와 메타데이터.
-
-        Raises:
-            ExtractorError: 수집 과정 중 발생한 모든 비즈니스 예외.
-        """
-        try:
-            # 1. 요청 유효성 검증 (Validation)
-            self._validate_request(request)
-
-            # 2. 데이터 인출 (Fetching)
-            raw_data = await self._fetch_raw_data(request)
-
-            # 3. 응답 객체 생성 (Response Creation)
-            response = self._create_response(raw_data, request.job_id)
-            
-            self.logger.info(f"Extraction Successful | Job: {request.job_id}")
-            
-            return response
-
-        except ExtractorError as e:
-            # 이미 처리된 ExtractorError는 그대로 상위로 전파
-            self.logger.error(f"Extraction Failed: {e}")
-            raise e
-        except Exception as e:
-            # 예상치 못한 시스템 에러는 ExtractorError로 래핑하여 일관성 유지
-            self.logger.error(f"Unexpected System Error during extraction: {e}", exc_info=True)
-            raise ExtractorError(f"System Error: {str(e)}")
+            raise ExtractorError("Critical Config Error: 'kis.base_url' is empty in ConfigManager.")
     
     def _validate_request(self, request: RequestDTO) -> None:
         """요청된 작업(Job)이 KIS 수집 정책에 부합하는지 검증합니다.
@@ -133,10 +95,10 @@ class KISExtractor(AbstractExtractor):
         # Rationale: JobPolicy 스키마에서 tr_id는 Optional이므로, KIS 구현체에서 필수 여부를 강제해야 함.
         if not policy.tr_id:
              raise ExtractorError(f"Configuration Error: 'tr_id' is missing in policy '{request.job_id}'.")
-
-    @retry(max_retries=3)
-    @rate_limit(limit=5, period=1.0, bucket_key="KIS_OpenAPI") # Personal/Corp Limit Shared
+    
     @log_decorator(logger_name="KIS_Extractor")
+    @rate_limit(limit=5, period=1.0, bucket_key="KIS_OpenAPI")
+    @retry(max_retries=3)
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """설정된 정책과 인증 정보를 결합하여 KIS API를 호출합니다.
 
@@ -180,14 +142,14 @@ class KISExtractor(AbstractExtractor):
         # 6. 비동기 호출 수행
         return await self.http_client.get(url, headers=headers, params=merged_params)
 
-    def _create_response(self, raw_data: Any, job_id: str) -> ResponseDTO:
+    def _create_response(self, raw_data: Any, job_id: str) -> ExtractedDTO:
         """KIS API 응답의 결과 코드(rt_cd)를 확인하고 DTO로 포장합니다.
 
         Args:
             raw_data (Any): API 원본 응답.
             job_id (str): 요청된 작업 ID.
         Returns:
-            ResponseDTO: 결과 객체.
+            ExtractedDTO: 결과 객체.
 
         Raises:
             ExtractorError: rt_cd가 성공('0')이 아닌 경우.
@@ -200,7 +162,7 @@ class KISExtractor(AbstractExtractor):
             self.logger.error(f"KIS API Business Failure: {msg} (Code: {rt_cd})")
             raise ExtractorError(f"KIS API Failed: {msg} (Code: {rt_cd})")
 
-        return ResponseDTO(
+        return ExtractedDTO(
             data=raw_data,
             meta={
                 "source": "KIS",

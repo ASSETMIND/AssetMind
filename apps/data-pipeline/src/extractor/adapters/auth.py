@@ -44,10 +44,10 @@ from urllib.parse import urlencode
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-from ..domain.interfaces import IAuthStrategy, IHttpClient
-from ..domain.exceptions import AuthError, NetworkError
-from ...common.config import AppConfig
-from ...common.decorators import log_decorator, retry
+from src.common.interfaces import IAuthStrategy, IHttpClient
+from src.common.exceptions import AuthError, NetworkConnectionError
+from src.common.config import ConfigManager
+from src.common.decorators import log_decorator, retry
 
 # --- Constants & Configuration ---
 TOKEN_EXPIRATION_BUFFER_MINUTES = 10
@@ -71,12 +71,11 @@ class KISAuthStrategy(IAuthStrategy):
         _logger (logging.Logger): 클래스 전용 로거.
     """
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: ConfigManager) -> None:
         """KISAuthStrategy 인스턴스를 초기화합니다.
 
         Args:
-            config (AppConfig): 애플리케이션 전역 설정 객체.
-
+            config (ConfigManager): 애플리케이션 전역 설정 객체.
         Raises:
             ValueError: 필수 설정(base_url)이 누락된 경우.
         """
@@ -131,7 +130,7 @@ class KISAuthStrategy(IAuthStrategy):
         return False
 
     @log_decorator(logger_name="KISAuth", suppress_error=False)
-    @retry(max_retries=3, base_delay=1.0, exceptions=(NetworkError,))
+    @retry(max_retries=3, base_delay=1.0, exceptions=(NetworkConnectionError,))
     async def _issue_token(self, http_client: IHttpClient) -> None:
         """KIS API를 호출하여 새로운 토큰을 발급받습니다."""
         url = f"{self.base_url}/oauth2/tokenP"
@@ -147,7 +146,7 @@ class KISAuthStrategy(IAuthStrategy):
             self._validate_response(response)
             self._update_state(response)
 
-        except NetworkError as e:
+        except NetworkConnectionError as e:
             error_msg = str(e)
             # Rationale: 인증 정보 오류(401/403)는 재시도해도 해결되지 않으므로 즉시 에러를 전파(Fail-Fast).
             if "403" in error_msg or "401" in error_msg:
@@ -185,12 +184,11 @@ class UPBITAuthStrategy(IAuthStrategy):
         _logger (logging.Logger): 클래스 전용 로거.
     """
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: ConfigManager) -> None:
         """UPBITAuthStrategy 인스턴스를 초기화합니다.
 
         Args:
-            config (AppConfig): 애플리케이션 전역 설정 객체.
-
+            config (ConfigManager): 애플리케이션 전역 설정 객체.
         Raises:
             ValueError: Access Key, Secret Key, Base URL 설정이 누락된 경우.
         """

@@ -25,32 +25,30 @@ Trade-off:
 from datetime import datetime
 from typing import Any
 
-# [Decorator Imports]
-# 공통 데코레이터 모듈을 임포트하여 횡단 관심사(Logging, Retry, RateLimit)를 처리합니다.
-from ...common.decorators.log_decorator import log_decorator
-from ...common.decorators.rate_limit_decorator import rate_limit
-from ...common.decorators.retry_decorator import retry
+from src.common.config import ConfigManager
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ETLError, ExtractorError
+from src.common.interfaces import IHttpClient
 
-from ...common.config import AppConfig
-from ..domain.dtos import RequestDTO, ResponseDTO
-from ..domain.exceptions import ExtractorError
-from ..domain.interfaces import IHttpClient
-from .abstract_extractor import AbstractExtractor
+from src.common.decorators.log_decorator import log_decorator
+from src.common.decorators.rate_limit_decorator import rate_limit
+from src.common.decorators.retry_decorator import retry
 
+from src.extractor.providers.abstract_extractor import AbstractExtractor
 
 class ECOSExtractor(AbstractExtractor):
     """설정(Config)에 정의된 정책을 기반으로 동작하는 한국은행(ECOS) 데이터 수집기.
 
     Attributes:
-        config (AppConfig): 애플리케이션의 전체 설정 정보를 담고 있는 객체.
+        config (ConfigManager): 애플리케이션의 전체 설정 정보를 담고 있는 객체.
     """
 
-    def __init__(self, http_client: IHttpClient, config: AppConfig):
+    def __init__(self, http_client: IHttpClient, config: ConfigManager):
         """ECOSExtractor를 초기화합니다.
 
         Args:
             http_client (IHttpClient): HTTP 요청 클라이언트.
-            config (AppConfig): 앱 설정 객체.
+            config (ConfigManager): 앱 설정 객체.
         """
         # 부모 클래스(AbstractExtractor) 초기화 (여기서 config 기본 검증 수행됨)
         super().__init__(http_client, config)
@@ -60,43 +58,6 @@ class ECOSExtractor(AbstractExtractor):
             raise ExtractorError("Critical Config Error: 'ecos.base_url' is empty.")
         if not config.ecos.api_key:
             raise ExtractorError("Critical Config Error: 'ecos.api_key' is missing.")
-
-    async def extract(self, request: RequestDTO) -> ResponseDTO:
-        """데이터 수집을 수행하는 공개 메서드 (Template Method).
-
-        검증 -> 데이터 인출 -> 응답 생성의 표준 흐름을 제어합니다.
-
-        Args:
-            request (RequestDTO): 수집 요청 정보 (job_id, params 포함).
-
-        Returns:
-            ResponseDTO: 수집된 원본 데이터와 메타데이터.
-
-        Raises:
-            ExtractorError: 수집 과정 중 발생한 모든 비즈니스 예외.
-        """
-        try:
-            # 1. 요청 유효성 검증 (Validation)
-            self._validate_request(request)
-
-            # 2. 데이터 인출 (Fetching)
-            raw_data = await self._fetch_raw_data(request)
-
-            # 3. 응답 객체 생성 (Response Creation)
-            response = self._create_response(raw_data, request.job_id)
-            
-            self.logger.info(f"Extraction Successful | Job: {request.job_id}")
-            
-            return response
-
-        except ExtractorError as e:
-            # 이미 처리된 ExtractorError는 그대로 상위로 전파
-            self.logger.error(f"Extraction Failed: {e}")
-            raise e
-        except Exception as e:
-            # 예상치 못한 시스템 에러는 ExtractorError로 래핑하여 일관성 유지
-            self.logger.error(f"Unexpected System Error during extraction: {e}", exc_info=True)
-            raise ExtractorError(f"System Error: {str(e)}")
 
     def _validate_request(self, request: RequestDTO) -> None:
         """요청된 작업(Job)이 ECOS 수집 정책에 부합하는지 검증합니다.
@@ -129,9 +90,9 @@ class ECOSExtractor(AbstractExtractor):
         if "start_date" not in request.params or "end_date" not in request.params:
             raise ExtractorError("Invalid Request: 'start_date' and 'end_date' are mandatory for ECOS.")
 
-    @retry(max_retries=3, base_delay=1.0)
-    @rate_limit(limit=20, period=1.0, bucket_key="ECOS_API")
     @log_decorator(logger_name="ECOS_Extractor")
+    @rate_limit(limit=20, period=1.0, bucket_key="ECOS_API")
+    @retry(max_retries=3, base_delay=1.0)
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """설정된 정책과 요청 파라미터를 결합하여 ECOS API URL을 조립하고 호출합니다.
 
@@ -176,14 +137,14 @@ class ECOSExtractor(AbstractExtractor):
         # Rationale: URL에 모든 파라미터가 포함되었으므로 params 인자는 전달하지 않음.
         return await self.http_client.get(url)
 
-    def _create_response(self, raw_data: Any, job_id: str) -> ResponseDTO:
+    def _create_response(self, raw_data: Any, job_id: str) -> ExtractedDTO:
         """ECOS API 응답의 결과 코드(RESULT.CODE)를 확인하고 DTO로 포장합니다.
 
         Args:
             raw_data (Any): API 원본 응답.
             job_id (str): 요청된 작업 ID.
         Returns:
-            ResponseDTO: 결과 객체.
+            ExtractedDTO: 결과 객체.
 
         Raises:
             ExtractorError: API 코드가 성공('INFO-000')이 아닌 경우.
@@ -214,7 +175,7 @@ class ECOSExtractor(AbstractExtractor):
              # Rationale: 예상한 서비스명 키가 없는 경우 응답 구조 변경 또는 알 수 없는 에러.
              raise ExtractorError(f"Invalid ECOS Response: Root key '{policy_path}' not found.")
 
-        return ResponseDTO(
+        return ExtractedDTO(
             data=raw_data,
             meta={
                 "source": "ECOS",

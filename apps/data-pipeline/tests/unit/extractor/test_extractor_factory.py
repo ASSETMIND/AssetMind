@@ -4,9 +4,9 @@ from typing import Dict
 
 # [Target Modules]
 from src.extractor.extractor_factory import ExtractorFactory
-from src.extractor.domain.exceptions import ExtractorError
-from src.extractor.domain.interfaces import IHttpClient, IAuthStrategy
-from src.common.config import AppConfig
+from src.common.exceptions import ExtractorError
+from src.common.interfaces import IHttpClient, IAuthStrategy
+from src.common.config import ConfigManager
 
 # [Implementations]
 from src.extractor.providers.kis_extractor import KISExtractor
@@ -28,12 +28,12 @@ class MockSecretStr:
         return self._value
 
 class MockPolicy:
-    """AppConfig.extraction_policy의 Value 객체 모방"""
+    """ConfigManager.extraction_policy의 Value 객체 모방"""
     def __init__(self, provider: str):
         self.provider = provider
 
 class MockConfig:
-    """AppConfig 객체 모방 (프로덕션 환경과 동일한 속성 구조 제공)"""
+    """ConfigManager 객체 모방 (프로덕션 환경과 동일한 속성 구조 제공)"""
     def __init__(self, policies: Dict[str, MockPolicy] = None):
         self.extraction_policy = policies or {}
         

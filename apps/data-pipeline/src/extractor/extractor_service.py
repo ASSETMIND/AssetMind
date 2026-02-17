@@ -29,12 +29,13 @@ Trade-off:
 import asyncio
 from typing import List, Dict, Optional, Any, Union, Tuple
 
-from ..common.config import AppConfig
-from ..common.log import LogManager
-from .adapters.http_client import AsyncHttpAdapter
-from .domain.dtos import RequestDTO, ResponseDTO
-from .domain.exceptions import ExtractorError
-from .extractor_factory import ExtractorFactory
+from src.common.config import ConfigManager
+from src.common.log import LogManager
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ConfigurationError, ETLError, ExtractorError
+
+from src.extractor.adapters.http_client import AsyncHttpAdapter
+from src.extractor.extractor_factory import ExtractorFactory
 
 
 class ExtractorService:
@@ -44,7 +45,7 @@ class ExtractorService:
     클라이언트에게 단순화된 인터페이스(extract_job, extract_batch)를 제공합니다.
 
     Attributes:
-        _config (AppConfig): 애플리케이션 전역 설정 객체.
+        _config (ConfigManager): 애플리케이션 전역 설정 객체.
         _http_client (Optional[AsyncHttpAdapter]): HTTP 요청을 처리하는 어댑터 인스턴스.
         _owns_client (bool): 클라이언트 인스턴스의 생명주기 관리 권한 여부.
                              True인 경우 Context Manager 종료 시 세션을 닫습니다.
@@ -52,13 +53,13 @@ class ExtractorService:
 
     def __init__(
         self, 
-        config: AppConfig, 
+        config: ConfigManager, 
         http_client: Optional[AsyncHttpAdapter] = None
     ):
         """ExtractorService 인스턴스를 초기화합니다.
 
         Args:
-            config (AppConfig): 전역 설정 객체.
+            config (ConfigManager): 전역 설정 객체.
             http_client (Optional[AsyncHttpAdapter]): 외부에서 주입된 HTTP 클라이언트. 
                 None일 경우 Context Manager 진입 시 내부에서 생성합니다.
         """
@@ -84,7 +85,7 @@ class ExtractorService:
         # 실제 사용 시점(Context Entry)에 초기화하여 불필요한 리소스 점유를 방지합니다.
         if self._http_client is None and self._owns_client:
             self._http_client = AsyncHttpAdapter(timeout=30)
-            self._logger.info("ExtractorService initialized internal HTTP client.")
+            self._logger.info("ExtractorService의 내부 HTTP client 초기화.")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -99,7 +100,7 @@ class ExtractorService:
         # 세션을 닫아 리소스 누수(Memory Leak, Socket Exhaustion)를 방지합니다.
         if self._owns_client and self._http_client:
             await self._http_client.close()
-            self._logger.info("ExtractorService closed internal HTTP client.")
+            self._logger.info("ExtractorService 내부 HTTP client 종료.")
 
     def _ensure_client(self):
         """HTTP 클라이언트 초기화 상태를 검증하는 Guard Clause.
@@ -112,7 +113,7 @@ class ExtractorService:
                 "HTTP Client is not initialized. Use 'async with ExtractorService(...) as service:' pattern."
             )
 
-    def _normalize_response(self, response: ResponseDTO) -> ResponseDTO:
+    def _normalize_response(self, response: RequestDTO) -> ExtractedDTO:
         """다양한 Provider의 성공 응답을 표준 포맷으로 통일합니다 (Normalization).
         
         Rationale:
@@ -121,10 +122,10 @@ class ExtractorService:
             상위 모듈이 구체적인 Provider 구현을 몰라도 되게 함 (Information Hiding).
 
         Args:
-            response (ResponseDTO): 원본 응답 객체.
+            response (RequestDTO): 원본 응답 객체.
 
         Returns:
-            ResponseDTO: 메타데이터(status)가 정규화된 응답 객체.
+            ExtractedDTO: 메타데이터(status)가 정규화된 응답 객체.
         """
         meta = response.meta
         
@@ -157,7 +158,7 @@ class ExtractorService:
         self, 
         job_id: str, 
         override_params: Optional[Dict[str, Any]] = None
-    ) -> ResponseDTO:
+    ) -> ExtractedDTO:
         """단일 수집 작업을 실행하고 정규화된 응답을 반환합니다.
 
         Args:
@@ -173,14 +174,16 @@ class ExtractorService:
         self._ensure_client()
         
         # 1. Policy Lookup
+        # Rationale: Job ID가 없는 것은 런타임 에러가 아니라 '설정 오류'입니다.
         policy = self._config.extraction_policy.get(job_id)
         if not policy:
-            raise ExtractorError(f"Job ID '{job_id}' not found in configuration.")
-
+            raise ConfigurationError(
+                message=f"Job ID '{job_id}'를 찾을 수 없습니다.",
+                key_name="job_id"
+            )
         try:
             # 2. Parameter Merging
-            # Rationale: Config 객체의 불변성을 보장하기 위해 
-            # 얕은 복사(.copy()) 후 업데이트를 수행합니다.
+            # Rationale: Config 불변성 보장을 위해 얕은 복사(.copy()) 사용
             final_params = policy.params.copy()
             if override_params:
                 final_params.update(override_params)
@@ -201,19 +204,25 @@ class ExtractorService:
             # 하위 시스템의 복잡성을 숨기고 표준화된 응답 반환
             return self._normalize_response(response)
 
-        except ExtractorError as e:
-            # 도메인 레벨 에러는 경고 로그만 남기고 상위로 재전파 (배치 처리 시 격리됨)
-            self._logger.warning(f"Domain Error in Job '{job_id}': {e}")
+        except ETLError as e:
+            # 이미 ETLError로 래핑된 예외는 그대로 상위로 전파
             raise e
+
         except Exception as e:
-            # 예상치 못한 시스템 에러는 Stack Trace 로깅 후 사용자 정의 예외로 래핑
-            self._logger.error(f"System Error in Job '{job_id}': {e}", exc_info=True)
-            raise ExtractorError(f"Unexpected failure in {job_id}") from e
+            raise ExtractorError(
+                message=f"Job '{job_id}' 작업 중 예상치 못한 오류가 발생.",
+                details={
+                    "job_id": job_id,
+                    "step": "execution_layer",
+                    "raw_error_type": type(e).__name__
+                },
+                original_exception=e, # 원본 스택트레이스 보존
+            )
 
     async def extract_batch(
         self, 
         job_requests: List[Union[str, Tuple[str, Dict[str, Any]]]]
-    ) -> List[Union[ResponseDTO, Exception]]:
+    ) -> List[Union[RequestDTO, Exception]]:
         """다수의 수집 작업을 병렬로 실행합니다 (Batch Processing).
 
         Args:
@@ -222,8 +231,8 @@ class ExtractorService:
                 - 또는 (ID, Param) 튜플 ("job_id", {"param": "value"})
 
         Returns:
-            List[Union[ResponseDTO, Exception]]: 결과 목록.
-            성공 시 ResponseDTO, 실패 시 Exception 객체가 리스트에 포함됨 (부분 성공 보장).
+            List[Union[RequestDTO, Exception]]: 결과 목록.
+            성공 시 RequestDTO, 실패 시 Exception 객체가 리스트에 포함됨 (부분 성공 보장).
         """
         tasks = []
         
@@ -234,7 +243,7 @@ class ExtractorService:
             elif isinstance(req, tuple):
                 tasks.append(self.extract_job(req[0], req[1]))
             else:
-                self._logger.warning(f"Invalid batch request format: {req}")
+                self._logger.warning(f"잘못된 배치 요청 형식: {req}")
         
         if not tasks:
             return []
@@ -242,11 +251,11 @@ class ExtractorService:
         # 2. Parallel Execution
         # Rationale: return_exceptions=True를 사용하여 개별 작업의 실패가 
         # 전체 배치 프로세스를 중단시키지 않도록 격리(Isolation)합니다.
-        self._logger.info(f"Starting batch execution of {len(tasks)} jobs.")
+        self._logger.info(f"{len(tasks)} 개의 작업을 병렬로 실행합니다.")
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # 3. Summary Logging
         success_count = sum(1 for r in results if not isinstance(r, Exception))
-        self._logger.info(f"Batch completed. Success: {success_count}/{len(tasks)}")
+        self._logger.info(f"배치 작업 완료. 성공: {success_count}/{len(tasks)}")
         
         return results

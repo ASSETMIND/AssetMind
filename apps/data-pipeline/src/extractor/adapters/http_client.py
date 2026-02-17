@@ -26,10 +26,10 @@ import asyncio
 from typing import Dict, Optional, Any
 from types import TracebackType
 
-from ..domain.interfaces import IHttpClient
-from ..domain.exceptions import NetworkError
-from ...common.log import LogManager
-from ...common.decorators import log_decorator, retry
+from src.common.interfaces import IHttpClient
+from src.common.exceptions import NetworkConnectionError
+from src.common.log import LogManager
+from src.common.decorators import log_decorator, retry
 
 
 class AsyncHttpAdapter(IHttpClient):
@@ -86,7 +86,7 @@ class AsyncHttpAdapter(IHttpClient):
             self.logger.info("Async HTTP Session closed.")
 
     @log_decorator(logger_name="HTTP", suppress_error=False)
-    @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkError, asyncio.TimeoutError))
+    @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkConnectionError, asyncio.TimeoutError))
     async def get(
         self, 
         url: str, 
@@ -104,7 +104,7 @@ class AsyncHttpAdapter(IHttpClient):
             Any: 파싱된 응답 데이터 (주로 Dict).
 
         Raises:
-            NetworkError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
+            NetworkConnectionError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
         """
         session = await self._get_session()
         try:
@@ -113,11 +113,11 @@ class AsyncHttpAdapter(IHttpClient):
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             # Rationale: 원본 에러(aiohttp specific)를 래핑하여 
             # 상위 도메인 로직이 인프라 구현 세부사항(aiohttp)에 의존하지 않도록 함.
-            # 또한 RetryDecorator가 감지할 수 있는 예외(NetworkError)로 변환함.
-            raise NetworkError(f"GET {url} failed: {str(e)}") from e
+            # 또한 RetryDecorator가 감지할 수 있는 예외(NetworkConnectionError)로 변환함.
+            raise NetworkConnectionError(f"GET {url} failed: {str(e)}") from e
 
     @log_decorator(logger_name="HTTP", suppress_error=False)
-    @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkError, asyncio.TimeoutError))
+    @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkConnectionError, asyncio.TimeoutError))
     async def post(
         self, 
         url: str, 
@@ -135,7 +135,7 @@ class AsyncHttpAdapter(IHttpClient):
             Any: 파싱된 응답 데이터.
 
         Raises:
-            NetworkError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
+            NetworkConnectionError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
         """
         session = await self._get_session()
         try:
@@ -143,7 +143,7 @@ class AsyncHttpAdapter(IHttpClient):
                 return await self._handle_response(response, url, "POST")
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
              # Rationale: GET과 동일하게 예외를 래핑하여 일관된 에러 인터페이스 제공.
-             raise NetworkError(f"POST {url} failed: {str(e)}") from e
+             raise NetworkConnectionError(f"POST {url} failed: {str(e)}") from e
 
     async def _handle_response(
         self, 
@@ -162,7 +162,7 @@ class AsyncHttpAdapter(IHttpClient):
             Any: 파싱된 JSON 객체 또는 텍스트.
 
         Raises:
-            NetworkError: HTTP Status가 400 이상일 경우.
+            NetworkConnectionError: HTTP Status가 400 이상일 경우.
         """
         # 1. HTTP Status 검사
         if response.status >= 400:
@@ -171,7 +171,7 @@ class AsyncHttpAdapter(IHttpClient):
                 f"[{method}] HTTP Error | Status: {response.status} | URL: {url} | Body: {error_body[:200]}"
             )
             # Rationale: 4xx/5xx 에러는 정상 응답이 아니므로 예외를 발생시켜 흐름을 제어함.
-            raise NetworkError(f"HTTP {response.status} on {method} {url}: {error_body}")
+            raise NetworkConnectionError(f"HTTP {response.status} on {method} {url}: {error_body}")
 
         # 2. 데이터 파싱 (JSON 우선, 실패 시 Text 반환)
         try:

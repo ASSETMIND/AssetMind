@@ -22,32 +22,31 @@ Trade-off:
 from datetime import datetime
 from typing import Any
 
-# [Decorator Imports]
-from ...common.decorators.log_decorator import log_decorator
-from ...common.decorators.rate_limit_decorator import rate_limit
-from ...common.decorators.retry_decorator import retry
+from src.common.config import ConfigManager
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ExtractorError
+from src.common.interfaces import IHttpClient
 
-from ...common.config import AppConfig
-from ..domain.dtos import RequestDTO, ResponseDTO
-from ..domain.exceptions import ExtractorError
-from ..domain.interfaces import IHttpClient
-from .abstract_extractor import AbstractExtractor
+from src.common.decorators.log_decorator import log_decorator
+from src.common.decorators.rate_limit_decorator import rate_limit
+from src.common.decorators.retry_decorator import retry
 
+from src.extractor.providers.abstract_extractor import AbstractExtractor
 
 class FREDExtractor(AbstractExtractor):
-    """설정(AppConfig)에 정의된 정책을 기반으로 FRED API를 호출하는 수집기.
+    """설정(ConfigManager)에 정의된 정책을 기반으로 FRED API를 호출하는 수집기.
 
     Attributes:
         http_client (IHttpClient): HTTP 요청 처리를 위한 어댑터.
-        config (AppConfig): 앱 전역 설정 객체 (FRED API Key 포함).
+        config (ConfigManager): 앱 전역 설정 객체 (FRED API Key 포함).
     """
 
-    def __init__(self, http_client: IHttpClient, config: AppConfig):
+    def __init__(self, http_client: IHttpClient, config: ConfigManager):
         """FREDExtractor를 초기화하고 필수 의존성을 검증합니다.
 
         Args:
             http_client (IHttpClient): HTTP 클라이언트.
-            config (AppConfig): 앱 설정 객체.
+            config (ConfigManager): 앱 설정 객체.
 
         Raises:
             ExtractorError: FRED 관련 필수 설정(Base URL, API Key)이 누락된 경우.
@@ -56,50 +55,11 @@ class FREDExtractor(AbstractExtractor):
         super().__init__(http_client, config)
 
         # 2. FRED 전용 필수 설정 검증 (Fail-Fast)
-        # Rationale: AppConfig 객체가 존재하더라도 내부 필드가 비어있으면 런타임 에러가 발생하므로 생성 시점에 확인.
+        # Rationale: ConfigManager 객체가 존재하더라도 내부 필드가 비어있으면 런타임 에러가 발생하므로 생성 시점에 확인.
         if not config.fred.base_url:
             raise ExtractorError("Critical Config Error: 'fred.base_url' is empty.")
         if not config.fred.api_key:
             raise ExtractorError("Critical Config Error: 'fred.api_key' is missing.")
-
-    async def extract(self, request: RequestDTO) -> ResponseDTO:
-        """데이터 수집 템플릿 메서드 (Overridden).
-
-        AbstractExtractor의 기본 흐름을 따르되, _create_response 단계에서
-        job_id를 주입하기 위해 KISExtractor와 동일하게 오버라이딩하였습니다.
-
-        Args:
-            request (RequestDTO): 요청 객체.
-
-        Returns:
-            ResponseDTO: 결과 객체.
-
-        Raises:
-            ExtractorError: 수집 실패 시.
-        """
-        try:
-            # Step 1: Validation
-            self._validate_request(request)
-
-            # Step 2: Execution (Preparation & I/O)
-            raw_data = await self._fetch_raw_data(request)
-
-            # Step 3: Packaging
-            # Rationale: 부모 클래스의 _create_response는 raw_data만 받도록 정의되어 있어,
-            # job_id를 포함시키기 위해 이곳에서 호출 구조를 변경함.
-            response = self._create_response(raw_data, request.job_id)
-            
-            self.logger.info(f"Extraction Successful | Job: {request.job_id} | Source: FRED")
-            return response
-
-        except ExtractorError as e:
-            # 도메인 에러는 로깅 후 상위로 전파
-            self.logger.error(f"Extraction Failed: {e}")
-            raise e
-        except Exception as e:
-            # 예상치 못한 에러는 래핑하여 전파
-            self.logger.error(f"Unexpected System Error: {e}", exc_info=True)
-            raise ExtractorError(f"System Error: {str(e)}")
 
     def _validate_request(self, request: RequestDTO) -> None:
         """요청된 Job이 FRED 정책에 부합하고 필수 파라미터를 가졌는지 검증합니다.
@@ -133,9 +93,9 @@ class FREDExtractor(AbstractExtractor):
         if not (has_series_id_in_policy or has_series_id_in_request):
             raise ExtractorError(f"Missing Parameter: 'series_id' is required for job '{request.job_id}'.")
 
-    @retry(max_retries=3)
-    @rate_limit(limit=2, period=1.0, bucket_key="FRED_API") # FRED Docs: 120 calls/min = 2 calls/sec
     @log_decorator(logger_name="FRED_Extractor")
+    @rate_limit(limit=2, period=1.0, bucket_key="FRED_API")
+    @retry(max_retries=3)
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
         """FRED API를 호출하여 원본 데이터를 가져옵니다.
 
@@ -172,15 +132,15 @@ class FREDExtractor(AbstractExtractor):
         # 4. HTTP 요청 수행
         return await self.http_client.get(url, params=merged_params)
 
-    def _create_response(self, raw_data: Any, job_id: str) -> ResponseDTO:
-        """API 응답을 검증하고 ResponseDTO로 포장합니다.
+    def _create_response(self, raw_data: Any, job_id: str) -> ExtractedDTO:
+        """API 응답을 검증하고 ExtractedDTO로 포장합니다.
 
         Args:
             raw_data (Any): API 원본 응답.
             job_id (str): 작업 ID.
 
         Returns:
-            ResponseDTO: 결과 객체.
+            ExtractedDTO: 결과 객체.
 
         Raises:
             ExtractorError: API 응답 내 에러 메시지가 포함된 경우.
@@ -193,13 +153,12 @@ class FREDExtractor(AbstractExtractor):
             self.logger.error(f"FRED API Business Failure: {msg} (Code: {code})")
             raise ExtractorError(f"FRED API Failed: {msg} (Code: {code})")
 
-        return ResponseDTO(
+        return ExtractedDTO(
             data=raw_data,
             meta={
                 "source": "FRED",
                 "job_id": job_id,
                 "extracted_at": datetime.now().isoformat(),
-                # FRED API는 명시적인 성공 코드를 JSON에 주지 않으므로 HTTP 성공을 가정하여 200 기재
                 "status_code": "200"
             }
         )

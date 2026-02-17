@@ -25,9 +25,10 @@ Trade-off:
 import asyncio
 from typing import List, Dict, Any, Optional, Union
 
-from src.common.config import get_config
+from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.common.dtos import ExtractedDTO, TransformedDTO
+from src.common.exceptions import ETLError, ExtractorError, LoaderError, TransformerError
 
 from .extractor.extractor_service import ExtractorService
 # TODO : 추후 구현될 서비스들의 인터페이스 타입 힌팅 (Forward Declaration)
@@ -51,7 +52,7 @@ class PipelineService:
             task_name (str): 실행할 작업 설정 파일의 이름 (예: 'extractor_demo').
         """
         # 1. Config Loading
-        self._config = get_config(task_name)
+        self._config = ConfigManager.get_config(task_name)
         self._logger = LogManager.get_logger("PipelineService")
         
         # 2. Service Initialization
@@ -99,39 +100,89 @@ class PipelineService:
         details = []
         
         # 3. [2단계: 변환] -> [3단계: 적재] 파이프라인 흐름 제어
-        for i, result in enumerate(extraction_results):
-            job_id = job_ids[i]
+        for job_id, result in zip(job_ids, extraction_results):
+            job_context = {"job_id": job_id}
             job_result = {"job_id": job_id, "status": "PENDING", "error": None}
 
-            # Case A: 수집 단계 실패
-            if isinstance(result, Exception):
-                self._logger.error(f"Job '{job_id}' 수집 실패: {result}")
-                job_result["status"] = "FAIL_EXTRACT"
-                job_result["error"] = str(result)
-                fail_count += 1
-                details.append(job_result)
-                continue
-
-            # Case B: 수집 성공 -> 변환 및 적재 진행
             try:
-                # --- 2단계: 변환 (Mock) ---
-                # ExtractedDTO -> TransformedDTO
-                transformed_dto = await self._mock_transform(result)
+                # Case A: 수집 결과 검증 
+                if isinstance(result, Exception):
+                    # 이미 Extractor 내부에서 커스텀 에러로 변환되어 올라왔다고 가정
+                    raise result
 
-                # --- 3단계: 적재 (Mock) ---
-                # TransformedDTO -> None (Action)
-                await self._mock_load(transformed_dto)
-                
+                # Case B: 데이터 변환
+                try:
+                    # ExtractedDTO -> TransformedDTO
+                    transformed_dto = await self._mock_transform(result)
+                except Exception as e:
+                    # 변환 중 발생한 에러를 TransformerError로 래핑하여 상위로 던집니다.
+                    if isinstance(e, ETLError):
+                        raise e
+                    
+                    raise TransformerError(
+                        message=f"데이터 변환 실패: {str(e)}",
+                        details={"original_data_type": type(result).__name__},
+                        original_exception=e
+                    )
+
+                # Case C: 데이터 적재
+                try:
+                    # TransformedDTO -> DB Load
+                    await self._mock_load(transformed_dto)
+                except Exception as e:
+                    # 적재 중 발생한 에러를 LoaderError로 래핑하여 상위로 던집니다.
+                    if isinstance(e, ETLError):
+                        raise e
+                        
+                    raise LoaderError(
+                        message=f"데이터 적재 실패: {str(e)}",
+                        details={"target": "dw_table_v1"}, # TODO : 실제 타겟 정보로 대체
+                        original_exception=e
+                    )
+                    
                 # 모든 단계 성공
                 job_result["status"] = "SUCCESS"
                 success_count += 1
 
-            except Exception as e:
-                # 변환/적재 단계 실패
-                self._logger.error(f"Job '{job_id}' 변환/적재 실패: {e}")
-                job_result["status"] = "FAIL_TRANSFORM_LOAD"
-                job_result["error"] = str(e)
+            # 모든 파이프라인 단계(Extract, Transform, Load)의 에러를 통합 처리
+            except ETLError as e:
                 fail_count += 1
+                
+                # 1. 상태 결정: 에러 타입에 따라 상태 코드를 구체화
+                if isinstance(e, ExtractorError):
+                    status_code = "FAIL_EXTRACT"
+                elif isinstance(e, TransformerError):
+                    status_code = "FAIL_TRANSFORM"
+                elif isinstance(e, LoaderError):
+                    status_code = "FAIL_LOAD"
+                else:
+                    status_code = "FAIL_UNKNOWN"
+                
+                job_result["status"] = status_code
+                
+                # 2. 구조화된 로그 생성 (to_dict 활용)
+                error_payload = e.to_dict()
+                
+                # 3. 상세 결과에 추가
+                job_result["error_info"] = error_payload
+                
+                # 4. 로깅 (단순 문자열 대신 JSON 구조 로깅 권장)
+                # Rationale: ELK에서 필터링 가능하도록 error_type과 status를 명시
+                self._logger.error(
+                    f"Job Failed [{status_code}]", 
+                    extra={"job_id": job_id, "error": error_payload}
+                )
+
+            except Exception as e:
+                # [방어 코드] 정말 예상치 못한 시스템 레벨 에러 (MemoryError 등)
+                fail_count += 1
+                job_result["status"] = "CRITICAL_SYSTEM_ERROR"
+                job_result["error_info"] = {"message": str(e), "type": type(e).__name__}
+                
+                self._logger.critical(
+                    f"{job_id} 작업 중 알 수 없는 시스템 오류 발생: {e}", 
+                    exc_info=True
+                )
             
             details.append(job_result)
 

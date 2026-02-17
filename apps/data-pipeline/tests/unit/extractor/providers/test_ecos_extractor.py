@@ -1,14 +1,13 @@
 import pytest
 import asyncio
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Dict
 
-# [Target Modules]
-from src.extractor.providers.ecos_extractor import ECOSExtractor
-from src.extractor.domain.dtos import RequestDTO, ResponseDTO
-from src.extractor.domain.exceptions import ExtractorError
-from src.extractor.domain.interfaces import IHttpClient
-from src.common.config import AppConfig
+from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.exceptions import ETLError, ExtractorError
+from src.common.interfaces import IHttpClient
+from src.common.config import ConfigManager
 
 # ========================================================================================
 # [Mocks & Stubs] 외부 의존성 격리를 위한 모의 객체
@@ -40,16 +39,18 @@ class MockJobPolicy:
 @pytest.fixture(autouse=True)
 def mock_logger():
     """LogManager 초기화 시 전역 Config 참조 방지 및 데코레이터 Pass-through 처리"""
+    # 데코레이터가 실제 로직을 감싸지 않고 원본 함수를 그대로 반환하도록 설정 (Pass-through)
+    passthrough = lambda *args, **kwargs: lambda func: func
+    
+    # [Critical Fix]
+    # 모듈이 재임포트(re-import) 되더라도 Mock이 유지되도록, 
+    # 사용처(ecos_extractor.xxx)가 아닌 정의 원본(src.common.decorators...)을 패치합니다.
     with patch("src.common.log.LogManager.get_logger") as mock_get_logger, \
-         patch("src.extractor.providers.ecos_extractor.log_decorator") as mock_log_dec, \
-         patch("src.extractor.providers.ecos_extractor.retry") as mock_retry_dec, \
-         patch("src.extractor.providers.ecos_extractor.rate_limit") as mock_rate_dec:
+         patch("src.common.decorators.log_decorator.log_decorator", side_effect=passthrough), \
+         patch("src.common.decorators.retry_decorator.retry", side_effect=passthrough), \
+         patch("src.common.decorators.rate_limit_decorator.rate_limit", side_effect=passthrough):
         
         mock_get_logger.return_value = MagicMock()
-        passthrough = lambda *args, **kwargs: lambda func: func
-        mock_log_dec.side_effect = passthrough
-        mock_retry_dec.side_effect = passthrough
-        mock_rate_dec.side_effect = passthrough
         yield
 
 @pytest.fixture
@@ -60,7 +61,7 @@ def mock_http_client():
 
 @pytest.fixture
 def mock_config():
-    config = MagicMock(spec=AppConfig)
+    config = MagicMock(spec=ConfigManager)
     config.ecos = MagicMock()
     config.ecos.base_url = "https://ecos.bok.or.kr/api"
     config.ecos.api_key = MockSecretStr("test_api_key")
@@ -72,6 +73,15 @@ def mock_config():
 
 @pytest.fixture
 def extractor(mock_http_client, mock_config):
+    """
+    모듈 임포트 시점 제어 및 클린 룸 테스트 환경 제공
+    """
+    module_name = "src.extractor.providers.ecos_extractor"
+    # 기존에 로드된 모듈이 있다면 삭제하여, 위 mock_logger의 원본 패치가 적용된 상태로 다시 임포트하게 강제함
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+    
+    from src.extractor.providers.ecos_extractor import ECOSExtractor
     return ECOSExtractor(mock_http_client, mock_config)
 
 # ========================================================================================
@@ -80,19 +90,23 @@ def extractor(mock_http_client, mock_config):
 
 def test_init_01_base_url_empty(mock_http_client, mock_config):
     """[INIT-01] ecos.base_url이 비어있는 설정 객체 -> ExtractorError"""
+    from src.extractor.providers.ecos_extractor import ECOSExtractor
+    
     mock_config.ecos.base_url = ""
     with pytest.raises(ExtractorError, match="'ecos.base_url' is empty"):
         ECOSExtractor(mock_http_client, mock_config)
 
 def test_init_02_api_key_missing(mock_http_client, mock_config):
     """[INIT-02] ecos.api_key가 없는 설정 객체 -> ExtractorError"""
+    from src.extractor.providers.ecos_extractor import ECOSExtractor
+    
     mock_config.ecos.api_key = None
     with pytest.raises(ExtractorError, match="'ecos.api_key' is missing"):
         ECOSExtractor(mock_http_client, mock_config)
 
 def test_init_03_valid_init(extractor):
     """[INIT-03] 유효한 설정(URL, Key 포함) 객체 -> 인스턴스 정상 생성"""
-    assert isinstance(extractor, ECOSExtractor)
+    assert extractor.config.ecos.base_url == "https://ecos.bok.or.kr/api"
 
 # ========================================================================================
 # [REQ] 요청 검증 테스트 (Validation - MC/DC)
@@ -144,11 +158,11 @@ async def test_flow_01_happy_path(extractor, mock_http_client):
     response = await extractor.extract(request)
     
     # Then
-    assert isinstance(response, ResponseDTO)
+    assert isinstance(response, ExtractedDTO)
     assert response.data == mock_response
     assert response.meta["job_id"] == "job_valid"
     
-    # ECOS Path Variable URL Construction Check
+    # URL Verification
     expected_url = (
         "https://ecos.bok.or.kr/api/StatisticSearch/"
         "test_api_key/json/kr/1/100000/"
@@ -193,7 +207,6 @@ async def test_data_03_inner_level_failure(extractor, mock_http_client):
 @pytest.mark.asyncio
 async def test_data_04_root_result_success_ignored(extractor, mock_http_client):
     """[DATA-04] Root RESULT 존재하나 성공(INFO-000) -> 정상 반환 (방어 로직)"""
-    # Given: Root에 성공 코드가 있고, 실제 데이터도 존재하는 복합 응답
     request = RequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230131"})
     mock_response = {
         "RESULT": {"CODE": "INFO-000", "MESSAGE": "Root Success"},
@@ -205,31 +218,23 @@ async def test_data_04_root_result_success_ignored(extractor, mock_http_client):
     }
     mock_http_client.get.return_value = mock_response
 
-    # When
     response = await extractor.extract(request)
-
-    # Then
     assert response.data == mock_response
     assert response.meta["status"] == "success"
 
 @pytest.mark.asyncio
 async def test_data_05_inner_result_missing(extractor, mock_http_client):
     """[DATA-05] 서비스 내 RESULT 키 자체가 누락됨 -> 정상 반환 (암시적 성공)"""
-    # Given: 필수 메타데이터인 RESULT가 누락되었으나 데이터는 있는 상황
     request = RequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230131"})
     mock_response = {
         "StatisticSearch": {
             "list_total_count": 1,
             "row": [{"TIME": "2023", "DATA_VALUE": "100"}]
-            # RESULT key missing
         }
     }
     mock_http_client.get.return_value = mock_response
 
-    # When
     response = await extractor.extract(request)
-
-    # Then
     assert response.data == mock_response
 
 # ========================================================================================
@@ -238,18 +243,21 @@ async def test_data_05_inner_result_missing(extractor, mock_http_client):
 
 @pytest.mark.asyncio
 async def test_err_01_system_error_wrapping(extractor, mock_http_client):
-    """[ERR-01] HTTP 클라이언트가 ValueError 발생 -> ExtractorError로 래핑"""
+    """[ERR-01] HTTP 클라이언트가 ValueError 발생 -> ExtractorError 래핑"""
+    # Given: Decorator 패치가 정상 작동하면 Raw Exception(ValueError)이 발생해야 함
     mock_http_client.get.side_effect = ValueError("Network Timeout")
     request = RequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
     
-    with pytest.raises(ExtractorError, match="System Error"):
+    # When & Then: AbstractExtractor(부모)가 Catch하여 ExtractorError로 감싸는지 검증
+    # 만약 Decorator가 살아있다면 ETLError가 발생하여 이 테스트는 실패함
+    with pytest.raises(ExtractorError, match="작업 중 알 수 없는 시스템 오류 발생"):
         await extractor.extract(request)
 
 @pytest.mark.asyncio
 async def test_err_02_reraise_extractor_error(extractor, mock_http_client):
-    """[ERR-02] 내부 로직에서 ExtractorError 발생 -> 그대로 전파"""
-    mock_http_client.get.side_effect = ExtractorError("Parsing Failed")
+    """[ERR-02] 내부 로직에서 ETLError 발생 -> 그대로 전파"""
+    mock_http_client.get.side_effect = ETLError("Parsing Failed")
     request = RequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
     
-    with pytest.raises(ExtractorError, match="Parsing Failed"):
+    with pytest.raises(ETLError, match="Parsing Failed"):
         await extractor.extract(request)
