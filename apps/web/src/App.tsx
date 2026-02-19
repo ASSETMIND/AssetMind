@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import Header from './components/layout/header';
 import { useRefresh } from './hooks/auth/use-refresh';
 import OauthCallback from './components/auth/oauth-callback';
+import MainPage from './pages/main-page';
 
 export default function App() {
 	// 앱 초기화 (토큰 리프레시 시도)
@@ -25,10 +26,7 @@ export default function App() {
 			<Header />
 			<main className='w-full'>
 				<Routes>
-					<Route
-						path='/'
-						element={<div className='p-10 text-center'>홈</div>}
-					/>
+					<Route path='/' element={<MainPage />} />
 
 					<Route
 						path='/oauth/callback/google'
