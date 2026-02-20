@@ -14,10 +14,10 @@ from pathlib import Path
 from src.pipeline_service import PipelineService
 
 from src.common.interfaces import IHttpClient, IAuthStrategy, IExtractor
-from src.common.exceptions import ETLError, ExtractorError, ConfigurationError, RateLimitError, NetworkConnectionError, HttpError, AuthError
+from src.common.exceptions import ETLError, ExtractorError, ConfigurationError, LoaderError, RateLimitError, NetworkConnectionError, HttpError, AuthError, TransformerError
 from src.common.config import ConfigManager, JobPolicy
 from src.common.log import LogManager, JsonFormatter, request_id_ctx
-from src.common.dtos import RequestDTO, ExtractedDTO
+from src.common.dtos import RequestDTO, ExtractedDTO, TransformedDTO
 
 from src.common.decorators.log_decorator import LoggingDecorator, _sanitize_args, _truncate_output, DEFAULT_TRUNCATE_LIMIT
 from src.common.decorators.rate_limit_decorator import RateLimitDecorator, _buckets, _get_bucket
@@ -34,6 +34,9 @@ from src.extractor.providers.fred_extractor import FREDExtractor
 from src.extractor.providers.kis_extractor import KISExtractor
 from src.extractor.providers.upbit_extractor import UPBITExtractor
 
+from src.extractor.extractor_factory import ExtractorFactory
+from src.extractor.extractor_service import ExtractorService
+from src.pipeline_service import PipelineService
 # ==============================================================================
 # [FIXTURE] 통합 테스트용 Mock Fixtures
 # ==============================================================================
@@ -192,6 +195,35 @@ def kis_mock_config():
     
     config.extraction_policy = {"kis_test_job": policy}
     return config
+
+@pytest.fixture
+def factory_mock_config():
+    """Factory 테스트용 기본 구조를 갖춘 Mock Config"""
+    config = MagicMock()
+    config.extraction_policy = {}
+    return config
+
+@pytest.fixture
+def service_mock_config():
+    """Service 테스트를 위한 Mock Config"""
+    config = MagicMock()
+    policy = MagicMock()
+    policy.params = {"default_key": "default_val"}
+    config.extraction_policy = {"test_job_id": policy}
+    return config
+
+@pytest.fixture
+def mock_pipeline_service():
+    """PipelineService 테스트를 위해 Config와 하위 Service를 모킹한 픽스처"""
+    with patch("src.pipeline_service.ConfigManager.get_config") as mock_get_config, \
+         patch("src.pipeline_service.ExtractorService") as mock_extractor_service:
+        
+        mock_config = MagicMock()
+        mock_config.extraction_policy = {}
+        mock_get_config.return_value = mock_config
+        
+        service = PipelineService("dummy_task")
+        return service
 
 # ==============================================================================
 # [INTEG] 파이프라인 통합 테스트 (Pipeline Service Flow)
@@ -1855,3 +1887,276 @@ def test_upbit_create_response_success(upbit_mock_config):
     assert res.meta["status_code"] == "OK"
     assert res.meta["source"] == "UPBIT"
     assert res.data == raw_data
+
+# [FACTORY-01] 알 수 없는 Provider에 대한 Auth 생성 예외
+def test_factory_auth_unknown_provider(factory_mock_config):
+    """Scenario: KIS, UPBIT가 아닌 인증 전략을 요청할 경우 예외 발생"""
+    with pytest.raises(ExtractorError, match="Auth Strategy not defined for provider: UNKNOWN_AUTH"):
+        ExtractorFactory._get_or_create_auth("UNKNOWN_AUTH", factory_mock_config)
+
+# [FACTORY-02] 정책이 존재하지 않는 job_id 예외
+def test_factory_create_no_policy(factory_mock_config):
+    """Scenario: 설정(Config)에 요청된 job_id의 정책이 아예 없는 경우 방어"""
+    # 로거 초기화를 위해 한번 호출 (안전장치)
+    ExtractorFactory._get_logger() 
+    
+    with pytest.raises(ExtractorError, match="Job ID 'missing_job' is undefined"):
+        ExtractorFactory.create_extractor("missing_job", MagicMock(), factory_mock_config)
+
+# [FACTORY-03] FRED 수집기 정상 생성
+def test_factory_create_fred(factory_mock_config):
+    """Scenario: Provider가 FRED일 때 FREDExtractor 인스턴스 반환"""
+    policy = MagicMock()
+    policy.provider = "FRED"
+    factory_mock_config.extraction_policy["fred_job"] = policy
+    
+    # FRED 초기화 필수 속성 세팅
+    factory_mock_config.fred.base_url = "http://fred.api"
+    factory_mock_config.fred.api_key.get_secret_value.return_value = "secret"
+    
+    extractor = ExtractorFactory.create_extractor("fred_job", MagicMock(), factory_mock_config)
+    assert extractor.__class__.__name__ == "FREDExtractor"
+
+# [FACTORY-04] ECOS 수집기 정상 생성
+def test_factory_create_ecos(factory_mock_config):
+    """Scenario: Provider가 ECOS일 때 ECOSExtractor 인스턴스 반환"""
+    policy = MagicMock()
+    policy.provider = "ECOS"
+    factory_mock_config.extraction_policy["ecos_job"] = policy
+    
+    # ECOS 초기화 필수 속성 세팅
+    factory_mock_config.ecos.base_url = "http://ecos.api"
+    factory_mock_config.ecos.api_key.get_secret_value.return_value = "secret"
+    
+    extractor = ExtractorFactory.create_extractor("ecos_job", MagicMock(), factory_mock_config)
+    assert extractor.__class__.__name__ == "ECOSExtractor"
+
+# [FACTORY-05] 지원하지 않는 Provider 예외 처리
+def test_factory_create_unsupported_provider(factory_mock_config):
+    """Scenario: Factory에 구현되지 않은 Provider가 명시되었을 때 방어 로직"""
+    policy = MagicMock()
+    policy.provider = "UNSUPPORTED"
+    factory_mock_config.extraction_policy["unsupported_job"] = policy
+    
+    with pytest.raises(ExtractorError, match="Unsupported Provider: 'UNSUPPORTED'"):
+        ExtractorFactory.create_extractor("unsupported_job", MagicMock(), factory_mock_config)
+
+# [FACTORY-06] 인스턴스 생성 중 예기치 못한 에러 래핑
+def test_factory_create_instantiation_exception(factory_mock_config):
+    """Scenario: 객체 생성 중 내부에서 파이썬 내장 에러가 터졌을 때 ExtractorError로 감싸줌"""
+    policy = MagicMock()
+    policy.provider = "FRED"
+    factory_mock_config.extraction_policy["fail_job"] = policy
+    
+    # FRED 초기화 시 config.fred 속성 자체가 에러를 던지도록 강제 조작
+    type(factory_mock_config).fred = property(lambda self: int("force_error_string"))
+    
+    with pytest.raises(ExtractorError, match="Factory Initialization Failed:"):
+        ExtractorFactory.create_extractor("fail_job", MagicMock(), factory_mock_config)
+
+# [SERVICE-01] 외부 HTTP Client 주입에 따른 Context Manager 분기
+@pytest.mark.asyncio
+async def test_extractor_service_with_provided_client(service_mock_config):
+    """Scenario: 외부에서 http_client를 주입받으면 _owns_client가 False가 되어 내부 관리를 건너뜀"""
+    mock_client = AsyncMock()
+    service = ExtractorService(config=service_mock_config, http_client=mock_client)
+    
+    assert service._owns_client is False
+    assert service._http_client is mock_client
+    
+    async with service as s:
+        assert s._http_client is mock_client
+    
+    # __aexit__ 에서 _owns_client가 False 이므로 close()가 호출되지 않음
+    mock_client.close.assert_not_called()
+
+# [SERVICE-02] _ensure_client 검증 실패
+@pytest.mark.asyncio
+async def test_extractor_service_ensure_client_fails(service_mock_config):
+    """Scenario: async with (Context Manager) 진입 없이 extract_job 호출 시 RuntimeError 발생"""
+    service = ExtractorService(config=service_mock_config)
+    with pytest.raises(RuntimeError, match="HTTP Client is not initialized"):
+        await service.extract_job("test_job_id")
+
+# [SERVICE-03] _normalize_response 이미 정규화된 응답
+def test_normalize_response_already_success(service_mock_config):
+    """Scenario: 이미 status가 success인 경우 빠른 반환(Fast Path)"""
+    service = ExtractorService(config=service_mock_config)
+    req = ExtractedDTO(data={}, meta={"status": "success"})
+    res = service._normalize_response(req)
+    assert res.meta["status"] == "success"
+
+# [SERVICE-04] _normalize_response 결측치 보정 로직
+def test_normalize_response_none_status(service_mock_config):
+    """Scenario: status_code가 비어있거나 None일 경우 암묵적 성공(200)으로 간주"""
+    service = ExtractorService(config=service_mock_config)
+    
+    req_none = ExtractedDTO(data={}, meta={"status_code": None})
+    res_none = service._normalize_response(req_none)
+    assert res_none.meta["status"] == "success"
+    assert res_none.meta["status_code"] == 200
+
+    req_empty = ExtractedDTO(data={}, meta={"status_code": ""})
+    res_empty = service._normalize_response(req_empty)
+    assert res_empty.meta["status"] == "success"
+    assert res_empty.meta["status_code"] == 200
+
+# [SERVICE-05] _normalize_response 비정상 코드 실패 분기
+def test_normalize_response_unrecognized_status(service_mock_config):
+    """Scenario: status_code가 성공 코드 집합에 포함되지 않으면 success 추가를 생략함"""
+    service = ExtractorService(config=service_mock_config)
+    req = ExtractedDTO(data={}, meta={"status_code": "500_ERROR"})
+    res = service._normalize_response(req)
+    
+    assert res.meta.get("status") != "success"
+    assert res.meta["status_code"] == "500_ERROR"
+
+# [SERVICE-06] extract_job 존재하지 않는 정책 예외
+@pytest.mark.asyncio
+async def test_extract_job_policy_not_found(service_mock_config):
+    """Scenario: ConfigManager에 등록되지 않은 job_id 요청 시 ConfigurationError 발생"""
+    service = ExtractorService(config=service_mock_config)
+    async with service:
+        with pytest.raises(ConfigurationError, match="찾을 수 없습니다"):
+            await service.extract_job("missing_job_id")
+
+# [SERVICE-07] extract_job 런타임 파라미터 덮어쓰기 로직
+@pytest.mark.asyncio
+@patch("src.extractor.extractor_service.ExtractorFactory.create_extractor")
+async def test_extract_job_override_params(mock_factory, service_mock_config):
+    """Scenario: override_params가 주어졌을 때 기본 정책 파라미터와 정상적으로 병합(Update)됨"""
+    mock_extractor = AsyncMock()
+    mock_extractor.extract.return_value = ExtractedDTO(data={}, meta={"status_code": "200"})
+    mock_factory.return_value = mock_extractor
+    
+    service = ExtractorService(config=service_mock_config)
+    async with service:
+        await service.extract_job("test_job_id", override_params={"custom_key": "custom_val"})
+    
+    # 병합된 파라미터가 Extractor에 정상 전달되었는지 확인
+    req_dto = mock_extractor.extract.call_args[0][0]
+    assert req_dto.params["default_key"] == "default_val"
+    assert req_dto.params["custom_key"] == "custom_val"
+
+# [SERVICE-08] extract_job 예상치 못한 시스템 에러 래핑
+@pytest.mark.asyncio
+@patch("src.extractor.extractor_service.ExtractorFactory.create_extractor")
+async def test_extract_job_general_exception(mock_factory, service_mock_config):
+    """Scenario: Factory 생성 혹은 extract 수행 중 일반 예외 발생 시 ExtractorError로 래핑"""
+    mock_factory.side_effect = ValueError("Some unexpected internal error")
+    
+    service = ExtractorService(config=service_mock_config)
+    async with service:
+        with pytest.raises(ExtractorError, match="예상치 못한 오류가 발생"):
+            await service.extract_job("test_job_id")
+
+# [SERVICE-09] extract_batch 요청 타입 분기 및 빈 목록 반환 로직
+@pytest.mark.asyncio
+@patch.object(ExtractorService, 'extract_job')
+async def test_extract_batch_various_inputs(mock_extract_job, service_mock_config):
+    """Scenario: Batch 처리 시 튜플, 잘못된 타입(int) 필터링, 빈 작업 목록 반환 로직 검증"""
+    mock_extract_job.return_value = ExtractedDTO(data={}, meta={"status": "success"})
+    
+    service = ExtractorService(config=service_mock_config)
+    
+    # 1. 아예 잘못된 타입들만 넘겼을 때 -> tasks가 비어있어 빈 리스트 반환
+    res_empty = await service.extract_batch([12345, None])
+    assert res_empty == [] 
+    
+    # 2. 정상 문자열, 튜플 덮어쓰기 파라미터 혼합
+    res_mixed = await service.extract_batch([
+        "job_1",
+        ("job_2", {"override": "yes"}),
+        3.14 # invalid type warning 
+    ])
+    
+    assert len(res_mixed) == 2
+    mock_extract_job.assert_any_call("job_1")
+    mock_extract_job.assert_any_call("job_2", {"override": "yes"})
+
+# [PIPELINE-01] 정의된 정책이 없을 경우 빠른 반환
+@pytest.mark.asyncio
+async def test_run_batch_empty_policy(mock_pipeline_service):
+    res = await mock_pipeline_service.run_batch()
+    assert res == {"status": "empty", "total": 0}
+
+# [PIPELINE-02] Transform 단계의 일반 예외 및 ETLError 래핑
+@pytest.mark.asyncio
+async def test_run_batch_transform_error(mock_pipeline_service):
+    """Scenario: 변환 단계에서 발생한 에러를 TransformerError로 감싸고 상태를 FAIL_TRANSFORM으로 기록"""
+    mock_pipeline_service._config.extraction_policy = {"job_1": MagicMock()}
+    
+    # 리스트가 아닌 AsyncMock으로 래핑하여 await TypeError 방지
+    mock_pipeline_service._extractor_service.extract_batch = AsyncMock(return_value=[ExtractedDTO(data={}, meta={})])
+    
+    # 1. 일반 예외 발생 시 TransformerError 래핑 검증
+    mock_pipeline_service._mock_transform = AsyncMock(side_effect=ValueError("transform failed"))
+    res1 = await mock_pipeline_service.run_batch()
+    assert res1["fail"] == 1
+    assert res1["details"][0]["status"] == "FAIL_TRANSFORM"
+
+    # 2. 이미 ETLError 타입일 경우 그대로 던지는지 검증
+    mock_pipeline_service._mock_transform = AsyncMock(side_effect=TransformerError("transform etl failed"))
+    res2 = await mock_pipeline_service.run_batch()
+    assert res2["fail"] == 1
+    assert res2["details"][0]["status"] == "FAIL_TRANSFORM"
+
+# [PIPELINE-03] Load 단계의 일반 예외 및 ETLError 래핑
+@pytest.mark.asyncio
+async def test_run_batch_load_error(mock_pipeline_service):
+    """Scenario: 적재 단계에서 발생한 에러를 LoaderError로 감싸고 상태를 FAIL_LOAD로 기록"""
+    mock_pipeline_service._config.extraction_policy = {"job_1": MagicMock()}
+    
+    mock_pipeline_service._extractor_service.extract_batch = AsyncMock(return_value=[ExtractedDTO(data={}, meta={})])
+    mock_pipeline_service._mock_transform = AsyncMock(return_value=TransformedDTO(data={"a":1}, meta={}))
+    
+    # 1. 일반 예외 발생 시 LoaderError 래핑 검증
+    mock_pipeline_service._mock_load = AsyncMock(side_effect=ValueError("load failed"))
+    res1 = await mock_pipeline_service.run_batch()
+    assert res1["fail"] == 1
+    assert res1["details"][0]["status"] == "FAIL_LOAD"
+
+    # 2. 이미 ETLError 타입일 경우 그대로 던지는지 검증
+    mock_pipeline_service._mock_load = AsyncMock(side_effect=LoaderError("load etl failed"))
+    res2 = await mock_pipeline_service.run_batch()
+    assert res2["fail"] == 1
+    assert res2["details"][0]["status"] == "FAIL_LOAD"
+
+# [PIPELINE-04] ETLError 타입별 상태 코드(Status Code) 세분화 분기
+@pytest.mark.asyncio
+async def test_run_batch_etl_errors(mock_pipeline_service):
+    """Scenario: Extractor, Loader가 아닌 일반 ETLError 발생 시 FAIL_UNKNOWN 으로 기록"""
+    mock_pipeline_service._config.extraction_policy = {"job_e": MagicMock(), "job_u": MagicMock()}
+    
+    mock_pipeline_service._extractor_service.extract_batch = AsyncMock(return_value=[
+        ExtractorError("extract error"),
+        ETLError("unknown etl error")
+    ])
+    
+    res = await mock_pipeline_service.run_batch()
+    assert res["fail"] == 2
+    
+    statuses = [d["status"] for d in res["details"]]
+    assert "FAIL_EXTRACT" in statuses
+    assert "FAIL_UNKNOWN" in statuses
+
+# [PIPELINE-05] 예상치 못한 시스템 치명적 오류 방어
+@pytest.mark.asyncio
+async def test_run_batch_critical_system_error(mock_pipeline_service):
+    """Scenario: 메모리 부족 등 시스템 치명 오류 발생 시 파이프라인 중단 없이 상태 기록"""
+    mock_pipeline_service._config.extraction_policy = {"job_1": MagicMock()}
+    
+    mock_pipeline_service._extractor_service.extract_batch = AsyncMock(return_value=[MemoryError("out of memory")])
+    
+    res = await mock_pipeline_service.run_batch()
+    assert res["fail"] == 1
+    assert res["details"][0]["status"] == "CRITICAL_SYSTEM_ERROR"
+
+# [PIPELINE-06] 빈 데이터 적재 시 분기 이탈
+@pytest.mark.asyncio
+async def test_mock_load_no_data(mock_pipeline_service):
+    """Scenario: 변환된 데이터(data)가 빈 딕셔너리일 경우 적재를 생략하고 조용히 종료됨"""
+    # data={} 로 세팅하여 if transformed.data: 분기를 False로 만듦
+    dto = TransformedDTO(data={}, meta={"status": "success", "source": "test"})
+    # 로깅 메서드가 호출되지 않고 안전하게 반환되어야 함
+    await mock_pipeline_service._mock_load(dto)
