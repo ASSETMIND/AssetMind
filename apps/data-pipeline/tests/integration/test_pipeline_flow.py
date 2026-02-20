@@ -989,3 +989,157 @@ async def test_interfaces_abstract_methods_coverage():
     ext = DummyExtractor()
     assert await ext.extract(None) is None
 
+# [LOG-1] JsonFormatter - Non-ETLError Exception and json.dumps exception (Missing 146, 152-154)
+def test_log_json_formatter_normal_exception_and_fallback():
+    """Scenario: ETLError가 아닌 일반 예외 처리 및 json.dumps 실패 시 fallback 처리 검증"""
+    formatter = JsonFormatter()
+    
+    # 일반 예외를 가지는 LogRecord 생성
+    record = logging.LogRecord(
+        name="test", level=logging.ERROR, pathname="test.py", lineno=1,
+        msg="test message", args=(), exc_info=None
+    )
+    
+    try:
+        raise ValueError("Normal Error")
+    except ValueError:
+        record.exc_info = sys.exc_info()
+    
+    # 1. 일반 예외가 제대로 "exception" 키에 들어가는지 검증 (Missing 146)
+    formatted = formatter.format(record)
+    parsed = json.loads(formatted)
+    assert "exception" in parsed
+    assert "Normal Error" in parsed["exception"]
+    
+    # 2. json.dumps가 실패하도록 조작하되, 예외 발생 시의 Fallback은 정상 수행되도록 분기 처리
+    original_dumps = json.dumps
+    def mocked_dumps(obj, *args, **kwargs):
+        # 첫 번째 변환 시도(원본 레코드에 exception 키가 있음)일 때만 에러 발생시킴
+        if isinstance(obj, dict) and "exception" in obj:
+            raise TypeError("Not serializable")
+        # Fallback 구조체는 정상적으로 변환해줌
+        return original_dumps(obj, *args, **kwargs)
+
+    with patch("json.dumps", side_effect=mocked_dumps):
+        fallback_formatted = formatter.format(record)
+        fallback_parsed = json.loads(fallback_formatted)
+        assert fallback_parsed["level"] == "ERROR"
+        assert "치명적 오류" in fallback_parsed["message"]
+
+
+# [LOG-2] LogManager Singleton Double-Check
+def test_log_manager_double_check():
+    """Scenario: 멀티스레드 환경을 모사하여 락 획득 후 _instance 재확인 상태 분기 검증"""
+    original_instance = LogManager._instance
+    
+    class MockLock:
+        def __enter__(self):
+            # 락 내부 진입 순간에 다른 스레드가 이미 초기화한 상태를 모사
+            LogManager._instance = "dummy_instance"
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+            
+    try:
+        LogManager._instance = None
+        with patch.object(LogManager, '_lock', MockLock()):
+            inst = LogManager.__new__(LogManager)
+            assert inst == "dummy_instance"
+    finally:
+        # 테스트 환경 오염 방지를 위해 무조건 복구
+        LogManager._instance = original_instance
+
+
+# [LOG-3] LogManager Initialized Double-Check
+def test_log_manager_init_double_check():
+    """Scenario: 멀티스레드 환경을 모사하여 락 획득 후 _initialized 재확인 분기 검증"""
+    manager = LogManager() # 기존 인스턴스 확보
+    original_initialized = getattr(manager, "_initialized", False)
+    
+    class MockLock:
+        def __enter__(self):
+            # 락 내부 진입 순간에 이미 설정이 끝난 상태를 모사
+            manager._initialized = True
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+            
+    try:
+        manager._initialized = False
+        with patch.object(LogManager, '_lock', MockLock()):
+            manager.__init__() # 여기서 191번 라인 return 이 실행됨
+    finally:
+        manager._initialized = original_initialized
+
+
+# [LOG-4] LogManager Handlers Already Exist
+@patch("src.common.log.ConfigManager.get_config")
+def test_log_manager_handlers_exist(mock_get_config):
+    """Scenario: 이미 핸들러가 존재하는 경우 중복 추가하지 않고 건너뜀(210->220 Exit)"""
+    # 1. ConfigManager가 반환할 task_name을 고정
+    mock_config = MagicMock()
+    mock_config.task_name = "test_handlers_exist"
+    mock_config.log_level = "INFO"
+    mock_config.log_dir = "logs"
+    mock_config.log_filename = "app.log"
+    mock_get_config.return_value = mock_config
+
+    manager = LogManager()
+    original_initialized = getattr(manager, "_initialized", False)
+    
+    # 2. 고정된 task_name과 일치하는 로거에 미리 더미 핸들러를 주입하여 상태 조작
+    pre_logger = logging.getLogger("test_handlers_exist")
+    dummy_handler = logging.NullHandler()
+    pre_logger.addHandler(dummy_handler)
+    
+    try:
+        manager._initialized = False
+        
+        # 3. 초기화 트리거
+        # __init__ 내부에서 getLogger("test_handlers_exist")를 호출하면 pre_logger를 반환받음
+        # 이미 dummy_handler가 존재하므로 if not self.logger.handlers: 가 False가 되어 건너뜀 
+        manager.__init__()
+        
+        # 4. 검증: 핸들러가 중복 추가되지 않고 최초의 1개(dummy_handler)만 유지되는지 확인
+        assert len(manager.logger.handlers) == 1
+        assert manager.logger.handlers[0] is dummy_handler
+    finally:
+        # 테스트 환경 오염 방지를 위해 주입한 핸들러 제거 및 상태 원상 복구
+        pre_logger.handlers.clear()
+        manager._initialized = original_initialized
+
+
+# [LOG-5] LogManager File Handler OSError
+def test_log_manager_file_handler_oserror():
+    """Scenario: 로그 디렉토리 생성 실패(OSError) 시 시스템 중단 없이 stderr 경고만 출력"""
+    manager = LogManager()
+    
+    with patch("pathlib.Path.mkdir", side_effect=OSError("Permission Denied")):
+        with patch("sys.stderr.write") as mock_stderr:
+            manager._setup_file_handler(logging.Formatter(), logging.Filter())
+            
+            mock_stderr.assert_called_once()
+            assert "Permission Denied" in mock_stderr.call_args[0][0]
+
+
+# [LOG-6] get_logger with name=None
+def test_log_manager_get_logger_no_name():
+    """Scenario: 이름을 주지 않으면 최상위 기본 로거 인스턴스를 반환"""
+    logger = LogManager.get_logger()
+    manager = LogManager()
+    assert logger.name == manager.logger.name
+
+
+# [LOG-7] set_context with explicit request_id
+def test_log_manager_set_context_explicit_id():
+    """Scenario: request_id를 명시적으로 전달하면 새로 생성하지 않고 해당 ID가 세팅됨"""
+    original_id = request_id_ctx.get()
+    
+    custom_id = "my-custom-request-id"
+    returned_id = LogManager.set_context(custom_id)
+    
+    assert returned_id == custom_id
+    assert request_id_ctx.get() == custom_id
+    
+    request_id_ctx.set(original_id)
+
