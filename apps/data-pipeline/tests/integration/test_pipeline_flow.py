@@ -1143,3 +1143,208 @@ def test_log_manager_set_context_explicit_id():
     
     request_id_ctx.set(original_id)
 
+# [AUTH-01] KIS 설정 누락 방어 로직
+def test_auth_kis_missing_base_url(auth_mock_config):
+    auth_mock_config.kis.base_url = ""
+    with pytest.raises(ValueError, match="base_url' is empty"):
+        KISAuthStrategy(auth_mock_config)
+
+# [AUTH-02] KIS Double-Checked Locking 및 갱신 건너뛰기 분기
+@pytest.mark.asyncio
+async def test_auth_kis_double_checked_locking_skip(auth_mock_config):
+    """Scenario: 락 대기 중 다른 태스크가 이미 토큰을 갱신했다면 재갱신을 건너뜀"""
+    strategy = KISAuthStrategy(auth_mock_config)
+    strategy._access_token = "valid_token_from_other_task"
+    # 명시적 경로(datetime.datetime) 사용
+    strategy._expires_at = datetime.datetime.now() + datetime.timedelta(hours=1)
+    
+    with patch.object(strategy, '_should_refresh', side_effect=[True, False]):
+        token = await strategy.get_token(AsyncMock())
+        
+    assert token == "Bearer valid_token_from_other_task"
+
+# [AUTH-03] KIS 토큰 획득 완전 실패 방어 로직
+@pytest.mark.asyncio
+async def test_auth_kis_silent_failure(auth_mock_config):
+    """Scenario: _issue_token이 에러 없이 종료되었으나 여전히 토큰이 없는 경우"""
+    strategy = KISAuthStrategy(auth_mock_config)
+    strategy._should_refresh = MagicMock(return_value=True)
+    strategy._issue_token = AsyncMock()
+    
+    with pytest.raises(AuthError, match="Failed to retrieve access token"):
+        await strategy.get_token(AsyncMock())
+
+# [AUTH-04] KIS 만료 임박(Threshold) 갱신 로직
+def test_auth_kis_should_refresh_threshold(auth_mock_config):
+    """Scenario: 만료 시간이 지났진 않았지만 임계치 내로 도달하면 갱신을 트리거함"""
+    strategy = KISAuthStrategy(auth_mock_config)
+    strategy._access_token = "token"
+    # 만료까지 1분 남음 (기본 버퍼인 5분보다 작으므로 갱신 대상)
+    strategy._expires_at = datetime.datetime.now() + datetime.timedelta(minutes=1)
+    
+    assert strategy._should_refresh() is True
+
+# [AUTH-05] KIS 토큰 발급 시 Network 및 일반 예외 처리
+@pytest.mark.asyncio
+async def test_auth_kis_issue_token_exceptions(auth_mock_config):
+    strategy = KISAuthStrategy(auth_mock_config)
+    mock_client = AsyncMock()
+    
+    mock_client.post.side_effect = NetworkConnectionError("401 Unauthorized")
+    with pytest.raises(AuthError, match="Invalid Credentials"):
+        await strategy._issue_token(mock_client)
+        
+    mock_client.post.side_effect = NetworkConnectionError("Timeout")
+    with pytest.raises(NetworkConnectionError):
+        await strategy._issue_token(mock_client)
+        
+    mock_client.post.side_effect = ValueError("JSON Parsing Failed")
+    with pytest.raises(AuthError, match="Error during token issuance"):
+        await strategy._issue_token(mock_client)
+
+# [AUTH-06] KIS 응답 검증 - access_token 누락
+def test_auth_kis_validate_response(auth_mock_config):
+    strategy = KISAuthStrategy(auth_mock_config)
+    with pytest.raises(AuthError, match="Missing access_token"):
+        strategy._validate_response({"wrong_key": "123"})
+
+# [AUTH-07] KIS 상태 업데이트 - 만료일 파싱 에러/누락
+def test_auth_kis_update_state_date_fallback(auth_mock_config):
+    strategy = KISAuthStrategy(auth_mock_config)
+    
+    strategy._update_state({"access_token": "tk1", "access_token_token_expired": "invalid_date_format"})
+    assert strategy._access_token == "tk1"
+    assert strategy._expires_at > datetime.datetime.now()
+    
+    strategy._update_state({"access_token": "tk2"})
+    assert strategy._access_token == "tk2"
+    assert strategy._expires_at > datetime.datetime.now()
+
+# [AUTH-08] UPBIT 설정 누락 방어 로직
+def test_auth_upbit_missing_config(auth_mock_config):
+    auth_mock_config.upbit.base_url = ""
+    with pytest.raises(ValueError, match="base_url' is empty"):
+        UPBITAuthStrategy(auth_mock_config)
+    auth_mock_config.upbit.base_url = "https://api.upbit.mock" 
+    
+    del auth_mock_config.upbit.secret_key
+    with pytest.raises(ValueError, match="missing in UPBITSettings"):
+        UPBITAuthStrategy(auth_mock_config)
+
+# [AUTH-09] UPBIT Query Hash 및 Bytes 디코딩 로직
+@pytest.mark.asyncio
+async def test_auth_upbit_query_params_and_bytes_fallback(auth_mock_config):
+    auth_mock_config.upbit.secret_key = MagicMock()
+    auth_mock_config.upbit.secret_key.get_secret_value.return_value = "dummy_secret"
+    strategy = UPBITAuthStrategy(auth_mock_config)
+    
+    with patch("jwt.encode", return_value=b"mocked_bytes_token"):
+        token = await strategy.get_token(AsyncMock(), query_params={"market": "KRW-BTC"})
+        assert token == "Bearer mocked_bytes_token"
+
+# [HTTP-01] 초기화, Context Manager 진입/종료 및 세션 관리
+@pytest.mark.asyncio
+async def test_http_adapter_lifecycle():
+    """Scenario: 어댑터 생성, 세션 초기화, Context Manager를 통한 자원 정리 검증"""
+    adapter = AsyncHttpAdapter(timeout=10)
+    assert adapter.timeout.total == 10
+    
+    await adapter.close()
+    
+    async with adapter as ctx_adapter:
+        assert ctx_adapter is adapter
+        assert adapter._session is not None
+        assert not adapter._session.closed
+        
+        session1 = await adapter._get_session()
+        assert session1 is adapter._session
+    
+    assert adapter._session.closed
+
+# [HTTP-02] GET 요청 성공 및 실패 분기
+@pytest.mark.asyncio
+async def test_http_adapter_get_success(http_adapter):
+    """Scenario: GET 요청 성공 시 JSON 응답 반환"""
+    mock_session = MagicMock()
+    mock_session.closed = False 
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.headers = {"Content-Type": "application/json"}
+    mock_resp.json.return_value = {"status": "ok"}
+    
+    # [핵심 방어 로직] async with 프로토콜을 준수하는 더미 매니저 주입
+    mock_session.get.return_value = DummyAsyncContextManager(mock_response=mock_resp)
+    http_adapter._session = mock_session
+    
+    res = await http_adapter.get("http://dummy.api")
+    assert res == {"status": "ok"}
+
+@pytest.mark.asyncio
+async def test_http_adapter_get_error(http_adapter):
+    """Scenario: GET 요청 중 ClientError 발생 시 NetworkConnectionError로 래핑됨"""
+    mock_session = MagicMock()
+    mock_session.closed = False 
+    
+    # __aenter__ 진입 시 예외가 터지도록 side_effect 주입
+    error_effect = aiohttp.ClientError("Connection Refused")
+    mock_session.get.return_value = DummyAsyncContextManager(side_effect=error_effect)
+    http_adapter._session = mock_session
+    
+    with pytest.raises(NetworkConnectionError, match="Connection Refused"):
+         await http_adapter.get("http://dummy.api")
+
+# [HTTP-03] POST 요청 성공 및 실패 분기
+@pytest.mark.asyncio
+async def test_http_adapter_post_success(http_adapter):
+    """Scenario: POST 요청 성공 시 텍스트 응답 반환 (JSON이 아닐 때 Text 반환 로직 검증)"""
+    mock_session = MagicMock()
+    mock_session.closed = False 
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.headers = {"Content-Type": "text/plain"}
+    mock_resp.text.return_value = "plain text response"
+    
+    mock_session.post.return_value = DummyAsyncContextManager(mock_response=mock_resp)
+    http_adapter._session = mock_session
+    
+    res = await http_adapter.post("http://dummy.api", data={"payload": 123})
+    assert res == "plain text response"
+
+@pytest.mark.asyncio
+async def test_http_adapter_post_error(http_adapter):
+    """Scenario: POST 요청 중 Timeout 발생 시 NetworkConnectionError로 래핑됨"""
+    mock_session = MagicMock()
+    mock_session.closed = False 
+    
+    timeout_effect = asyncio.TimeoutError("timeout")
+    mock_session.post.return_value = DummyAsyncContextManager(side_effect=timeout_effect)
+    http_adapter._session = mock_session
+    
+    with pytest.raises(NetworkConnectionError, match="POST http://dummy.api failed"):
+         await http_adapter.post("http://dummy.api")
+
+# [HTTP-04] 응답 핸들러 상태 코드 및 파싱 분기
+@pytest.mark.asyncio
+async def test_http_adapter_handle_response_error_status(http_adapter):
+    """Scenario: HTTP 응답 코드가 400 이상일 경우 에러 바디를 포함하여 예외 발생"""
+    mock_resp = AsyncMock()
+    mock_resp.status = 404
+    mock_resp.text.return_value = "Not Found Page"
+    
+    with pytest.raises(NetworkConnectionError, match="HTTP 404 on GET http://dummy.api: Not Found Page"):
+        await http_adapter._handle_response(mock_resp, "http://dummy.api", "GET")
+
+@pytest.mark.asyncio
+async def test_http_adapter_handle_response_json_parsing_error(http_adapter):
+    """Scenario: Content-Type이 JSON이나 파싱 에러(망가진 데이터) 시 텍스트 파싱으로 Fallback"""
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.headers = {"Content-Type": "application/json"}
+    
+    mock_resp.json.side_effect = ValueError("Malformed JSON")
+    mock_resp.text.return_value = "{malformed json"
+    
+    res = await http_adapter._handle_response(mock_resp, "http://dummy.api", "GET")
+    assert res == "{malformed json"
