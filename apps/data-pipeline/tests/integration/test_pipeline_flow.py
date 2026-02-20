@@ -17,6 +17,7 @@ from src.common.interfaces import IHttpClient, IAuthStrategy, IExtractor
 from src.common.exceptions import ETLError, ExtractorError, ConfigurationError, RateLimitError, NetworkConnectionError, HttpError, AuthError
 from src.common.config import ConfigManager, JobPolicy
 from src.common.log import LogManager, JsonFormatter, request_id_ctx
+from src.common.dtos import RequestDTO, ExtractedDTO
 
 from src.common.decorators.log_decorator import LoggingDecorator, _sanitize_args, _truncate_output, DEFAULT_TRUNCATE_LIMIT
 from src.common.decorators.rate_limit_decorator import RateLimitDecorator, _buckets, _get_bucket
@@ -26,6 +27,12 @@ import src.common.decorators.rate_limit_decorator as rld_module
 
 from src.extractor.adapters.auth import KISAuthStrategy, UPBITAuthStrategy, KIS_DATE_FORMAT
 from src.extractor.adapters.http_client import AsyncHttpAdapter
+
+from src.extractor.providers.abstract_extractor import AbstractExtractor
+from src.extractor.providers.ecos_extractor import ECOSExtractor
+from src.extractor.providers.fred_extractor import FREDExtractor
+from src.extractor.providers.kis_extractor import KISExtractor
+from src.extractor.providers.upbit_extractor import UPBITExtractor
 
 # ==============================================================================
 # [FIXTURE] 통합 테스트용 Mock Fixtures
@@ -135,6 +142,57 @@ class DummyAsyncContextManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
 
+@pytest.fixture
+def ecos_mock_config():
+    """ECOS 수집기 전용 Mock Config 생성"""
+    config = MagicMock()
+    config.ecos.base_url = "https://ecos.mock.api"
+    config.ecos.api_key.get_secret_value.return_value = "secret_key_123"
+    
+    # 더미 정책 주입
+    policy = MagicMock()
+    policy.provider = "ECOS"
+    policy.path = "/StatisticSearch/"
+    policy.params = {"stat_code": "001", "cycle": "M", "item_code1": "A"}
+    
+    # 속성에 Dictionary 형태로 할당
+    config.extraction_policy = {"ecos_test_job": policy}
+    return config
+
+@pytest.fixture
+def fred_mock_config():
+    """FRED 수집기 전용 Mock Config 생성"""
+    config = MagicMock()
+    config.fred.base_url = "https://api.fred.mock"
+    config.fred.api_key.get_secret_value.return_value = "dummy_fred_secret_key"
+    
+    # 더미 정책 주입
+    policy = MagicMock()
+    policy.provider = "FRED"
+    policy.path = "/series/observations"
+    policy.params = {"series_id": "GNPCA"}
+    
+    config.extraction_policy = {"fred_test_job": policy}
+    return config
+
+@pytest.fixture
+def kis_mock_config():
+    """KIS 수집기 전용 Mock Config 생성"""
+    config = MagicMock()
+    config.kis.base_url = "https://api.kis.mock"
+    config.kis.app_key.get_secret_value.return_value = "dummy_kis_app_key"
+    config.kis.app_secret.get_secret_value.return_value = "dummy_kis_app_secret"
+    
+    # 더미 정책 주입
+    policy = MagicMock()
+    policy.provider = "KIS"
+    policy.path = "/uapi/domestic-stock/v1/quotations/inquire-price"
+    policy.params = {"FID_COND_MRKT_DIV_CODE": "J"}
+    policy.tr_id = "FHKST01010100"
+    
+    config.extraction_policy = {"kis_test_job": policy}
+    return config
+
 # ==============================================================================
 # [INTEG] 파이프라인 통합 테스트 (Pipeline Service Flow)
 # ==============================================================================
@@ -221,6 +279,20 @@ async def test_pipeline_factory_provider_switching(mock_integration_config, mock
     assert "appkey" in kis_calls[0].kwargs["headers"] 
     assert "market" in upbit_calls[0].kwargs["params"]
 
+@pytest.fixture
+def upbit_mock_config():
+    """UPBIT 수집기 전용 Mock Config 생성"""
+    config = MagicMock()
+    config.upbit.base_url = "https://api.upbit.mock"
+    
+    # 더미 정책 주입
+    policy = MagicMock()
+    policy.provider = "UPBIT"
+    policy.path = "/v1/ticker"
+    policy.params = {"market": "KRW-BTC"}
+    
+    config.extraction_policy = {"upbit_test_job": policy}
+    return config
 
 # ==============================================================================
 # [CONFIG] ConfigManager 100% Coverage (Passed)
@@ -462,7 +534,7 @@ def test_log_decorator_serialization_failure(mock_logger, clean_context):
 # [NEW] Missing Coverage 완벽 보완 영역 (100% 달성을 위한 Edge Cases)
 # ------------------------------------------------------------------------------
 
-# [LOG-10] ImportError Fallback (Missing 35-40)
+# [LOG-10] ImportError Fallback
 def test_log_decorator_import_fallback():
     """Scenario: src.common.log 임포트 실패 시 fallback 경로 로직이 실행되어야 함"""
     import sys
@@ -743,7 +815,7 @@ async def test_rlimit_async_throttling(mock_sleep):
         wait_time_called = mock_sleep.call_args[0][0]
         assert wait_time_called > 0
 
-# [RETRY-01] ImportError Fallback (Missing 30-34)
+# [RETRY-01] ImportError Fallback
 def test_retry_import_fallback():
     """Scenario: src.common.log 임포트 실패 시 fallback 경로 로직이 실행되어야 함"""
     target_module_name = 'src.common.decorators.retry_decorator'
@@ -764,7 +836,7 @@ def test_retry_import_fallback():
         
     importlib.reload(target_module)
 
-# [RETRY-02] Sync Wrapper Happy Path (Missing 88->91, 93, 139-150)
+# [RETRY-02] Sync Wrapper Happy Path
 def test_retry_sync_happy_path():
     """Scenario: 동기 함수가 오류 없이 즉시 성공할 경우"""
     @RetryDecorator(max_retries=2)
@@ -773,7 +845,7 @@ def test_retry_sync_happy_path():
     
     assert sync_func() == "sync_ok"
 
-# [RETRY-03] Sync Wrapper Retry Then Success (Missing 151-163)
+# [RETRY-03] Sync Wrapper Retry Then Success
 @patch("time.sleep")
 def test_retry_sync_retry_then_success(mock_sleep):
     """Scenario: 동기 함수가 일시적 에러 발생 후 재시도하여 성공함"""
@@ -790,7 +862,7 @@ def test_retry_sync_retry_then_success(mock_sleep):
     assert attempts == 2
     mock_sleep.assert_called_once()
 
-# [RETRY-04] Sync Wrapper Max Retries Exceeded (Missing 165-168)
+# [RETRY-04] Sync Wrapper Max Retries Exceeded
 @patch("time.sleep")
 def test_retry_sync_max_retries_exceeded(mock_sleep):
     """Scenario: 최대 재시도 횟수를 초과할 때까지 동기 함수가 실패하면 최종 예외 발생"""
@@ -803,7 +875,7 @@ def test_retry_sync_max_retries_exceeded(mock_sleep):
     
     assert mock_sleep.call_count == 2
 
-# [RETRY-05] Sync Wrapper No Retry Attribute (Missing 154-159)
+# [RETRY-05] Sync Wrapper No Retry Attribute
 @patch("time.sleep")
 def test_retry_sync_no_retry_attr(mock_sleep):
     """Scenario: should_retry=False 인 예외 발생 시 재시도 없이 즉시 실패 (Fail-Fast)"""
@@ -817,7 +889,7 @@ def test_retry_sync_no_retry_attr(mock_sleep):
     # 즉시 실패했으므로 sleep이 한 번도 호출되지 않아야 함
     mock_sleep.assert_not_called()
 
-# [RETRY-06] Async Wrapper Retry Then Success (Missing 181-196)
+# [RETRY-06] Async Wrapper Retry Then Success
 @pytest.mark.asyncio
 @patch("asyncio.sleep")
 async def test_retry_async_retry_then_success(mock_sleep):
@@ -835,7 +907,7 @@ async def test_retry_async_retry_then_success(mock_sleep):
     assert attempts == 2
     mock_sleep.assert_called_once()
 
-# [RETRY-07] Async Wrapper Max Retries Exceeded (Missing 198)
+# [RETRY-07] Async Wrapper Max Retries Exceeded
 @pytest.mark.asyncio
 @patch("asyncio.sleep")
 async def test_retry_async_max_retries_exceeded(mock_sleep):
@@ -915,7 +987,7 @@ async def test_retry_async_loop_exhausted():
     with pytest.raises(TypeError):
         await async_func()
 
-# [EXCEPT-01] NetworkConnectionError URL 파라미터 분기 (Missing 99-100)
+# [EXCEPT-01] NetworkConnectionError URL 파라미터 분기
 def test_network_connection_error_no_url():
     """Scenario: URL이 주어지지 않은 경우 details가 빈 딕셔너리로 세팅됨"""
     err = NetworkConnectionError("timeout")
@@ -927,7 +999,7 @@ def test_network_connection_error_with_url():
     err = NetworkConnectionError("timeout", url="http://api.test.com")
     assert err.details == {"url": "http://api.test.com"}
 
-# [EXCEPT-02] HttpError body 길이 Truncate 분기 방어 로직 (Missing 124-127)
+# [EXCEPT-02] HttpError body 길이 Truncate 분기 방어 로직
 def test_http_error_short_body():
     """Scenario: response_body 길이가 최대 제한을 넘지 않으면 원본 문자열을 그대로 유지"""
     short_body = "short response"
@@ -944,7 +1016,7 @@ def test_http_error_long_body():
     assert preview.endswith("...(truncated)")
     assert preview.startswith("x" * 500)
 
-# [EXCEPT-03] AuthError 강제 설정 로직 (Missing 147)
+# [EXCEPT-03] AuthError 강제 설정 로직
 def test_auth_error_init():
     """Scenario: AuthError는 무조건 재시도 불가(should_retry=False) 객체로 초기화되어야 함"""
     err = AuthError("Unauthorized Token", status_code=403)
@@ -976,20 +1048,20 @@ async def test_interfaces_abstract_methods_coverage():
         async def extract(self, request):
             return await super().extract(request)
             
-    # 2. IHttpClient (Missing 24, 38)
+    # 2. IHttpClient
     client = DummyHttpClient()
     assert await client.get("http://dummy.test") is None
     assert await client.post("http://dummy.test") is None
     
-    # 3. IAuthStrategy (Missing 58)
+    # 3. IAuthStrategy
     auth = DummyAuthStrategy()
     assert await auth.get_token(client) is None
     
-    # 4. IExtractor (Missing 82)
+    # 4. IExtractor
     ext = DummyExtractor()
     assert await ext.extract(None) is None
 
-# [LOG-1] JsonFormatter - Non-ETLError Exception and json.dumps exception (Missing 146, 152-154)
+# [LOG-1] JsonFormatter - Non-ETLError Exception and json.dumps exception
 def test_log_json_formatter_normal_exception_and_fallback():
     """Scenario: ETLError가 아닌 일반 예외 처리 및 json.dumps 실패 시 fallback 처리 검증"""
     formatter = JsonFormatter()
@@ -1005,7 +1077,7 @@ def test_log_json_formatter_normal_exception_and_fallback():
     except ValueError:
         record.exc_info = sys.exc_info()
     
-    # 1. 일반 예외가 제대로 "exception" 키에 들어가는지 검증 (Missing 146)
+    # 1. 일반 예외가 제대로 "exception" 키에 들어가는지 검증
     formatted = formatter.format(record)
     parsed = json.loads(formatted)
     assert "exception" in parsed
@@ -1348,3 +1420,438 @@ async def test_http_adapter_handle_response_json_parsing_error(http_adapter):
     
     res = await http_adapter._handle_response(mock_resp, "http://dummy.api", "GET")
     assert res == "{malformed json"
+
+# [EXTRACTOR-01] ConfigManager 의존성 누락 방어 로직
+def test_abstract_extractor_init_missing_config():
+    """Scenario: 초기화 시 config가 None일 경우 런타임 에러 방지를 위해 ConfigurationError 발생"""
+    mock_http_client = MagicMock()
+    
+    # 추상 클래스이므로 임시 더미 구현체 생성
+    class DummyExtractor(AbstractExtractor):
+        def _validate_request(self, request): pass
+        async def _fetch_raw_data(self, request): pass
+        def _create_response(self, raw_data, job_id): pass
+        
+    with pytest.raises(ConfigurationError, match="ConfigManager 인스턴스가 필요합니다"):
+        DummyExtractor(http_client=mock_http_client, config=None)
+
+# [EXTRACTOR-02] 일반 Exception 발생 시 ExtractorError 래핑 방어 로직
+@pytest.mark.asyncio
+async def test_abstract_extractor_extract_general_exception():
+    """Scenario: extract() 실행 중 통제되지 않은 일반 예외(Exception)가 발생하면 ExtractorError로 래핑됨"""
+    mock_http_client = MagicMock()
+    mock_config = MagicMock()
+    
+    # 내부 로직에서 의도적으로 ValueError를 발생시키는 결함(Faulty) 구현체 모사
+    class FaultyExtractor(AbstractExtractor):
+        def _validate_request(self, request):
+            raise ValueError("Unexpected system memory failure")
+            
+        async def _fetch_raw_data(self, request): pass
+        def _create_response(self, raw_data, job_id): pass
+            
+    extractor = FaultyExtractor(http_client=mock_http_client, config=mock_config)
+    req = RequestDTO(job_id="test_error_job")
+    
+    with pytest.raises(ExtractorError) as exc_info:
+        await extractor.extract(req)
+        
+    # 에러 메세지 및 디테일 검증
+    assert "알 수 없는 시스템 오류 발생" in str(exc_info.value)
+    assert "Unexpected system memory failure" in exc_info.value.details["raw_error"]
+    assert exc_info.value.details["extractor"] == "FaultyExtractor"
+
+# [ECOS-01] 초기화 시 필수 설정 누락 방어
+def test_ecos_init_missing_base_url(ecos_mock_config):
+    ecos_mock_config.ecos.base_url = ""
+    with pytest.raises(ExtractorError, match="ecos.base_url' is empty"):
+        ECOSExtractor(MagicMock(), ecos_mock_config)
+
+def test_ecos_init_missing_api_key(ecos_mock_config):
+    ecos_mock_config.ecos.api_key = None
+    with pytest.raises(ExtractorError, match="ecos.api_key' is missing"):
+        ECOSExtractor(MagicMock(), ecos_mock_config)
+
+# [ECOS-02] _validate_request 정책 및 파라미터 검증
+def test_ecos_validate_no_job_id(ecos_mock_config):
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    with pytest.raises(ExtractorError, match="job_id' is mandatory"):
+        extractor._validate_request(RequestDTO(job_id=""))
+
+def test_ecos_validate_no_policy(ecos_mock_config):
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    with pytest.raises(ExtractorError, match="Policy not found"):
+        extractor._validate_request(RequestDTO(job_id="unknown_job"))
+
+def test_ecos_validate_wrong_provider(ecos_mock_config):
+    ecos_mock_config.extraction_policy["ecos_test_job"].provider = "KIS"
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    with pytest.raises(ExtractorError, match="not 'ECOS'"):
+        extractor._validate_request(RequestDTO(job_id="ecos_test_job"))
+
+def test_ecos_validate_missing_dates(ecos_mock_config):
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    with pytest.raises(ExtractorError, match="start_date' and 'end_date' are mandatory"):
+        extractor._validate_request(RequestDTO(job_id="ecos_test_job", params={"start_date": "202301"}))
+
+# [ECOS-03] _fetch_raw_data URL 조립 및 호출
+@pytest.mark.asyncio
+async def test_ecos_fetch_raw_data(ecos_mock_config):
+    mock_client = AsyncMock()
+    mock_client.get.return_value = {"StatisticSearch": {"RESULT": {"CODE": "INFO-000"}}}
+    
+    extractor = ECOSExtractor(mock_client, ecos_mock_config)
+    req = RequestDTO(job_id="ecos_test_job", params={"start_date": "202301", "end_date": "202312"})
+    
+    res = await extractor._fetch_raw_data(req)
+    assert "StatisticSearch" in res
+    
+    # URL Path 조립이 정확히 이루어졌는지 확인 (동적+정적 파라미터 병합)
+    mock_client.get.assert_called_once()
+    called_url = mock_client.get.call_args[0][0]
+    expected_url = "https://ecos.mock.api/StatisticSearch/secret_key_123/json/kr/1/100000/001/M/202301/202312/A"
+    assert called_url == expected_url
+
+# [ECOS-04] _create_response 다양한 예외 및 성공 분기
+def test_ecos_create_response_root_error(ecos_mock_config):
+    """Scenario: 인증 실패 등으로 Root에 RESULT 코드가 바로 떨어지는 경우"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {"RESULT": {"CODE": "ERR-001", "MESSAGE": "API Key Invalid"}}
+    
+    with pytest.raises(ExtractorError, match="API Key Invalid \\(Code: ERR-001\\)"):
+        extractor._create_response(raw_data, "ecos_test_job")
+
+def test_ecos_create_response_business_error(ecos_mock_config):
+    """Scenario: 서비스명 하위에 있는 RESULT 코드가 에러인 경우 (조회 결과 없음 등)"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {"StatisticSearch": {"RESULT": {"CODE": "ERR-002", "MESSAGE": "No Data Found"}}}
+    
+    with pytest.raises(ExtractorError, match="No Data Found \\(Code: ERR-002\\)"):
+        extractor._create_response(raw_data, "ecos_test_job")
+
+def test_ecos_create_response_invalid_format(ecos_mock_config):
+    """Scenario: 요청한 서비스명(StatisticSearch)이 아예 결과에 없는 비정상 포맷"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {"UnknownService": {}}
+    
+    with pytest.raises(ExtractorError, match="Root key 'StatisticSearch' not found"):
+        extractor._create_response(raw_data, "ecos_test_job")
+
+def test_ecos_create_response_success(ecos_mock_config):
+    """Scenario: 정상 데이터 반환 시 DTO 래핑"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {"StatisticSearch": {"RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}, "row": [{"val": 1}]}}
+    
+    res = extractor._create_response(raw_data, "ecos_test_job")
+    assert res.meta["status"] == "success"
+    assert res.meta["source"] == "ECOS"
+    assert res.data == raw_data
+
+# [ECOS-05] _validate_request 정상 통과 해피 경로
+def test_ecos_validate_success(ecos_mock_config):
+    """Scenario: 모든 필수 파라미터(start_date, end_date)가 정상적으로 존재하여 검증을 무사히 통과함"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    
+    # 예외가 발생하지 않고 함수가 정상 종료(exit)되면 통과
+    request = RequestDTO(job_id="ecos_test_job", params={"start_date": "202301", "end_date": "202312"})
+    extractor._validate_request(request)
+
+# [ECOS-06] _create_response Root RESULT가 INFO-000인 경우
+def test_ecos_create_response_root_success_and_body(ecos_mock_config):
+    """Scenario: Root에 RESULT가 존재하지만 코드가 INFO-000이어서 에러 없이 다음 단계로 넘어감"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {
+        "RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"},
+        "StatisticSearch": {"row": [{"val": 1}]}
+    }
+    
+    res = extractor._create_response(raw_data, "ecos_test_job")
+    assert res.meta["status"] == "success"
+
+# [ECOS-07] _create_response Body 내에 RESULT가 아예 없는 경우
+def test_ecos_create_response_no_result_in_body(ecos_mock_config):
+    """Scenario: 서비스명 하위에 RESULT 키 없이 순수 데이터(row)만 내려오는 정상 응답 포맷 처리"""
+    extractor = ECOSExtractor(MagicMock(), ecos_mock_config)
+    raw_data = {
+        "StatisticSearch": {"row": [{"val": 1}, {"val": 2}]}
+    }
+    
+    res = extractor._create_response(raw_data, "ecos_test_job")
+    assert res.meta["status"] == "success"
+
+# [FRED-01] 초기화 시 필수 설정 누락 방어
+def test_fred_init_missing_base_url(fred_mock_config):
+    fred_mock_config.fred.base_url = ""
+    with pytest.raises(ExtractorError, match="fred.base_url' is empty"):
+        FREDExtractor(MagicMock(), fred_mock_config)
+
+def test_fred_init_missing_api_key(fred_mock_config):
+    fred_mock_config.fred.api_key = None
+    with pytest.raises(ExtractorError, match="fred.api_key' is missing"):
+        FREDExtractor(MagicMock(), fred_mock_config)
+
+# [FRED-02] _validate_request 예외 및 성공 분기
+def test_fred_validate_no_job_id(fred_mock_config):
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+        extractor._validate_request(RequestDTO(job_id=""))
+
+def test_fred_validate_no_policy(fred_mock_config):
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    with pytest.raises(ExtractorError, match="Policy not found"):
+        extractor._validate_request(RequestDTO(job_id="unknown_job"))
+
+def test_fred_validate_wrong_provider(fred_mock_config):
+    fred_mock_config.extraction_policy["fred_test_job"].provider = "ECOS"
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    with pytest.raises(ExtractorError, match="not 'FRED'"):
+        extractor._validate_request(RequestDTO(job_id="fred_test_job"))
+
+def test_fred_validate_missing_series_id(fred_mock_config):
+    """Scenario: policy와 request 어디에도 series_id가 없는 경우 에러 발생"""
+    fred_mock_config.extraction_policy["fred_test_job"].params = {}
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    with pytest.raises(ExtractorError, match="'series_id' is required"):
+        extractor._validate_request(RequestDTO(job_id="fred_test_job", params={}))
+
+def test_fred_validate_success(fred_mock_config):
+    """Scenario: 검증을 무사히 통과하는 해피 경로 (Branch Exit)"""
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    # 예외가 발생하지 않으면 통과
+    extractor._validate_request(RequestDTO(job_id="fred_test_job", params={"observation_start": "2023-01-01"}))
+
+# [FRED-03] _fetch_raw_data URL 및 파라미터 병합 로직
+@pytest.mark.asyncio
+async def test_fred_fetch_raw_data(fred_mock_config):
+    mock_client = AsyncMock()
+    mock_client.get.return_value = {"observations": []}
+    
+    extractor = FREDExtractor(mock_client, fred_mock_config)
+    req = RequestDTO(job_id="fred_test_job", params={"observation_start": "2023-01-01"})
+    
+    res = await extractor._fetch_raw_data(req)
+    assert "observations" in res
+    
+    mock_client.get.assert_called_once()
+    called_url = mock_client.get.call_args[0][0]
+    called_params = mock_client.get.call_args[1]["params"]
+    
+    # URL 및 파라미터 병합 검증
+    assert called_url == "https://api.fred.mock/series/observations"
+    assert called_params["series_id"] == "GNPCA" # Policy에서 옴
+    assert called_params["observation_start"] == "2023-01-01" # Request에서 옴
+    assert called_params["file_type"] == "json" # 시스템 강제 주입
+    assert called_params["api_key"] == "dummy_fred_secret_key" # 시스템 강제 주입
+
+# [FRED-04] _create_response 응답 검증 및 DTO 래핑
+def test_fred_create_response_with_error(fred_mock_config):
+    """Scenario: HTTP는 200 OK지만 JSON Body에 error_message가 있는 비즈니스 실패 케이스"""
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    raw_data = {"error_code": 400, "error_message": "Bad Request"}
+    
+    with pytest.raises(ExtractorError, match="FRED API Failed: Bad Request \\(Code: 400\\)"):
+        extractor._create_response(raw_data, "fred_test_job")
+
+def test_fred_create_response_with_error_no_code(fred_mock_config):
+    """Scenario: error_message는 있으나 error_code가 없는 엣지 케이스"""
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    raw_data = {"error_message": "Unknown Error"}
+    
+    with pytest.raises(ExtractorError, match="FRED API Failed: Unknown Error \\(Code: Unknown\\)"):
+        extractor._create_response(raw_data, "fred_test_job")
+
+def test_fred_create_response_success(fred_mock_config):
+    """Scenario: 정상 응답 시 DTO 래핑 확인 (status 키 제거 및 job_id 검증 추가)"""
+    extractor = FREDExtractor(MagicMock(), fred_mock_config)
+    raw_data = {"observations": [{"value": "1.0"}]}
+    
+    res = extractor._create_response(raw_data, "fred_test_job")
+    
+    # FRED 구현체에 맞춰 meta 데이터를 검증
+    assert res.meta["source"] == "FRED"
+    assert res.meta["job_id"] == "fred_test_job"
+    assert "extracted_at" in res.meta
+    assert res.data == raw_data
+
+# [KIS-01] 초기화 시 필수 설정 누락 방어
+def test_kis_init_missing_base_url(kis_mock_config):
+    kis_mock_config.kis.base_url = ""
+    with pytest.raises(ExtractorError, match="'kis.base_url' is empty in ConfigManager"):
+        KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+
+# [KIS-02] _validate_request 예외 및 성공 방어
+def test_kis_validate_no_job_id(kis_mock_config):
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+        extractor._validate_request(RequestDTO(job_id=""))
+
+def test_kis_validate_no_policy(kis_mock_config):
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    with pytest.raises(ExtractorError, match="Policy not found"):
+        extractor._validate_request(RequestDTO(job_id="unknown_job"))
+
+def test_kis_validate_wrong_provider(kis_mock_config):
+    kis_mock_config.extraction_policy["kis_test_job"].provider = "ECOS"
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    with pytest.raises(ExtractorError, match="not 'KIS'"):
+        extractor._validate_request(RequestDTO(job_id="kis_test_job"))
+
+def test_kis_validate_missing_tr_id(kis_mock_config):
+    kis_mock_config.extraction_policy["kis_test_job"].tr_id = None
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    with pytest.raises(ExtractorError, match="'tr_id' is missing in policy"):
+        extractor._validate_request(RequestDTO(job_id="kis_test_job"))
+
+def test_kis_validate_success(kis_mock_config):
+    """Scenario: 모든 검증을 정상 통과하는 해피 경로"""
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    extractor._validate_request(RequestDTO(job_id="kis_test_job"))
+
+# [KIS-03] _fetch_raw_data 인증 획득, URL/헤더 조립 및 호출
+@pytest.mark.asyncio
+async def test_kis_fetch_raw_data(kis_mock_config):
+    mock_http_client = AsyncMock()
+    mock_http_client.get.return_value = {"rt_cd": "0"}
+    
+    mock_auth_strategy = AsyncMock()
+    mock_auth_strategy.get_token.return_value = "Bearer test_token"
+    
+    extractor = KISExtractor(mock_http_client, mock_auth_strategy, kis_mock_config)
+    req = RequestDTO(job_id="kis_test_job", params={"FID_INPUT_ISCD": "005930"})
+    
+    res = await extractor._fetch_raw_data(req)
+    assert res == {"rt_cd": "0"}
+    
+    # API 호출 검증
+    mock_http_client.get.assert_called_once()
+    called_url = mock_http_client.get.call_args[0][0]
+    called_headers = mock_http_client.get.call_args[1]["headers"]
+    called_params = mock_http_client.get.call_args[1]["params"]
+    
+    # URL 조립, 헤더 및 토큰 주입, 파라미터 병합 검증
+    assert called_url == "https://api.kis.mock/uapi/domestic-stock/v1/quotations/inquire-price"
+    assert called_headers["authorization"] == "Bearer test_token"
+    assert called_headers["appkey"] == "dummy_kis_app_key"
+    assert called_headers["appsecret"] == "dummy_kis_app_secret"
+    assert called_headers["tr_id"] == "FHKST01010100"
+    
+    assert called_params["FID_COND_MRKT_DIV_CODE"] == "J"
+    assert called_params["FID_INPUT_ISCD"] == "005930"
+
+# [KIS-04] _create_response 응답 비즈니스 로직 에러 처리
+def test_kis_create_response_with_error(kis_mock_config):
+    """Scenario: KIS API에서 HTTP 200이 왔으나 비즈니스 코드(rt_cd)가 실패를 가리킴"""
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    raw_data = {"rt_cd": "1", "msg1": "Invalid Parameter"}
+    
+    with pytest.raises(ExtractorError, match="KIS API Failed: Invalid Parameter \\(Code: 1\\)"):
+        extractor._create_response(raw_data, "kis_test_job")
+
+def test_kis_create_response_success(kis_mock_config):
+    """Scenario: 정상 응답 시 DTO 래핑 검증"""
+    extractor = KISExtractor(MagicMock(), AsyncMock(), kis_mock_config)
+    raw_data = {"rt_cd": "0", "output": {"price": "1000"}}
+    
+    res = extractor._create_response(raw_data, "kis_test_job")
+    assert res.meta["status_code"] == "0"
+    assert res.meta["source"] == "KIS"
+    assert res.data == raw_data
+
+# [UPBIT-01] 초기화 시 필수 설정 누락 방어
+def test_upbit_init_missing_base_url(upbit_mock_config):
+    upbit_mock_config.upbit.base_url = ""
+    with pytest.raises(ExtractorError, match="'upbit.base_url' is empty in ConfigManager"):
+        UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+
+# [UPBIT-02] _validate_request 예외 및 경고 방어
+def test_upbit_validate_no_job_id(upbit_mock_config):
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+        extractor._validate_request(RequestDTO(job_id=""))
+
+def test_upbit_validate_no_policy(upbit_mock_config):
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    with pytest.raises(ExtractorError, match="Policy not found"):
+        extractor._validate_request(RequestDTO(job_id="unknown_job"))
+
+def test_upbit_validate_wrong_provider(upbit_mock_config):
+    upbit_mock_config.extraction_policy["upbit_test_job"].provider = "KIS"
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    with pytest.raises(ExtractorError, match="not 'UPBIT'"):
+        extractor._validate_request(RequestDTO(job_id="upbit_test_job"))
+
+def test_upbit_validate_missing_market(upbit_mock_config):
+    """Scenario: market 파라미터 누락 시 warning 로깅 확인 (Missing 99)"""
+    upbit_mock_config.extraction_policy["upbit_test_job"].params = {}
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    # 예외가 발생하지는 않고 경고 로그만 남음
+    extractor._validate_request(RequestDTO(job_id="upbit_test_job", params={}))
+
+def test_upbit_validate_success(upbit_mock_config):
+    """Scenario: 모든 검증 정상 통과"""
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    extractor._validate_request(RequestDTO(job_id="upbit_test_job"))
+
+# [UPBIT-03] _fetch_raw_data 인증 및 HTTP 호출
+@pytest.mark.asyncio
+async def test_upbit_fetch_raw_data_with_token(upbit_mock_config):
+    """Scenario: 인증 토큰이 존재하는 경우 authorization 헤더 주입 분기"""
+    mock_http_client = AsyncMock()
+    mock_http_client.get.return_value = [{"market": "KRW-BTC", "trade_price": 50000000}]
+    
+    mock_auth_strategy = AsyncMock()
+    mock_auth_strategy.get_token.return_value = "Bearer test_token"
+    
+    extractor = UPBITExtractor(mock_http_client, mock_auth_strategy, upbit_mock_config)
+    req = RequestDTO(job_id="upbit_test_job", params={"custom": "val"})
+    
+    res = await extractor._fetch_raw_data(req)
+    assert res == [{"market": "KRW-BTC", "trade_price": 50000000}]
+    
+    mock_http_client.get.assert_called_once()
+    called_headers = mock_http_client.get.call_args[1]["headers"]
+    assert called_headers["authorization"] == "Bearer test_token"
+
+@pytest.mark.asyncio
+async def test_upbit_fetch_raw_data_without_token(upbit_mock_config):
+    """Scenario: 인증 토큰이 없을 경우(None) authorization 헤더 생략 분기"""
+    mock_http_client = AsyncMock()
+    mock_http_client.get.return_value = [{"market": "KRW-BTC"}]
+    
+    mock_auth_strategy = AsyncMock()
+    mock_auth_strategy.get_token.return_value = None
+    
+    extractor = UPBITExtractor(mock_http_client, mock_auth_strategy, upbit_mock_config)
+    req = RequestDTO(job_id="upbit_test_job")
+    
+    await extractor._fetch_raw_data(req)
+    
+    called_headers = mock_http_client.get.call_args[1]["headers"]
+    assert "authorization" not in called_headers
+
+# [UPBIT-04] _create_response 비즈니스 에러 및 정상 응답 처리
+def test_upbit_create_response_with_error(upbit_mock_config):
+    """Scenario: 응답이 error 딕셔너리를 포함하는 비즈니스 실패 케이스"""
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    raw_data = {"error": {"name": "invalid_query_payload", "message": "Invalid market"}}
+    
+    with pytest.raises(ExtractorError, match="UPBIT API Failed: Invalid market \\(Name: invalid_query_payload\\)"):
+        extractor._create_response(raw_data, "upbit_test_job")
+
+def test_upbit_create_response_with_error_missing_fields(upbit_mock_config):
+    """Scenario: error 객체는 있으나 name이나 message가 없는 엣지 케이스"""
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    raw_data = {"error": {}}
+    
+    with pytest.raises(ExtractorError, match="UPBIT API Failed: No message provided \\(Name: UnknownError\\)"):
+        extractor._create_response(raw_data, "upbit_test_job")
+
+def test_upbit_create_response_success(upbit_mock_config):
+    """Scenario: 정상 응답 시 DTO 래핑 검증"""
+    extractor = UPBITExtractor(MagicMock(), AsyncMock(), upbit_mock_config)
+    raw_data = [{"market": "KRW-BTC", "trade_price": 50000000}]
+    
+    res = extractor._create_response(raw_data, "upbit_test_job")
+    assert res.meta["status_code"] == "OK"
+    assert res.meta["source"] == "UPBIT"
+    assert res.data == raw_data
