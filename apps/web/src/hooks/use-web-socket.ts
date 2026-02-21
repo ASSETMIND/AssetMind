@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import type { UseWebSocketReturn } from '../types/web-socket';
+import { useWebSocketStore } from '../store/web-socket';
 
 /*
  * 웹소켓 연결 관리를 위한 커스텀 훅
@@ -11,22 +13,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * - connect: 수동 연결 함수
  * - disconnect: 수동 연결 해제 함수
  */
-interface UseWebSocketReturn {
-	isConnected: boolean;
-	lastMessage: MessageEvent | null;
-	error: Event | null;
-	sendMessage: (message: string | ArrayBuffer | Blob) => void;
-	connect: () => void;
-	disconnect: () => void;
-}
 
 export const useWebSocket = (
 	url: string,
 	reconnectInterval = 3000,
 ): UseWebSocketReturn => {
-	const [isConnected, setIsConnected] = useState(false);
-	const [lastMessage, setLastMessage] = useState<MessageEvent | null>(null);
-	const [error, setError] = useState<Event | null>(null);
+	const {
+		isConnected,
+		lastMessage,
+		error,
+		setIsConnected,
+		setLastMessage,
+		setError,
+	} = useWebSocketStore();
 
 	const ws = useRef<WebSocket | null>(null);
 	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -92,7 +91,7 @@ export const useWebSocket = (
 		};
 
 		ws.current = socket;
-	}, [url, reconnectInterval]);
+	}, [url, reconnectInterval, setIsConnected, setLastMessage, setError]);
 
 	// connect 함수가 변경될 때마다 ref 업데이트 (재귀 호출 지원)
 	useEffect(() => {
