@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { UseWebSocketReturn } from '../types/web-socket';
-import { useWebSocketStore } from '../store/web-socket';
+import type { UseWebSocketReturn } from '../../types/web-socket';
+import { useWebSocketStore } from '../../store/web-socket';
 
 /*
  * 웹소켓 연결 관리를 위한 커스텀 훅
