@@ -2,9 +2,8 @@
 
 # [핵심 변경] 태스크 이름 변경
 task_name: "logging_demo"
-
-# [핵심 변경] 로그가 섞이지 않도록 별도 폴더 지정
-log_dir: "logs/demo"
 log_level: "DEBUG"
+log_dir: "logs/demo"
+log_filename: "logging_demo.log"
 
 # ... (나머지 설정은 Pydantic 검증 통과를 위해 유지) ...

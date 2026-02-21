@@ -410,7 +410,7 @@ class TestRateLimitDecorator:
         with pytest.raises(ETLError) as excinfo:
             broken_func()
         
-        assert "Unexpected error in rate limit decorator" in str(excinfo.value)
+        assert "RateLimitDecorator 실행 중 예기치 못한 오류 발생" in str(excinfo.value)
         assert isinstance(excinfo.value.original_exception, RuntimeError)
 
     @pytest.mark.asyncio
@@ -425,7 +425,7 @@ class TestRateLimitDecorator:
         with pytest.raises(ETLError) as excinfo:
             await broken_async_func()
         
-        assert "Unexpected error in async rate limit decorator" in str(excinfo.value)
+        assert "RateLimitDecorator 실행 중 예기치 못한 오류 발생" in str(excinfo.value)
 
     def test_tc019_log_throttling_short_wait_branch(self):
         """[TC-019] [Branch] 대기 시간이 0.1초 이하일 때 로그 생략 분기 검증 (BrPart 1)"""

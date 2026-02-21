@@ -6,7 +6,8 @@
 # [System Settings]
 task_name: "decorator_demo"
 log_level: "DEBUG"
-log_dir: "logs/decorator_test" # 별도 폴더에 로그 저장
+log_dir: "logs/decorator_test"
+log_filename: "decorator_demo.log"
 
 # [Test Scenarios]
 # 파이썬 코드(examples/decorator_demo.py)에서 이 데이터를 읽어 동작을 제어합니다.
