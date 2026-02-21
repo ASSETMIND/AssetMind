@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실시간 주가 데이터 페이지 - AssetMind Theme</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── AssetMind Color Palette Tokens ── */
+  :root {
+    --bg-primary:  #131316; 
+    --bg-surface:  #1C1D21; 
+    --bg-elevated: #21242C; 
+    --bg-hover:    #2C2C30; 
+    
+    --text-primary:   #FFFFFF; 
+    --text-secondary: #9194A1; 
+    --text-disabled:  #4B4B50; 
+    
+    --border-divider: #2F3037; 
+    --border-input:   #383A42; 
+    
+    --brand-primary: #0D59F2; 
+    
+    --status-rise: #EA580C; 
+    --status-fall: #256AF4; 
+    
+    --font: 'Noto Sans KR', 'Pretendard Variable', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { background:var(--bg-primary); font-family:var(--font); color:var(--text-primary); font-size:14px; }
+
+  /* ══ TOOLBAR ══ */
+  .toolbar {
+    position:fixed; top:0; left:0; right:0; height:44px;
+    background:var(--bg-primary); z-index:9999;
+    display:flex; align-items:center; padding:0 16px; gap:0;
+    border-bottom:1px solid var(--border-divider);
+  }
+  .tb-title { font-size:11px; color:var(--text-disabled); letter-spacing:.06em; margin-right:18px; }
+  .tb-btns  { display:flex; gap:3px; }
+  .tb-btn {
+    padding:5px 12px; border-radius:5px; font-size:11px; font-weight:600;
+    cursor:pointer; border:none; background:transparent; color:var(--text-disabled);
+    font-family:var(--font); transition:all .15s;
+  }
+  .tb-btn.active { background:var(--brand-primary); color:var(--text-primary); }
+  .tb-btn:hover:not(.active) { background:var(--bg-hover); color:var(--text-secondary); }
+  .tb-sep  { width:1px; height:20px; background:var(--border-divider); margin:0 12px; }
+  .tb-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+  .tb-name  { font-size:12px; color:var(--text-secondary); font-weight:500; }
+  .tb-date  { font-size:11px; color:var(--text-disabled); font-family:monospace; }
+
+  /* ══ CANVAS & SHELL ══ */
+  .canvas { margin-top:44px; padding:32px 16px; display:flex; justify-content:center; min-height:calc(100vh - 44px); background:var(--bg-primary); }
+  .frames { display:flex; gap:48px; justify-content:center; align-items:flex-start; flex-wrap:wrap; width: 100%; }
+  .frame-wrap { flex-shrink:0; display:flex; flex-direction:column; align-items:center; width: 100%; }
+  
+  /* 🖥 Desktop 넓이 유동적 확장 (최대 1200px) */
+  .desktop-shell { width:100%; max-width:1200px; background:var(--bg-primary); }
+  
+  /* 📱/⬜ Tablet & Mobile은 기기 사이즈 고정 유지 */
+  .tablet-shell  { width:768px; background:var(--bg-primary); margin: 0 auto; }
+  .mobile-shell  { width:390px; background:var(--bg-primary); margin: 0 auto; }
+
+  /* ══ GNB ══ */
+  .gnb { display:flex; align-items:center; padding:10px 16px; gap:12px; margin-top: 10px; }
+  .gnb-item { font-size:14px; color:var(--text-disabled); display:flex; align-items:center; gap:6px; font-weight: 500; }
+  .gnb-item.on { color:var(--text-primary); }
+  .gnb-dot { width:6px; height:6px; border-radius:50%; background:var(--brand-primary); }
+
+  /* ══ BANNER ══ */
+  .banner { padding: 32px 20px 24px; text-align:center; }
+  .banner-box { color:var(--text-primary); font-size:24px; font-weight:700; letter-spacing:-.02em; }
+
+  /* ══ SUB TABS ══ */
+  .sub-tabs { display:flex; padding:0 16px; border-bottom:1px solid var(--border-divider); }
+  .sub-tab {
+    padding:14px 14px 12px; font-size:15px; font-weight:500;
+    color:var(--text-secondary);
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+    white-space:nowrap; margin-right:8px; cursor: pointer;
+  }
+  .sub-tab.on { color:var(--text-primary); font-weight:600; border-bottom-color:var(--text-primary); }
+
+  /* ══ FILTER ROW ══ */
+  .filter-row {
+    display:flex; align-items:center; gap:8px;
+    padding:16px; overflow-x:auto; scrollbar-width:none;
+    flex-wrap:nowrap;
+  }
+  .filter-row::-webkit-scrollbar { display:none; }
+
+  .filter-group {
+    display:flex; align-items:center;
+    background:var(--bg-surface);
+    border-radius:8px; padding:4px; gap:2px;
+  }
+  
+  .chip {
+    padding:6px 14px; border-radius:6px; font-size:13px; font-weight:500;
+    background:transparent; color:var(--text-secondary);
+    border:none; cursor:pointer; white-space:nowrap; flex-shrink:0;
+    transition: background 0.1s, color 0.1s;
+  }
+  .chip.active { background:var(--border-input); color:var(--text-primary); }
+
+  /* ══ TABLE META ══ */
+  .tbl-meta {
+    display:grid;
+    grid-template-columns: 60px 1fr 100px 100px 130px 180px;
+    padding:10px 16px 8px;
+    font-size:12px; color:var(--text-secondary);
+    border-bottom: 1px solid var(--border-divider);
+  }
+  .info-icon { 
+    display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border-radius:50%; border:1px solid var(--text-secondary);
+    font-size:9px; margin-left:4px; color:var(--text-secondary); 
+  }
+
+  /* ══ TABLE ROW ══ */
+  .tbl-row {
+    display:grid;
+    grid-template-columns: 60px 1fr 100px 100px 130px 180px;
+    padding:12px 16px;
+    align-items:center;
+    cursor:pointer;
+    transition:background .1s;
+  }
+  .tbl-row:hover { background:var(--bg-hover); }
+
+  .rank-cell { display:flex; align-items:center; gap:8px; }
+  .heart { font-size:14px; color:var(--text-disabled); }
+  .rank-n { font-size:15px; color:var(--text-primary); font-weight:600; min-width:20px; text-align:center; }
+
+  .stock-cell { display:flex; align-items:center; gap:12px; min-width:0; }
+  .logo {
+    width:36px; height:36px; border-radius:50%; flex-shrink:0;
+    background:var(--bg-elevated);
+    display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+  }
+  .logo .flag { position:absolute; bottom:-2px; right:-2px; font-size:12px; line-height:1; }
+  .stock-name { font-size:15px; color:var(--text-primary); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .price-cell { text-align:right; font-size:15px; font-weight:500; color:var(--text-primary); padding-right:8px; }
+
+  .change-cell { display:flex; justify-content:flex-end; padding-right:8px; }
+  .change-badge { font-size:15px; font-weight:500; }
+  .change-badge.up   { color:var(--status-rise); }
+  .change-badge.down { color:var(--status-fall); }
+
+  .vol-cell { text-align:right; font-size:15px; font-weight:500; color:var(--text-primary); padding-right:16px; }
+
+  .ratio-cell { display:flex; align-items:center; justify-content:center; gap:8px; }
+  .rn { font-size:13px; width:24px; flex-shrink:0; font-weight:500; }
+  .rn.b { color:var(--status-fall); text-align:right; }
+  .rn.s { color:var(--status-rise); }
+  .rbar { flex:1; height:4px; background:var(--bg-surface); border-radius:2px; display:flex; overflow:hidden; }
+  .rb { height:100%; background:var(--status-fall); }
+  .rs { height:100%; background:var(--status-rise); }
+
+  /* ══ MOBILE/TABLET adjustments ══ */
+  .tbl-row-m { display:grid; grid-template-columns: 52px 1fr 90px 90px; padding:12px 14px; align-items:center; cursor:pointer; }
+  .tbl-row-m:hover { background:var(--bg-hover); }
+  .tbl-meta-m { display:grid; grid-template-columns: 52px 1fr 90px 90px; padding:10px 14px 8px; font-size:12px; color:var(--text-secondary); border-bottom: 1px solid var(--border-divider); }
+  
+  .tbl-row-t { display:grid; grid-template-columns: 56px 1fr 100px 100px 130px; padding:12px 16px; align-items:center; cursor:pointer; }
+  .tbl-row-t:hover { background:var(--bg-hover); }
+  .tbl-meta-t { display:grid; grid-template-columns: 56px 1fr 100px 100px 130px; padding:10px 16px 8px; font-size:12px; color:var(--text-secondary); border-bottom: 1px solid var(--border-divider);}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="tb-title">📐 WIREFRAME</span>
+  <div class="tb-btns">
+    <button class="tb-btn active" onclick="sv('desktop',this)">Desktop</button>
+    <button class="tb-btn" onclick="sv('tablet',this)">Tablet</button>
+    <button class="tb-btn" onclick="sv('mobile',this)">Mobile</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-right">
+    <span class="tb-name">김성연</span>
+    <span class="tb-date">2026.02.20</span>
+  </div>
+</div>
+
+<div class="canvas">
+<div class="frames" id="frames">
+
+<div class="frame-wrap" id="dF">
+  <div class="desktop-shell">
+
+    <div class="gnb">
+      <span class="gnb-item">국내 장 닫힘</span>
+      <span class="gnb-item on"><span class="gnb-dot"></span>해외 데이마켓</span>
+    </div>
+
+    <div class="banner">
+      <div class="banner-box">(여기는 훗날 광고 넣을 수 있도록 비워 둡니다)</div>
+    </div>
+
+    <div>
+      <div class="sub-tabs">
+        <span class="sub-tab on">실시간 차트</span>
+        <span class="sub-tab">지금 뜨는 카테고리</span>
+        <span class="sub-tab">국내 투자자 동향</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <button class="chip active">전체</button>
+          <button class="chip">국내</button>
+          <button class="chip">해외</button>
+        </div>
+        <div class="filter-group">
+          <button class="chip active">증권 거래대금</button>
+          <button class="chip">증권 거래량</button>
+          <button class="chip">거래대금</button>
+          <button class="chip">거래량</button>
+        </div>
+        <div class="filter-group">
+          <button class="chip active">실시간</button>
+          <button class="chip">1일</button>
+          <button class="chip">1주일</button>
+          <button class="chip">1개월</button>
+          <button class="chip">3개월</button>
+          <button class="chip">6개월</button>
+          <button class="chip">1년</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tbl-meta">
+      <div style="grid-column: 1 / 3; display: flex; align-items: center; white-space: nowrap;">순위 · 오늘 11:44 기준</div>
+      <div style="display: flex; justify-content: flex-end;">현재가</div>
+      <div style="display: flex; justify-content: flex-end;">등락률</div>
+      <div style="display: flex; justify-content: flex-end; font-weight: 600; color: var(--text-primary); padding-right: 16px;">거래대금 순</div>
+      <div style="display: flex; justify-content: center; align-items: center;">거래 비율 <span class="info-icon">?</span></div>
+    </div>
+
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">1</span></div>
+      <div class="stock-cell"><div class="logo" style="background:#fff"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ccc'/%3E%3C/svg%3E" style="width:100%;height:100%"><span class="flag">🇺🇸</span></div><span class="stock-name">리커전 파마슈티컬스</span></div>
+      <div class="price-cell">4,503원</div>
+      <div class="change-cell"><span class="change-badge down">-9.82%</span></div>
+      <div class="vol-cell">5.6억원</div>
+      <div class="ratio-cell"><span class="rn b">54</span><div class="rbar"><div class="rb" style="width:54%"></div><div class="rs" style="width:46%"></div></div><span class="rn s">46</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">2</span></div>
+      <div class="stock-cell"><div class="logo" style="background:#1e3a8a"><span style="font-size:12px;color:#fff;font-weight:700">S</span><span class="flag">🇺🇸</span></div><span class="stock-name">샤이닝 데이 스포츠</span></div>
+      <div class="price-cell">712원</div>
+      <div class="change-cell"><span class="change-badge up">+17.62%</span></div>
+      <div class="vol-cell">4.4억원</div>
+      <div class="ratio-cell"><span class="rn b">51</span><div class="rbar"><div class="rb" style="width:51%"></div><div class="rs" style="width:49%"></div></div><span class="rn s">49</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">3</span></div>
+      <div class="stock-cell"><div class="logo" style="background:#e0f2fe"><span style="font-size:10px;color:var(--brand-primary);font-weight:700">Ben</span><span class="flag">🇺🇸</span></div><span class="stock-name">베네피선트</span></div>
+      <div class="price-cell">11,503원</div>
+      <div class="change-cell"><span class="change-badge up">+108.63%</span></div>
+      <div class="vol-cell">3.4억원</div>
+      <div class="ratio-cell"><span class="rn b">54</span><div class="rbar"><div class="rb" style="width:54%"></div><div class="rs" style="width:46%"></div></div><span class="rn s">46</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">4</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--status-error)"><span style="font-size:16px;color:#fff;font-weight:700">T</span><span class="flag">🇺🇸</span></div><span class="stock-name">테슬라</span></div>
+      <div class="price-cell">593,309원</div>
+      <div class="change-cell"><span class="change-badge up">+0.10%</span></div>
+      <div class="vol-cell">3.3억원</div>
+      <div class="ratio-cell"><span class="rn b">19</span><div class="rbar"><div class="rb" style="width:19%"></div><div class="rs" style="width:81%"></div></div><span class="rn s">81</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">5</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--status-error)"><span style="font-size:12px;color:#fff;font-weight:700">2x</span><span class="flag">🇺🇸</span></div><span class="stock-name">SNXX</span></div>
+      <div class="price-cell">50,562원</div>
+      <div class="change-cell"><span class="change-badge down">-1.95%</span></div>
+      <div class="vol-cell">2.7억원</div>
+      <div class="ratio-cell"><span class="rn b">41</span><div class="rbar"><div class="rb" style="width:41%"></div><div class="rs" style="width:59%"></div></div><span class="rn s">59</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">6</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--bg-disabled)"><span style="font-size:14px;color:#fff;font-weight:700">G</span><span class="flag">🇺🇸</span></div><span class="stock-name">알파벳 A</span></div>
+      <div class="price-cell">435,185원</div>
+      <div class="change-cell"><span class="change-badge down">-0.17%</span></div>
+      <div class="vol-cell">2.5억원</div>
+      <div class="ratio-cell"><span class="rn b">30</span><div class="rbar"><div class="rb" style="width:30%"></div><div class="rs" style="width:70%"></div></div><span class="rn s">70</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">7</span></div>
+      <div class="stock-cell"><div class="logo" style="background:#fff"><span style="font-size:9px;color:var(--status-error);font-weight:700">SANDISK</span><span class="flag">🇺🇸</span></div><span class="stock-name">샌디스크</span></div>
+      <div class="price-cell">845,832원</div>
+      <div class="change-cell"><span class="change-badge down">-0.77%</span></div>
+      <div class="vol-cell">2.5억원</div>
+      <div class="ratio-cell"><span class="rn b">24</span><div class="rbar"><div class="rb" style="width:24%"></div><div class="rs" style="width:76%"></div></div><span class="rn s">76</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">8</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--status-premium)"><span style="font-size:12px;color:#fff;font-weight:700">SLV</span><span class="flag">🇺🇸</span></div><span class="stock-name">SLV</span></div>
+      <div class="price-cell">96,375원</div>
+      <div class="change-cell"><span class="change-badge up">+0.60%</span></div>
+      <div class="vol-cell">2.2억원</div>
+      <div class="ratio-cell"><span class="rn b">85</span><div class="rbar"><div class="rb" style="width:85%"></div><div class="rs" style="width:15%"></div></div><span class="rn s">15</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">9</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--bg-elevated)"><span style="font-size:16px;color:#fff;font-weight:700">a</span><span class="flag">🇺🇸</span></div><span class="stock-name">아마존</span></div>
+      <div class="price-cell">290,917원</div>
+      <div class="change-cell"><span class="change-badge up">+0.19%</span></div>
+      <div class="vol-cell">2.0억원</div>
+      <div class="ratio-cell"><span class="rn b">22</span><div class="rbar"><div class="rb" style="width:22%"></div><div class="rs" style="width:78%"></div></div><span class="rn s">78</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">10</span></div>
+      <div class="stock-cell"><div class="logo" style="background:#0d9488"><span style="font-size:12px;color:#fff;font-weight:700">2x</span><span class="flag">🇺🇸</span></div><span class="stock-name">AGQ</span></div>
+      <div class="price-cell">175,300원</div>
+      <div class="change-cell"><span class="change-badge up">+1.15%</span></div>
+      <div class="vol-cell">1.9억원</div>
+      <div class="ratio-cell"><span class="rn b">69</span><div class="rbar"><div class="rb" style="width:69%"></div><div class="rs" style="width:31%"></div></div><span class="rn s">31</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">11</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--status-error)"><span style="font-size:12px;color:#fff;font-weight:700">2x</span><span class="flag">🇺🇸</span></div><span class="stock-name">TSLL</span></div>
+      <div class="price-cell">22,271원</div>
+      <div class="change-cell"><span class="change-badge up">+0.12%</span></div>
+      <div class="vol-cell">1.9억원</div>
+      <div class="ratio-cell"><span class="rn b">25</span><div class="rbar"><div class="rb" style="width:25%"></div><div class="rs" style="width:75%"></div></div><span class="rn s">75</span></div>
+    </div>
+    <div class="tbl-row">
+      <div class="rank-cell"><span class="heart">♥</span><span class="rank-n">12</span></div>
+      <div class="stock-cell"><div class="logo" style="background:var(--bg-disabled)"><span style="font-size:12px;color:#fff;font-weight:700">TG</span><span class="flag">🇺🇸</span></div><span class="stock-name">TG-17</span></div>
+      <div class="price-cell">5,369원</div>
+      <div class="change-cell"><span class="change-badge up">+9.73%</span></div>
+      <div class="vol-cell">1.6억원</div>
+      <div class="ratio-cell"><span class="rn b">40</span><div class="rbar"><div class="rb" style="width:40%"></div><div class="rs" style="width:60%"></div></div><span class="rn s">60</span></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="frame-wrap" id="tF" style="display:none">
+  <div class="tablet-shell">
+    <div class="gnb">
+      <span class="gnb-item">국내 장 닫힘</span>
+      <span class="gnb-item on"><span class="gnb-dot"></span>해외 데이마켓</span>
+    </div>
+    <div class="banner"><div class="banner-box">(여기는 훗날 광고 넣을 수 있도록 비워 둡니다)</div></div>
+    <div class="sub-tabs">
+      <span class="sub-tab on">실시간 차트</span>
+      <span class="sub-tab">지금 뜨는 카테고리</span>
+      <span class="sub-tab">국내 투자자 동향</span>
+    </div>
+    <div class="filter-row">
+      <div class="filter-group">
+        <button class="chip active">전체</button>
+        <button class="chip">국내</button>
+        <button class="chip">해외</button>
+      </div>
+      <div class="filter-group">
+        <button class="chip active">증권 거래대금</button>
+        <button class="chip">증권 거래량</button>
+        <button class="chip">거래대금</button>
+        <button class="chip">거래량</button>
+      </div>
+      <div class="filter-group">
+        <button class="chip active">실시간</button>
+        <button class="chip">1일</button>
+        <button class="chip">1주일</button>
+        <button class="chip">1개월</button>
+      </div>
+    </div>
+    <div class="tbl-meta-t">
+      <div style="grid-column: 1 / 3; display: flex; align-items: center; white-space: nowrap;">순위 · 오늘 11:44 기준</div>
+      <div style="display: flex; justify-content: flex-end;">현재가</div>
+      <div style="display: flex; justify-content: flex-end;">등락률</div>
+      <div style="display: flex; justify-content: flex-end; font-weight: 600; color: var(--text-primary); padding-right: 16px;">거래대금 순</div>
+    </div>
+    
+    <div class="tbl-row-t"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">1</span></div><div class="stock-cell"><div class="logo" style="background:#fff"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ccc'/%3E%3C/svg%3E" style="width:100%;height:100%"><span class="flag">🇺🇸</span></div><span class="stock-name">리커전 파마슈티컬스</span></div><div class="price-cell">4,503원</div><div class="change-cell"><span class="change-badge down">-9.82%</span></div><div class="vol-cell">5.6억원</div></div>
+    <div class="tbl-row-t"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">2</span></div><div class="stock-cell"><div class="logo" style="background:#1e3a8a"><span style="font-size:12px;color:#fff;font-weight:700">S</span><span class="flag">🇺🇸</span></div><span class="stock-name">샤이닝 데이 스포츠</span></div><div class="price-cell">712원</div><div class="change-cell"><span class="change-badge up">+17.62%</span></div><div class="vol-cell">4.4억원</div></div>
+    <div class="tbl-row-t"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">3</span></div><div class="stock-cell"><div class="logo" style="background:#e0f2fe"><span style="font-size:10px;color:var(--brand-primary);font-weight:700">Ben</span><span class="flag">🇺🇸</span></div><span class="stock-name">베네피선트</span></div><div class="price-cell">11,503원</div><div class="change-cell"><span class="change-badge up">+108.63%</span></div><div class="vol-cell">3.4억원</div></div>
+    <div class="tbl-row-t"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">4</span></div><div class="stock-cell"><div class="logo" style="background:var(--status-error)"><span style="font-size:16px;color:#fff;font-weight:700">T</span><span class="flag">🇺🇸</span></div><span class="stock-name">테슬라</span></div><div class="price-cell">593,309원</div><div class="change-cell"><span class="change-badge up">+0.10%</span></div><div class="vol-cell">3.3억원</div></div>
+  </div>
+</div>
+
+<div class="frame-wrap" id="mF" style="display:none">
+  <div class="mobile-shell">
+    <div class="gnb" style="padding:16px 16px 8px;">
+      <span class="gnb-item" style="font-size:13px">국내 장 닫힘</span>
+      <span class="gnb-item on" style="font-size:13px"><span class="gnb-dot"></span>해외 데이마켓</span>
+    </div>
+    <div class="banner" style="padding:16px"><div class="banner-box" style="font-size:16px;padding:24px 10px">(여기는 훗날 광고 넣을 수 있도록 비워 둡니다)</div></div>
+    <div class="sub-tabs" style="padding:0 16px">
+      <span class="sub-tab on" style="font-size:14px;padding:12px 10px 10px;margin-right:8px">실시간 차트</span>
+      <span class="sub-tab" style="font-size:14px;padding:12px 10px 10px;margin-right:8px">카테고리</span>
+      <span class="sub-tab" style="font-size:14px;padding:12px 10px 10px">투자자 동향</span>
+    </div>
+    <div class="filter-row" style="padding:12px 16px 8px">
+      <div class="filter-group">
+        <button class="chip active">전체</button>
+        <button class="chip">국내</button>
+        <button class="chip">해외</button>
+      </div>
+      <div class="filter-group">
+        <button class="chip active">거래대금</button>
+        <button class="chip">거래량</button>
+      </div>
+      <div class="filter-group">
+        <button class="chip active">실시간</button>
+        <button class="chip">1일</button>
+      </div>
+    </div>
+    <div class="tbl-meta-m">
+      <div style="grid-column: 1 / 3; display: flex; align-items: center; white-space: nowrap;">순위 · 오늘 11:44 기준</div>
+      <div style="display: flex; justify-content: flex-end;">현재가</div>
+      <div style="display: flex; justify-content: flex-end; font-weight: 600; color: var(--text-primary); padding-right: 8px;">등락률</div>
+    </div>
+    
+    <div class="tbl-row-m"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">1</span></div><div class="stock-cell"><div class="logo" style="background:#fff"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23ccc'/%3E%3C/svg%3E" style="width:100%;height:100%"><span class="flag">🇺🇸</span></div><span class="stock-name">리커전 파마슈티컬스</span></div><div class="price-cell">4,503원</div><div class="change-cell"><span class="change-badge down">-9.82%</span></div></div>
+    <div class="tbl-row-m"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">2</span></div><div class="stock-cell"><div class="logo" style="background:#1e3a8a"><span style="font-size:12px;color:#fff;font-weight:700">S</span><span class="flag">🇺🇸</span></div><span class="stock-name">샤이닝 데이 스포츠</span></div><div class="price-cell">712원</div><div class="change-cell"><span class="change-badge up">+17.62%</span></div></div>
+    <div class="tbl-row-m"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">3</span></div><div class="stock-cell"><div class="logo" style="background:#e0f2fe"><span style="font-size:10px;color:var(--brand-primary);font-weight:700">Ben</span><span class="flag">🇺🇸</span></div><span class="stock-name">베네피선트</span></div><div class="price-cell">11,503원</div><div class="change-cell"><span class="change-badge up">+108.63%</span></div></div>
+    <div class="tbl-row-m"><div class="rank-cell"><span class="heart">♥</span><span class="rank-n">4</span></div><div class="stock-cell"><div class="logo" style="background:var(--status-error)"><span style="font-size:16px;color:#fff;font-weight:700">T</span><span class="flag">🇺🇸</span></div><span class="stock-name">테슬라</span></div><div class="price-cell">593,309원</div><div class="change-cell"><span class="change-badge up">+0.10%</span></div></div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+  function sv(v, el) {
+    document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    const d = document.getElementById('dF');
+    const t = document.getElementById('tF');
+    const m = document.getElementById('mF');
+    if(d) d.style.display = (v==='tablet'||v==='mobile') ? 'none' : '';
+    if(t) t.style.display = (v==='desktop'||v==='mobile') ? 'none' : '';
+    if(m) m.style.display = (v==='desktop'||v==='tablet') ? 'none' : '';
+  }
+</script>
+</body>
+</html>
