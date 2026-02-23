@@ -1,4 +1,4 @@
-import { http, HttpResponse, type HttpResponseResolver } from 'msw';
+import { http, HttpResponse, ws, type HttpResponseResolver } from 'msw';
 
 /*
   [Resolvers]
@@ -202,6 +202,31 @@ const logoutResolver: HttpResponseResolver = async () => {
 	);
 };
 
+// 주식 랭킹 조회 Resolver
+const stockRankingResolver: HttpResponseResolver = ({ request }) => {
+	const url = new URL(request.url);
+	const limit = Number(url.searchParams.get('limit')) || 10;
+
+	console.log(`[MSW] 주식 랭킹 조회 요청 (limit: ${limit})`);
+
+	// 가짜 주식 데이터 생성
+	const mockData = Array.from({ length: limit }).map((_, i) => ({
+		stockCode: String(i + 1).padStart(6, '0'), // 000001, 000002...
+		stockName: `테스트종목 ${i + 1}`,
+		currentPrice: 10000 + i * 500 + Math.floor(Math.random() * 1000),
+		changeRate: Number((Math.random() * 20 - 10).toFixed(2)), // -10.00 ~ +10.00
+		cumulativeAmount: 1000000000 + i * 50000000, // 10억 + @
+		cumulativeVolume: 100000 + i * 5000,
+	}));
+
+	return HttpResponse.json(mockData, {
+		status: 200,
+	});
+};
+
+// WebSocket 핸들러 정의
+const stockSocket = ws.link('ws://localhost:8080/stocks');
+
 /*
   [Handlers]
   URL 경로와 HTTP 메서드를 Resolver 함수와 매핑
@@ -230,4 +255,45 @@ export const handlers = [
 
 	// 로그아웃 (POST)
 	http.post('*/auth/logout', logoutResolver),
+
+	// 주식 랭킹 조회 (GET)
+	http.get('*/api/stocks/ranking/value', stockRankingResolver),
+
+	// WebSocket 연결 핸들링
+	stockSocket.addEventListener('connection', ({ client }) => {
+		console.log('[MSW] WebSocket connected');
+
+		client.addEventListener('message', (event) => {
+			const message = JSON.parse(event.data as string);
+
+			// 구독 요청이 오면 주기적으로 데이터 전송 시작
+			if (message.type === 'SUBSCRIBE' && message.channel === 'RANKING_VALUE') {
+				const limit = message.limit || 10;
+				console.log(`[MSW] 구독 시작: RANKING_VALUE (limit: ${limit})`);
+
+				// 데이터 생성 및 전송 함수
+				const sendUpdate = () => {
+					const mockData = Array.from({ length: limit }).map((_, i) => ({
+						stockCode: String(i + 1).padStart(6, '0'),
+						stockName: `테스트종목 ${i + 1}`,
+						currentPrice: 10000 + i * 500 + Math.floor(Math.random() * 1000),
+						changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
+						cumulativeAmount: 1000000000 + i * 50000000,
+						cumulativeVolume: 100000 + i * 5000,
+					}));
+
+					client.send(
+						JSON.stringify({
+							type: 'RANKING_VALUE_UPDATE',
+							data: mockData,
+						}),
+					);
+				};
+
+				// 즉시 전송 후 2초마다 갱신
+				sendUpdate();
+				setInterval(sendUpdate, 2000);
+			}
+		});
+	}),
 ];

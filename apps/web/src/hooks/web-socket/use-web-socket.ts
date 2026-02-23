@@ -17,6 +17,7 @@ import { useWebSocketStore } from '../../store/web-socket';
 export const useWebSocket = (
 	url: string,
 	reconnectInterval = 3000,
+	onConnect?: () => void,
 ): UseWebSocketReturn => {
 	const {
 		isConnected,
@@ -33,6 +34,12 @@ export const useWebSocket = (
 	);
 	const shouldReconnect = useRef(true);
 	const connectRef = useRef<() => void>(() => {});
+
+	// onConnect 콜백을 ref로 관리하여 의존성 배열 문제 해결
+	const onConnectRef = useRef(onConnect);
+	useEffect(() => {
+		onConnectRef.current = onConnect;
+	}, [onConnect]);
 
 	const connect = useCallback(() => {
 		// 연결 검증
@@ -60,6 +67,8 @@ export const useWebSocket = (
 			setIsConnected(true);
 			setError(null);
 			console.log('WebSocket Connected');
+			// 연결 성공 시 주입된 콜백(구독 로직 등) 실행
+			onConnectRef.current?.();
 		};
 
 		// 이벤트 핸들러 등록: 메시지 수신
