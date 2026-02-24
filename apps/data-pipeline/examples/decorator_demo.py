@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
 from src.common.decorators import retry, log_decorator, rate_limit
-from src.common.config import get_config
+from src.common.config import ConfigManager
 from src.common.log import LogManager
 
 
@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
     # 1. Config & Logger Init
     try:
-        get_config(task_name=task_name)
+        ConfigManager.get_config(task_name=task_name)
         LogManager()
         # setup_human_readable_logging(task_name) # 필요 시 해제
         print(f" [Init] System initialized successfully.\n")

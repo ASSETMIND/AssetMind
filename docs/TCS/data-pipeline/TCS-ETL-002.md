@@ -8,7 +8,7 @@
 - **적용 전략:**
   - [x] **MC/DC (수정 조건/결정 커버리지):** `_validate_request` 내 다중 검증 조건(Job ID, Policy, Provider, TR_ID)의 독립적 결함 유발 검증.
   - [x] **Fail-Fast (조기 실패):** 설정 오류나 필수 파라미터 누락 시 즉각적인 예외 발생 여부 검증.
-  - [x] **Mocking & Stubbing:** `IHttpClient`, `IAuthStrategy`, `AppConfig`의 완벽한 제어를 통한 외부 의존성 격리.
+  - [x] **Mocking & Stubbing:** `IHttpClient`, `IAuthStrategy`, `ConfigManager`의 완벽한 제어를 통한 외부 의존성 격리.
   - [x] **Data Integrity:** 파라미터 병합 우선순위 및 응답 코드(`rt_cd`) 기반의 무결성 검증.
 
 ## 2. 로직 흐름도

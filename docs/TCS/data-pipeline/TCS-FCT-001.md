@@ -8,7 +8,7 @@
 - **적용 전략:**
   - [x] **상태 전이 (State Transition):** 인증 객체 캐싱(Cache Miss -> Create -> Cache Hit) 흐름 검증.
   - [x] **경계값 분석 (BVA):** 미지원 Provider, 대소문자 혼용, 비어있는 설정 등 예외 케이스.
-  - [x] **의존성 격리 (Isolation):** `AppConfig`, `HttpClient` 등 외부 객체의 철저한 Mocking.
+  - [x] **의존성 격리 (Isolation):** `ConfigManager`, `HttpClient` 등 외부 객체의 철저한 Mocking.
   - [x] **결정 테이블 (Decision Table):** Provider 타입별(KIS, UPBIT, FRED 등) 분기 로직 완전 탐색.
   - [x] **싱글톤 검증 (Singleton Verification):** 로거 및 인증 객체의 인스턴스 재사용성(Identity Check) 검증.
 

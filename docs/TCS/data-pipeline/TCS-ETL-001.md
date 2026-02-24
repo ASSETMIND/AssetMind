@@ -59,7 +59,7 @@ stateDiagram-v2
 
 |  테스트 ID  | 분류 |   기법   | 전제 조건 (Given)                      | 수행 (When)                                | 검증 (Then)                                                                          | 입력 데이터 / 상황          |
 | :---------: | :--: | :------: | :------------------------------------- | :----------------------------------------- | :----------------------------------------------------------------------------------- | :-------------------------- |
-| **INIT-01** | 단위 |   BVA    | `config` 객체가 `None`인 상태          | `StubExtractor(client, None)` 초기화       | `ExtractorError` 발생 (메시지: "AppConfig cannot be None")                           | `config=None`               |
+| **INIT-01** | 단위 |   BVA    | `config` 객체가 `None`인 상태          | `StubExtractor(client, None)` 초기화       | `ExtractorError` 발생 (메시지: "ConfigManager cannot be None")                       | `config=None`               |
 | **INIT-02** | 단위 |   보안   | `extract(None)` 호출 (요청 객체 누락)  | `extract(None)` 실행                       | 1. 로깅 시 job_id="Unknown" 처리 (Crash 없음)<br>2. `_validate`에서 에러 발생        | `request=None`              |
 | **FLOW-01** | 단위 |   상태   | 모든 단계가 성공하는 `StubExtractor`   | `extract(request)` 호출                    | 1. `_validate` -> `_fetch` -> `_create` 순서 호출 확인<br>2. 최종 `ResponseDTO` 반환 | `request=RequestDTO(...)`   |
 | **FLOW-02** | 단위 |   상태   | `_validate`에서 에러 발생하도록 설정   | `extract(request)` 호출                    | 1. `_validate` 호출됨<br>2. **`_fetch`는 호출되지 않음** (흐름 중단 확인)            | Stub: `validate` raises Err |

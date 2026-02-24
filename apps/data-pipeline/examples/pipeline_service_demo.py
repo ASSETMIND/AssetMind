@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
 from src.common.log import LogManager
-from src.common.config import ConfigManager, get_config
+from src.common.config import ConfigManager
 from src.pipeline_service import PipelineService
 
 def print_report(summary: dict):
@@ -42,7 +42,7 @@ def print_report(summary: dict):
 
 async def main():
     # 1. 로거 초기화
-    config = get_config("extractor_demo")
+    config = ConfigManager.get_config("extractor_demo")
     logger = LogManager.get_logger("PipelineDemo")
     logger.info(">>> [Start] Pipeline Service Demo 시작")
 
