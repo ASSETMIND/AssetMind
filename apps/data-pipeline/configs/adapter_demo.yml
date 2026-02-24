@@ -1,0 +1,22 @@
+# ==============================================================================
+# Adapter Integration Test Configuration
+# 파일 경로: configs/adapter_demo.yml
+# 목적: 인프라 계층(Auth, Http)이 실제 KIS 서버와 정상적으로 핸드셰이크하는지 검증
+# ==============================================================================
+
+# [System Settings]
+log_level: "INFO"
+log_dir: "logs/adapter_demo"
+
+# [Test Policies]
+# 실제 Extractor 로직을 타지 않지만, Adapter가 요청을 조립하기 위해 참조할 메타데이터입니다.
+policy:
+  # Case: KIS 주식 현재가 시세 조회 (실전/모의투자 공통 TR)
+  test_kis_integration:
+    provider: "KIS"
+    description: "Verify Full Connectivity (Auth -> Request -> Response) with KIS"
+    path: "/uapi/domestic-stock/v1/quotations/inquire-price"
+    tr_id: "FHKST01010100" # 주식 현재가 시세 조회를 위한 고유 ID
+    params:
+      FID_COND_MRKT_DIV_CODE: "J" # 시장 분류 (J: 주식)
+      FID_INPUT_ISCD: "005930" # 종목 코드 (삼성전자)

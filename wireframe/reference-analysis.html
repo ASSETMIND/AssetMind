@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>레퍼런스 분석 리포트 — 실시간 주가 데이터 페이지</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #1a1d25;
+    --border: #252830;
+    --border2: #2e3240;
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --text3: #555a68;
+    --accent: #4f7cff;
+    --accent2: #7b9fff;
+    --green: #26d07c;
+    --red: #ff4d6d;
+    --yellow: #ffd166;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Noto Sans KR', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 32px 0 24px;
+    position: sticky;
+    top: 0;
+    background: rgba(10,12,16,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .doc-meta { display: flex; align-items: center; gap: 12px; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .tag.green { background: var(--green); color: #000; }
+  .tag.yellow { background: var(--yellow); color: #000; }
+  .doc-title { font-size: 15px; font-weight: 500; color: var(--text2); }
+  .date { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  /* LAYOUT */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+  .page-title-section {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  h1 span { color: var(--accent2); }
+  .subtitle { color: var(--text2); font-size: 15px; max-width: 560px; line-height: 1.7; }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    margin: 40px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--bg2);
+    padding: 24px;
+    text-align: center;
+  }
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--accent2);
+    line-height: 1;
+  }
+  .stat-label { font-size: 12px; color: var(--text3); margin-top: 6px; }
+
+  /* SECTION */
+  section { padding: 56px 0; border-bottom: 1px solid var(--border); }
+  .section-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 32px; }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+  }
+  h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  p { color: var(--text2); line-height: 1.75; margin-bottom: 12px; }
+
+  /* ANALYSIS GRID */
+  .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border2); }
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .card ul { list-style: none; }
+  .card ul li {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card ul li:last-child { border-bottom: none; }
+  .card ul li::before {
+    content: '→';
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  .card.full { grid-column: span 2; }
+  .card.accent-card { border-color: rgba(79,124,255,0.3); background: rgba(79,124,255,0.05); }
+
+  /* COLOR PALETTE */
+  .palette { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .swatch {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 3px;
+    font-family: var(--mono); font-size: 8px; color: rgba(255,255,255,0.5);
+  }
+
+  /* COMPONENT TABLE */
+  .comp-table { width: 100%; border-collapse: collapse; }
+  .comp-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .comp-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text2);
+    vertical-align: top;
+  }
+  .comp-table tr:hover td { background: var(--bg3); }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px;
+  }
+  .badge.hi { background: rgba(255,77,109,0.15); color: #ff6b85; border: 1px solid rgba(255,77,109,0.3); }
+  .badge.med { background: rgba(255,209,102,0.1); color: #ffd166; border: 1px solid rgba(255,209,102,0.3); }
+  .badge.lo { background: rgba(38,208,124,0.1); color: #26d07c; border: 1px solid rgba(38,208,124,0.3); }
+
+  /* UX FINDINGS */
+  .findings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .finding-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .finding-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 14px;
+  }
+  .finding-card h3 { font-size: 14px; margin-bottom: 8px; }
+  .finding-card p { font-size: 13px; color: var(--text3); line-height: 1.6; margin: 0; }
+
+  /* INSIGHT BOX */
+  .insight {
+    background: rgba(79,124,255,0.07);
+    border: 1px solid rgba(79,124,255,0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .insight-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .insight p { color: var(--text); font-size: 13px; line-height: 1.7; margin: 0; }
+
+  /* LAYOUT ANATOMY */
+  .anatomy {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .anatomy-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .anatomy-row:last-child { border-bottom: none; }
+  .anatomy-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    width: 24px;
+    flex-shrink: 0;
+  }
+  .anatomy-zone {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    width: 180px;
+    flex-shrink: 0;
+  }
+  .anatomy-desc { font-size: 13px; color: var(--text2); }
+
+  /* FILTER TAG ROW */
+  .filter-demo {
+    display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0;
+  }
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .filter-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* PROGRESS BAR DEMO */
+  .bar-demo { display: flex; gap: 4px; align-items: center; width: 100px; }
+  .bar-buy { height: 4px; border-radius: 2px; background: var(--accent); }
+  .bar-sell { height: 4px; border-radius: 2px; background: var(--red); }
+
+  /* FOOTER */
+  footer {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    h1 { font-size: 26px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .analysis-grid { grid-template-columns: 1fr; }
+    .card.full { grid-column: span 1; }
+    .findings-grid { grid-template-columns: 1fr; }
+    .anatomy-zone { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="doc-meta">
+      <span class="tag">RESEARCH</span>
+      <span class="doc-title">토스증권 UI 레퍼런스 분석</span>
+    </div>
+    <span class="date">2026-02-19 · 김성연</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="page-title-section">
+    <div class="eyebrow">Reference Analysis Report</div>
+    <h1>실시간 주가 데이터 페이지<br><span>UI 레퍼런스 분석</span></h1>
+    <p class="subtitle">토스증권의 실시간 차트 화면을 분석하여 UI 구조, 컴포넌트 패턴, UX 원칙을 도출합니다. 이를 기반으로 페이지 설계 방향을 제안합니다.</p>
+
+    <div class="stats-row">
+      <div class="stat"><div class="stat-num">5</div><div class="stat-label">주요 UI 영역</div></div>
+      <div class="stat"><div class="stat-num">12</div><div class="stat-label">식별된 컴포넌트</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">탭 필터 레이어</div></div>
+      <div class="stat"><div class="stat-num">6</div><div class="stat-label">데이터 컬럼</div></div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: 화면 구조 분석 -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>화면 구조 분석 (Layout Anatomy)</h2>
+    </div>
+
+    <p>토스증권 실시간 차트 페이지는 수직으로 명확하게 구분된 5개의 레이어로 구성되어 있습니다. 각 레이어는 독립적인 기능을 담당하며 위에서 아래로 자연스럽게 정보를 전달합니다.</p>
+
+    <div class="anatomy">
+      <div class="anatomy-row">
+        <span class="anatomy-num">01</span>
+        <div class="anatomy-zone">글로벌 네비게이션</div>
+        <span class="anatomy-desc">국내장/해외 데이마켓 탭 — 최상위 시장 분류. 현재 선택 상태를 색상(주황 점)으로 명확히 표시</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">02</span>
+        <div class="anatomy-zone">광고 배너 영역</div>
+        <span class="anatomy-desc">여백을 명시적으로 "광고 공간"으로 표시 — 수익화를 위한 의도적 레이아웃 설계</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">03</span>
+        <div class="anatomy-zone">서브 탭 네비게이션</div>
+        <span class="anatomy-desc">실시간 차트 / 지금 뜨는 카테고리 / 국내 투자자 동향 — 콘텐츠 뷰를 전환하는 탭</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">04</span>
+        <div class="anatomy-zone">필터 컨트롤 바</div>
+        <span class="anatomy-desc">전체/국내/해외 + 정렬 기준(거래대금, 거래량 등) + 기간(실시간/1일/1주일…) — 3단 필터 레이어</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">05</span>
+        <div class="anatomy-zone">데이터 테이블</div>
+        <span class="anatomy-desc">순위 / 종목명·로고 / 현재가 / 등락률 / 거래대금 / 토스 거래 비율 바 — 핵심 콘텐츠 영역</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: 컴포넌트 분석 -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>컴포넌트 상세 분석</h2>
+    </div>
+
+    <div class="analysis-grid">
+
+      <div class="card">
+        <div class="card-label">Navigation Tabs</div>
+        <h3>탭 네비게이션 패턴</h3>
+        <ul>
+          <li>밑줄 + 색상 변화로 현재 탭 표시 (언더라인 스타일)</li>
+          <li>글로벌 탭은 활성 상태를 색상 점(•)으로 추가 강조</li>
+          <li>탭 클릭 시 콘텐츠 영역 전체가 교체되는 방식</li>
+          <li>모바일 대응: 가로 스크롤 가능한 탭 바 구조</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Filter Controls</div>
+        <h3>필터 칩(Chip) 패턴</h3>
+        <div class="filter-demo">
+          <span class="filter-chip active">전체</span>
+          <span class="filter-chip">국내</span>
+          <span class="filter-chip">해외</span>
+        </div>
+        <ul>
+          <li>선택 상태: 진한 배경 + 흰 텍스트 (solid fill)</li>
+          <li>미선택: 테두리 없는 텍스트만 표시 (ghost)</li>
+          <li>정렬 기준과 기간 필터가 같은 행에 혼재</li>
+          <li>현재 활성 정렬 기준이 강조 표시됨</li>
+        </ul>
+      </div>
+
+      <div class="card full">
+        <div class="card-label">Data Table Row</div>
+        <h3>테이블 행 구조 분석</h3>
+        <table class="comp-table">
+          <thead>
+            <tr>
+              <th>컬럼</th>
+              <th>내용</th>
+              <th>비고</th>
+              <th>중요도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>순위</td>
+              <td>숫자 + 즐겨찾기(하트) 아이콘</td>
+              <td>즐겨찾기는 호버 또는 기본 표시</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>종목명</td>
+              <td>로고 이미지 + 한글명 + 국가 플래그</td>
+              <td>국내/해외 구분을 플래그로 시각화</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>현재가</td>
+              <td>KRW 기준 가격 (천 단위 쉼표)</td>
+              <td>우측 정렬, 고정 폭 유지</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>등락률</td>
+              <td>+/- % 값, 상승=파란색, 하락=빨간색</td>
+              <td>한국 증권 관행 반영 (파랑=상승)</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>거래대금</td>
+              <td>X억원 단위 축약 표기</td>
+              <td>단위 축약으로 공간 절약</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+            <tr>
+              <td>거래 비율 바</td>
+              <td>매수(파랑)/매도(빨강) 비율 바</td>
+              <td>토스 플랫폼 고유 지표</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Color Semantics</div>
+        <h3>색상 의미 체계</h3>
+        <div class="palette">
+          <div class="swatch" style="background:#4f7cff;">파랑</div>
+          <div class="swatch" style="background:#ff4d6d;">빨강</div>
+          <div class="swatch" style="background:#111318;border:1px solid #2e3240;">배경</div>
+          <div class="swatch" style="background:#1a1d25;border:1px solid #2e3240;">카드</div>
+        </div>
+        <ul style="margin-top:14px">
+          <li>파란색(#4f7cff 계열) = 상승, 매수, 주요 액션</li>
+          <li>빨간색 = 하락, 매도</li>
+          <li>다크 테마 전용 — 라이트 모드 없음</li>
+          <li>글씨 계층: 흰색>회색>어두운 회색</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Buy/Sell Ratio Bar</div>
+        <h3>거래 비율 바 컴포넌트</h3>
+        <div style="margin: 14px 0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--accent2);width:20px">54</span>
+            <div class="bar-demo"><div class="bar-buy" style="width:54px;height:4px"></div><div class="bar-sell" style="width:46px;height:4px"></div></div>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--red);width:20px">46</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--accent2);width:20px">19</span>
+            <div class="bar-demo"><div class="bar-buy" style="width:19px;height:4px"></div><div class="bar-sell" style="width:81px;height:4px"></div></div>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--red);width:20px">81</span>
+          </div>
+        </div>
+        <ul>
+          <li>매수/매도 비율을 선형 바로 시각화</li>
+          <li>양쪽 끝에 숫자로 비율값 명시</li>
+          <li>토스 플랫폼 내 거래자 데이터만 반영</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECTION 3: UX 패턴 분석 -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>UX 패턴 및 디자인 원칙</h2>
+    </div>
+
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(79,124,255,0.1);">🎯</div>
+        <h3>정보 밀도 최적화</h3>
+        <p>행 높이를 최소화하면서도 종목 로고, 플래그, 비율 바 등 풍부한 정보를 한 행에 담음. 스캔 가능성을 최우선으로 설계.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(38,208,124,0.1);">🔗</div>
+        <h3>컨텍스트 보존 필터링</h3>
+        <p>필터를 변경해도 스크롤 위치와 테이블 컨텍스트가 유지됨. 사용자가 탐색 흐름을 잃지 않도록 설계.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(255,209,102,0.1);">⚡</div>
+        <h3>실시간성 강조</h3>
+        <p>"오늘 11:44 기준"과 같은 타임스탬프로 데이터 신선도를 명시. 실시간 뱃지와 시간 표기로 신뢰성 확보.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(255,77,109,0.1);">🇰🇷</div>
+        <h3>한국 금융 관행 준수</h3>
+        <p>파랑=상승, 빨강=하락의 한국 증권 관행을 정확히 따름. 글로벌 관행(빨강=상승)과 반대이므로 명확한 적용 필요.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(79,124,255,0.1);">📱</div>
+        <h3>모바일 퍼스트 구조</h3>
+        <p>세로 중심 레이아웃, 대형 터치 타깃, 수평 스크롤 가능한 필터 바. 앱과 웹이 동일한 구조를 공유.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(38,208,124,0.1);">🏷</div>
+        <h3>플랫폼 고유 지표</h3>
+        <p>거래 비율 바는 토스 내부 데이터로만 구성되는 독자적 지표. 경쟁사와의 차별화 포인트로 작동.</p>
+      </div>
+    </div>
+
+    <div class="insight" style="margin-top:32px">
+      <div class="insight-label">핵심 인사이트</div>
+      <p>토스증권 UI의 핵심 전략은 <strong>데이터 밀도와 가독성의 균형</strong>입니다. 복잡한 금융 데이터를 다크 테마 + 색상 코딩 + 아이콘 계층으로 분해하여 비전문 투자자도 빠르게 스캔할 수 있도록 합니다. 이 패턴은 우리 페이지 설계에 그대로 적용할 수 있는 검증된 방향성입니다.</p>
+    </div>
+  </section>
+
+  <!-- SECTION 4: 설계 제안 -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>설계 적용 제안</h2>
+    </div>
+    <p>레퍼런스 분석을 바탕으로 우리 페이지에 적용할 핵심 설계 방향을 도출했습니다.</p>
+    <div class="analysis-grid">
+      <div class="card accent-card">
+        <div class="card-label">Keep (유지)</div>
+        <h3>그대로 채택할 패턴</h3>
+        <ul>
+          <li>3단 필터 레이어 (분류 > 정렬 > 기간)</li>
+          <li>순위 + 즐겨찾기 복합 셀</li>
+          <li>테이블 행 기반 데이터 표현</li>
+          <li>거래 비율 바 (매수/매도 시각화)</li>
+          <li>타임스탬프로 데이터 신선도 명시</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-label">Improve (개선)</div>
+        <h3>개선할 포인트</h3>
+        <ul>
+          <li>필터 칩의 선택 상태를 더 명확하게 시각화</li>
+          <li>테이블 헤더 고정 (Sticky Header) 추가</li>
+          <li>로딩 스켈레톤 UI 추가</li>
+          <li>접근성(ARIA) 레이블 보강</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="container">
+    레퍼런스 분석 리포트 · 2026.02.19 · 김성연
+  </div>
+</footer>
+
+</body>
+</html>

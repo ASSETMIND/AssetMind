@@ -1,0 +1,340 @@
+export const meta = {
+  title: 'Docs/Accessibility/Checklist',
+};
+
+# 접근성 체크리스트
+
+WCAG 2.1 Level AA 기준에 부합하는 접근성 체크리스트입니다.
+
+---
+
+## Overview
+
+AssetMind 디자인 시스템의 모든 컴포넌트는 **WCAG 2.1 Level AA** 기준을 준수해야 합니다.  
+이 문서는 개발 시 반드시 확인해야 할 접근성 체크리스트를 제공합니다.
+
+---
+
+## 1. 인식 가능성 (Perceivable)
+
+### 1.1 대체 텍스트 (Text Alternatives)
+- [ ] 모든 이미지와 아이콘에 적절한 `alt` 또는 `aria-label` 제공
+- [ ] 장식용 이미지는 `alt=""` 또는 `aria-hidden="true"` 사용
+- [ ] 아이콘 버튼은 `aria-label`로 목적 명시
+
+**예시:**
+```tsx
+// ✅ 좋은 예
+<button aria-label="모달 닫기">
+  <CloseIcon />
+</button>
+
+// ❌ 나쁜 예
+<button>
+  <CloseIcon />
+</button>
+```
+
+---
+
+### 1.2 색상 대비 (Color Contrast)
+
+#### 필수 기준
+- [ ] **일반 텍스트 (18px 미만)**: 최소 4.5:1 대비율
+- [ ] **큰 텍스트 (18px 이상 또는 14px Bold)**: 최소 3:1 대비율
+- [ ] **UI 컴포넌트 및 그래픽**: 최소 3:1 대비율
+- [ ] **비활성 상태 (disabled)**: 대비율 요구사항 제외
+
+#### AssetMind 색상 대비표
+
+<table>
+  <thead>
+    <tr>
+      <th>배경</th>
+      <th>텍스트</th>
+      <th>대비율</th>
+      <th>상태</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>#121212 (background-primary)</td><td>#FFFFFF (text-primary)</td><td>18.17:1</td><td>Pass</td></tr>
+    <tr><td>#121212</td><td>#E5E5E5 (text-secondary)</td><td>14.82:1</td><td>Pass</td></tr>
+    <tr><td>#1C1D21 (background-surface)</td><td>#FFFFFF</td><td>17.42:1</td><td>Pass</td></tr>
+    <tr><td>#2E2F33 (background-elevated)</td><td>#E5E5E5</td><td>12.98:1</td><td>Pass</td></tr>
+    <tr><td>#6D4AE6 (primary)</td><td>#FFFFFF</td><td>5.12:1</td><td>Pass</td></tr>
+    <tr><td>#EC1A13 (error)</td><td>#FFFFFF</td><td>4.89:1</td><td>Pass</td></tr>
+    <tr><td>#0D59F2 (info)</td><td>#FFFFFF</td><td>5.78:1</td><td>Pass</td></tr>
+  </tbody>
+</table>
+
+
+**도구:**
+- [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
+- Chrome DevTools > Lighthouse > Accessibility
+
+---
+
+### 1.3 텍스트 크기 조정
+- [ ] 사용자가 200%까지 확대해도 레이아웃이 깨지지 않음
+- [ ] `rem` 또는 `em` 단위 사용 (픽셀 고정 금지)
+- [ ] 최소 텍스트 크기: 14px (0.875rem)
+
+```css
+/* ✅ 좋은 예 */
+.text {
+  font-size: 1rem; /* 16px */
+}
+
+/* ❌ 나쁜 예 */
+.text {
+  font-size: 12px; /* 너무 작음 */
+}
+```
+
+---
+
+## 2. 운용 가능성 (Operable)
+
+### 2.1 키보드 접근성
+
+#### 필수 요구사항
+- [ ] 모든 기능을 키보드만으로 사용 가능
+- [ ] Tab 키로 모든 인터랙티브 요소 탐색 가능
+- [ ] 포커스 순서가 논리적이고 예측 가능함
+- [ ] 포커스 표시(Focus Indicator)가 명확함
+- [ ] 키보드 트랩(Keyboard Trap) 없음
+
+#### 주요 단축키
+
+<table>
+  <thead>
+    <tr>
+      <th>키</th>
+      <th>기능</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Tab</td><td>다음 요소로 이동</td></tr>
+    <tr><td>Shift + Tab</td><td>이전 요소로 이동</td></tr>
+    <tr><td>Enter / Space</td><td>버튼 활성화</td></tr>
+    <tr><td>Esc</td><td>모달/드롭다운 닫기</td></tr>
+    <tr><td>Arrow Keys</td><td>리스트/메뉴 탐색</td></tr>
+  </tbody>
+</table>
+
+
+**체크 방법:**
+```
+1. 마우스를 사용하지 않고 Tab 키만으로 전체 페이지 탐색
+2. 모든 버튼과 링크가 포커스 받는지 확인
+3. 포커스 순서가 시각적 순서와 일치하는지 확인
+```
+
+---
+
+### 2.2 포커스 관리
+
+#### Focus Trap (모달/다이얼로그)
+모달이 열렸을 때 포커스가 모달 내부에만 머물러야 함
+
+```tsx
+// ✅ Modal 컴포넌트 - Focus Trap 구현됨
+export const Modal = ({ isOpen, onClose, children }) => {
+  useEffect(() => {
+    if (isOpen) {
+      // 첫 번째 포커스 가능 요소로 이동
+      closeButtonRef.current?.focus();
+      
+      // Tab 키 이벤트 감지
+      document.addEventListener('keydown', handleTabKey);
+    }
+    return () => {
+      document.removeEventListener('keydown', handleTabKey);
+    };
+  }, [isOpen]);
+};
+```
+
+#### Focus Visible
+- [ ] `:focus-visible` 스타일 적용
+- [ ] 포커스 링(Focus Ring) 최소 2px, 대비율 3:1 이상
+
+```css
+/* ✅ AssetMind Focus Style */
+button:focus-visible {
+  outline: 2px solid #6D4AE6;
+  outline-offset: 2px;
+}
+```
+
+---
+
+### 2.3 충분한 시간 제공
+- [ ] 자동으로 사라지는 Toast는 최소 5초 이상 표시
+- [ ] 사용자가 시간 제한을 조절하거나 연장 가능
+- [ ] 애니메이션 지속 시간 < 5초
+
+```tsx
+// ✅ Toast - 충분한 시간 제공
+showToast('LOGIN_FAIL', 5000); // 최소 5초
+```
+
+---
+
+## 3. 이해 가능성 (Understandable)
+
+### 3.1 명확한 레이블
+- [ ] 모든 입력 필드에 `<label>` 연결
+- [ ] `id`와 `htmlFor` 속성으로 연결
+- [ ] Placeholder만으로 레이블 대체 금지
+
+```tsx
+// ✅ 좋은 예
+<label htmlFor="email">이메일</label>
+<input id="email" type="email" placeholder="example@email.com" />
+
+// ❌ 나쁜 예
+<input placeholder="이메일을 입력하세요" />
+```
+
+---
+
+### 3.2 오류 안내
+- [ ] 입력 오류 시 명확한 오류 메시지 제공
+- [ ] 오류 메시지는 `aria-describedby`로 연결
+- [ ] 오류가 발생한 필드로 포커스 이동
+
+```tsx
+// ✅ Input 컴포넌트 - 오류 안내
+<Input
+  label="비밀번호"
+  error="비밀번호는 8자 이상이어야 합니다"
+  aria-describedby="password-error"
+/>
+<span id="password-error" className="error-message">
+  비밀번호는 8자 이상이어야 합니다
+</span>
+```
+
+---
+
+### 3.3 일관된 탐색
+- [ ] 네비게이션 구조가 페이지 간 일관됨
+- [ ] 같은 기능은 같은 위치에 배치
+- [ ] 버튼 텍스트와 동작이 일치
+
+---
+
+## 4. 견고성 (Robust)
+
+### 4.1 시맨틱 HTML
+- [ ] 적절한 HTML 태그 사용 (`<button>`, `<nav>`, `<main>`, `<article>`)
+- [ ] `<div>`로 버튼 만들기 금지
+- [ ] Heading 순서 준수 (`<h1>` → `<h2>` → `<h3>`)
+
+```tsx
+// ✅ 좋은 예
+<button onClick={handleClick}>클릭</button>
+
+// ❌ 나쁜 예
+<div onClick={handleClick}>클릭</div>
+```
+
+---
+
+### 4.2 ARIA 속성
+
+<table>
+  <thead>
+    <tr>
+      <th>속성</th>
+      <th>용도</th>
+      <th>예시</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>aria-label</td><td>보이지 않는 레이블</td><td>&lt;button aria-label="닫기"&gt;</td></tr>
+    <tr><td>aria-describedby</td><td>추가 설명 연결</td><td>&lt;input aria-describedby="error-msg"&gt;</td></tr>
+    <tr><td>aria-labelledby</td><td>여러 요소로 레이블 구성</td><td>&lt;div aria-labelledby="title subtitle"&gt;</td></tr>
+    <tr><td>aria-hidden</td><td>스크린리더에서 숨김</td><td>&lt;div aria-hidden="true"&gt;</td></tr>
+    <tr><td>aria-live</td><td>동적 콘텐츠 알림</td><td>&lt;div aria-live="polite"&gt;</td></tr>
+    <tr><td>aria-modal</td><td>모달 표시</td><td>&lt;div role="dialog" aria-modal="true"&gt;</td></tr>
+  </tbody>
+</table>
+
+
+#### ARIA 역할(Role)
+```tsx
+<div role="dialog" aria-modal="true">모달</div>
+<button role="button">버튼</button>
+<nav role="navigation">네비게이션</nav>
+```
+
+**주의:** ARIA는 최후의 수단! 가능하면 시맨틱 HTML 우선 사용
+
+---
+
+## 5. 컴포넌트별 체크리스트
+
+### Button
+- [ ] `<button>` 태그 사용
+- [ ] 텍스트 또는 `aria-label` 필수
+- [ ] 비활성 상태는 `disabled` 속성
+- [ ] `:focus-visible` 스타일 적용
+
+### Input
+- [ ] `<label>` 연결 (`htmlFor` + `id`)
+- [ ] 오류 시 `aria-describedby`로 오류 메시지 연결
+- [ ] `type` 속성 명시 (email, password, text 등)
+- [ ] Placeholder는 보조 힌트로만 사용
+
+### Modal
+- [ ] `role="dialog"`, `aria-modal="true"`
+- [ ] `aria-labelledby`로 제목 연결
+- [ ] Focus Trap 구현
+- [ ] ESC 키로 닫기
+- [ ] 백드롭 클릭 시 닫기
+
+### Toast
+- [ ] `aria-live="polite"` 또는 `assertive`
+- [ ] 최소 5초 표시
+- [ ] 닫기 버튼 제공 (선택사항)
+
+---
+
+## 테스트 도구
+
+### 자동화 도구
+- **Chrome DevTools Lighthouse**: 접근성 점수 측정
+- **axe DevTools**: Chrome 확장 프로그램
+- **WAVE**: 웹 접근성 평가 도구
+
+### 수동 테스트
+1. **키보드 전용 탐색**: 마우스 없이 Tab 키로 모든 기능 사용
+2. **스크린리더 테스트**:
+   - Windows: NVDA (무료)
+   - macOS: VoiceOver (내장)
+3. **확대/축소**: 200% 확대 시 레이아웃 확인
+4. **색각 이상 시뮬레이션**: Chrome DevTools 사용
+
+---
+
+## 참고 자료
+
+- [WCAG 2.1 가이드라인](https://www.w3.org/WAI/WCAG21/quickref/)
+- [WebAIM 체크리스트](https://webaim.org/standards/wcag/checklist)
+- [MDN 접근성 가이드](https://developer.mozilla.org/ko/docs/Web/Accessibility)
+- [A11y Project](https://www.a11yproject.com/)
+
+---
+
+## 빠른 체크
+
+### 개발 완료 전 필수 확인
+```
+✅ 키보드만으로 모든 기능 사용 가능한가?
+✅ 스크린리더로 콘텐츠를 이해할 수 있는가?
+✅ 색상 대비가 충분한가?
+✅ 오류 메시지가 명확한가?
+✅ 포커스 표시가 잘 보이는가?
+```

@@ -1,0 +1,106 @@
+/* 1. Pretendard 폰트 불러오기 (CDN) */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. 전역 기본 스타일 */
+@layer base {
+  html, body {
+    font-family: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-weight: 400;
+
+    @apply h-full w-full;
+    @apply bg-background-primary text-text-primary;
+    
+    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+
+    @apply overflow-hidden;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border-divider rounded-full;
+  }
+}
+
+/* 3. 공용 컴포넌트 클래스 */
+@layer components {
+  /* [Typography] */
+  .text-h1 {
+    @apply text-[24px] md:text-[32px] lg:text-[48px] font-medium leading-[120%] tracking-[-0.05em];
+  }
+  
+  .text-t1 {
+    @apply text-[14px] md:text-[16px] lg:text-[20px] font-normal leading-[140%] tracking-normal;
+  }
+
+  .text-b2 {
+    @apply text-[14px] font-normal leading-[150%];
+  }
+
+  /* 라벨, 버튼용 텍스트 (L3 등 필요시 추가) */
+  .text-l3 {
+    @apply text-[14px] font-normal leading-[100%];
+  }
+  
+  /* [Layout] 모달 시스템 */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+    @apply bg-background-overlay backdrop-blur-[2px]; 
+  }
+
+  /* 모달 컨테이너 (둥근 모서리 40px) */
+  .modal-container {
+    @apply w-full max-w-[480px] p-10 rounded-[40px];
+    @apply bg-background-surface shadow-2xl;
+    @apply flex flex-col relative;
+  }
+
+  /* [Form] 입력 필드 */
+  .input-base {
+    @apply w-full h-[52px] px-4 rounded-lg border bg-transparent text-b2 text-text-primary outline-none transition-all duration-200;
+    @apply border-border-inputNormal placeholder-text-placeholder;
+    @apply focus:border-border-inputFocus focus:bg-background-elevated;
+  }
+
+  .input-error {
+    @apply border-border-inputError text-text-error focus:border-border-inputError;
+  }
+  
+  /* [Button] */
+  .btn-full {
+    @apply w-full flex items-center justify-center rounded-lg transition-colors font-medium;
+  }
+}
+
+/* 스크린 리더 전용 콘텐츠 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* 로딩 스피너 애니메이션 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
