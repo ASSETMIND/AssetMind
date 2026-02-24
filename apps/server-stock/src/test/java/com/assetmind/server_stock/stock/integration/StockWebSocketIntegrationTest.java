@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.*;
 import com.assetmind.server_stock.support.IntegrationTestSupport;
 import com.assetmind.server_stock.support.MockKisDataFeeder;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -20,10 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.messaging.converter.ByteArrayMessageConverter;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
@@ -149,12 +146,18 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
 
         boolean completed = latch.await(5, TimeUnit.SECONDS); // 5초 동안 3건의 메시지가 도착할 때 까지 대기
 
+
         // then: 프론트엔드가 5초 내에 파싱된 응답을 받는지 검증
+
+        // 수신 후 최종 리스트 상태 확인
+        System.out.println("[수신 완료] 수신된 메시지 총 개수: " + receivedMessages.size());
+        for (int i = 0; i < receivedMessages.size(); i++) {
+            System.out.println("[" + (i+1) + "번째 응답]" + receivedMessages.get(i));
+        }
+
         assertThat(completed).isTrue();
         assertThat(receivedMessages).hasSize(3);
-
-        System.out.println("✅ 수신된 메시지 총 개수: " + receivedMessages.size());
-
+        
         // 검증: 3건 주식 데이터의 가격이 75000, 75100, 75200 모두 파싱되었는지
         List<String> prices = receivedMessages.stream()
                 .map(msg -> String.valueOf(msg.get("currentPrice")))

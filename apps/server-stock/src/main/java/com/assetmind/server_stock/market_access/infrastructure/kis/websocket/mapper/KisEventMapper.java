@@ -12,12 +12,21 @@ public class KisEventMapper {
         return RealTimeStockTradeEvent.builder()
                 .stockCode(data.stockCode())
                 .time(data.executionTime())
+
+                // --- 가격 정보 ---
                 .currentPrice(data.currentPrice())
+                .openPrice(data.openPrice())
+                .highPrice(data.highPrice())
+                .lowPrice(data.lowPrice())
                 .priceChange(data.priceChange())
                 .changeSign(data.changeSign())
+                .changeRate(data.changeRate())
+
+                // --- 거래량 정보 ---
                 .executionVolume(data.executionVolume())
                 .cumulativeAmount(data.cumulativeAmount())
                 .cumulativeVolume(data.cumulativeVolume())
+
                 .eventTimeStamp(LocalDateTime.now())
                 .build();
     }
