@@ -263,37 +263,98 @@ export const handlers = [
 	stockSocket.addEventListener('connection', ({ client }) => {
 		console.log('[MSW] WebSocket connected');
 
+		let intervalId: any;
+		let currentLimit = 10;
+
 		client.addEventListener('message', (event) => {
-			const message = JSON.parse(event.data as string);
+			const data = event.data as string;
 
-			// 구독 요청이 오면 주기적으로 데이터 전송 시작
-			if (message.type === 'SUBSCRIBE' && message.channel === 'RANKING_VALUE') {
-				const limit = message.limit || 10;
-				console.log(`[MSW] 구독 시작: RANKING_VALUE (limit: ${limit})`);
-
-				// 데이터 생성 및 전송 함수
-				const sendUpdate = () => {
-					const mockData = Array.from({ length: limit }).map((_, i) => ({
-						stockCode: String(i + 1).padStart(6, '0'),
-						stockName: `테스트종목 ${i + 1}`,
-						currentPrice: 10000 + i * 500 + Math.floor(Math.random() * 1000),
-						changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
-						cumulativeAmount: 1000000000 + i * 50000000,
-						cumulativeVolume: 100000 + i * 5000,
-					}));
-
-					client.send(
-						JSON.stringify({
-							type: 'RANKING_VALUE_UPDATE',
-							data: mockData,
-						}),
-					);
-				};
-
-				// 즉시 전송 후 2초마다 갱신
-				sendUpdate();
-				setInterval(sendUpdate, 2000);
+			// 1. CONNECT 프레임 처리
+			if (data.startsWith('CONNECT') || data.startsWith('STOMP')) {
+				client.send('CONNECTED\nversion:1.2\n\n\0');
+				return;
 			}
+
+			// 2. SUBSCRIBE 프레임 처리
+			if (data.startsWith('SUBSCRIBE')) {
+				const destMatch = data.match(/destination:([^\n]+)/);
+				const idMatch = data.match(/id:([^\n]+)/);
+
+				if (destMatch && idMatch) {
+					const destination = destMatch[1].trim();
+					const id = idMatch[1].trim();
+
+					if (
+						destination === '/topic/ranking/value' ||
+						destination === '/topic/ranking/volume'
+					) {
+						console.log(`[MSW] STOMP 구독 시작: ${destination}`);
+
+						const sendUpdate = () => {
+							let mockData = Array.from({ length: currentLimit }).map(
+								(_, i) => ({
+									stockCode: String(i + 1).padStart(6, '0'),
+									stockName: `테스트종목 ${i + 1}`,
+									currentPrice:
+										10000 + i * 500 + Math.floor(Math.random() * 1000),
+									changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
+									cumulativeAmount: 1000000000 + i * 50000000,
+									cumulativeVolume: 100000 + i * 5000,
+								}),
+							);
+
+							// 거래량 순일 경우 데이터 특성 약간 변경 (테스트용)
+							if (destination === '/topic/ranking/volume') {
+								mockData = mockData.sort(
+									(a, b) => b.cumulativeVolume - a.cumulativeVolume,
+								);
+							}
+
+							const payload = JSON.stringify({
+								type:
+									destination === '/topic/ranking/value'
+										? 'RANKING_VALUE_UPDATE'
+										: 'RANKING_VOLUME_UPDATE',
+								data: mockData,
+							});
+
+							// STOMP MESSAGE 프레임 구성
+							const messageFrame = `MESSAGE\ndestination:${destination}\nsubscription:${id}\nmessage-id:${Date.now()}\ncontent-type:application/json\n\n${payload}\0`;
+
+							client.send(messageFrame);
+						};
+
+						sendUpdate();
+						if (intervalId) clearInterval(intervalId);
+						intervalId = setInterval(sendUpdate, 2000);
+					}
+				}
+				return;
+			}
+
+			// 3. SEND 프레임 처리 (Limit 업데이트 등)
+			if (data.startsWith('SEND')) {
+				const destMatch = data.match(/destination:([^\n]+)/);
+				if (destMatch && destMatch[1].trim().startsWith('/app/ranking/')) {
+					const bodyParts = data.split('\n\n');
+					if (bodyParts.length >= 2) {
+						try {
+							const bodyStr = bodyParts[1].replace(/\0$/, '');
+							const body = JSON.parse(bodyStr);
+							if (body.limit) {
+								currentLimit = body.limit;
+								console.log(`[MSW] Limit 업데이트: ${currentLimit}`);
+							}
+						} catch (e) {
+							console.error('[MSW] Body 파싱 에러', e);
+						}
+					}
+				}
+			}
+		});
+
+		client.addEventListener('close', () => {
+			if (intervalId) clearInterval(intervalId);
 		});
 	}),
 ];

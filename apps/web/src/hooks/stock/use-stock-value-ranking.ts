@@ -2,53 +2,49 @@ import { useEffect, useState } from 'react';
 import { useWebSocket } from '../web-socket/use-web-socket';
 import { StockRankingResponseSchema } from '../../libs/schema/stock';
 import type { StockRankingDto } from '../../types/stock';
+import { STOCK_WS_URL } from '../../api/stock';
 
-export const useStockValueRanking = (limit = 10) => {
+export type RankingType = 'VALUE' | 'VOLUME';
+
+export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 	const [rankingData, setRankingData] = useState<StockRankingDto[]>([]);
 
-	// 환경 변수에서 웹소켓 URL 로드 (없을 경우 기본값 처리)
-	const WS_URL = import.meta.env.VITE_WS_URL
-		? `${import.meta.env.VITE_WS_URL}/stocks`
-		: 'ws://localhost:8080/stocks';
+	const { isConnected, subscribe, sendMessage } = useWebSocket(STOCK_WS_URL);
 
-	const { lastMessage, sendMessage, isConnected } = useWebSocket(WS_URL);
-
-	//  연결(및 재연결) 시 구독 메시지 전송
-	// isConnected 상태를 감지하여 소켓이 연결되면 즉시 구독 요청을 보냄
+	// 연결(및 재연결) 시 STOMP 구독 및 초기 데이터 요청
 	useEffect(() => {
-		if (isConnected) {
-			sendMessage(
-				JSON.stringify({
-					type: 'SUBSCRIBE',
-					channel: 'RANKING_VALUE', // 거래대금순 랭킹 채널
-					limit,
-				}),
-			);
-		}
-	}, [isConnected, sendMessage, limit]);
+		if (!isConnected) return;
 
-	// 메시지 수신 및 데이터 무결성 검증
-	useEffect(() => {
-		if (lastMessage?.data) {
-			try {
-				const parsed = JSON.parse(lastMessage.data);
+		// 타입에 따른 토픽 및 메시지 타입 설정
+		const topic =
+			type === 'VALUE' ? '/topic/ranking/value' : '/topic/ranking/volume';
+		const appDestination =
+			type === 'VALUE' ? '/app/ranking/value' : '/app/ranking/volume';
+		const responseType =
+			type === 'VALUE' ? 'RANKING_VALUE_UPDATE' : 'RANKING_VOLUME_UPDATE';
 
-				// Zod 스키마를 통한 런타임 데이터 검증
-				const result = StockRankingResponseSchema.safeParse(parsed);
+		// 1. 토픽 구독 (데이터 수신)
+		const subscription = subscribe(topic, (data) => {
+			// Zod 스키마를 통한 런타임 데이터 검증
+			const result = StockRankingResponseSchema.safeParse(data);
 
-				if (result.success) {
-					// 거래대금 랭킹 업데이트 메시지인지 확인 (채널/타입 필터링)
-					if (result.data.type === 'RANKING_VALUE_UPDATE') {
-						setRankingData(result.data.data);
-					}
-				} else {
-					console.warn('Invalid stock ranking data format:', result.error);
+			if (result.success) {
+				// 요청한 타입에 맞는 응답인지 확인
+				if (result.data.type === responseType) {
+					setRankingData(result.data.data);
 				}
-			} catch (error) {
-				console.error('WebSocket message parsing error:', error);
+			} else {
+				console.warn('Invalid stock ranking data format:', result.error);
 			}
-		}
-	}, [lastMessage]);
+		});
+
+		// 2. 파라미터 전송 (Limit 설정 등)
+		sendMessage(appDestination, { limit });
+
+		return () => {
+			subscription?.unsubscribe();
+		};
+	}, [isConnected, subscribe, sendMessage, limit, type]);
 
 	return { rankingData, isConnected };
 };
