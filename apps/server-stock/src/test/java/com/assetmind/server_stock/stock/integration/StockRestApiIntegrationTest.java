@@ -8,6 +8,7 @@ import static org.springframework.restdocs.operation.preprocess.Preprocessors.*;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
 import static org.springframework.restdocs.request.RequestDocumentation.*;
 
+import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.domain.repository.StockHistoryRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
@@ -18,12 +19,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.BDDMockito;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders;
 import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +46,9 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @MockitoBean
+    private StockMetadataProvider stockMetadataProvider;
 
     @AfterEach
     void tearDown() {
@@ -209,6 +216,8 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
             String stockCode = "005930";
             saveHistory(stockCode, 71000L, LocalDateTime.now());
 
+            BDDMockito.given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
+
             // when & then
             // PathParameter(StockCode) 문서화를 위해 MockMvcRequestBuilders.get 대신 RestDocumentationRequestBuilders.get 사용
             mockMvc.perform(RestDocumentationRequestBuilders.get("/api/stocks/{stockCode}/history", stockCode)
@@ -254,6 +263,8 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
             // given
             String stockCode = "005930";
             saveHistory(stockCode, 70000L, LocalDateTime.now());
+
+            BDDMockito.given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
 
             // when & then
             mockMvc.perform(get("/api/stocks/{stockCode}/history", stockCode))
