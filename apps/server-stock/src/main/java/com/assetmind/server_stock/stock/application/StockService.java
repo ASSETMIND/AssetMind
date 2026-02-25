@@ -8,7 +8,6 @@ import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.domain.repository.StockHistoryRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
-import com.assetmind.server_stock.stock.exception.InvalidStockParameterException;
 import com.assetmind.server_stock.stock.exception.StockNotFoundException;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
@@ -39,7 +38,7 @@ public class StockService {
     public void processRealTimeTrade(RealTimeStockTradeEvent event) {
 
         if (event == null || event.stockCode() == null || event.stockCode().isBlank()) {
-            throw new InvalidStockParameterException(ErrorCode.INVALID_STOCK_PARAMETER);
+            throw new IllegalArgumentException("실시간 체결 데이터 이벤트에 필수 값이 누락되었습니다. (event: " + event + ")");
         }
 
         // 캐싱된 국내 전체 주식에서 실시간 주식 데이터의 주식 이름 추출
@@ -78,8 +77,8 @@ public class StockService {
 
     // 특정 주식의 시계열 데이터 조회
     public List<StockHistoryResponse> getStockRecentHistory(String stockCode, int limit) {
-        if (stockCode == null || stockCode.isBlank()) {
-            throw new InvalidStockParameterException(ErrorCode.INVALID_STOCK_PARAMETER);
+        if (!stockMetadataProvider.isExist(stockCode)) {
+            throw new StockNotFoundException(ErrorCode.NOT_FOUND_STOCK);
         }
 
         return stockHistoryRepository.findRecentData(stockCode, limit).stream()

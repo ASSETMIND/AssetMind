@@ -26,7 +26,7 @@ public class StockWebSocketEventHandler {
         try {
             messagingTemplate.convertAndSend("/topic/stocks/" + event.stockCode(), event.response());
         } catch (Exception e) {
-            log.error("[Stock WebSocket Event Handler] 특정 종목 시계열 데이터 전송 에러 : {}", e.getMessage());
+            log.error("[Stock WebSocket Event Handler] 특정 종목 시계열 데이터 전송 에러 : {}", e.getMessage(), e);
         }
     }
 
@@ -42,7 +42,7 @@ public class StockWebSocketEventHandler {
             // 부하가 생길 경우 0.5 ~ 1초에 한번 전송으로 로직을 구성할 수 있음
             messagingTemplate.convertAndSend("/topic/ranking", event.response());
         } catch (Exception e) {
-            log.error("[Stock WebSocket Event Handler] 랭킹 데이터 전송 에러 : {}", e.getMessage());
+            log.error("[Stock WebSocket Event Handler] 랭킹 데이터 전송 에러 : {}", e.getMessage(), e);
         }
     }
 }

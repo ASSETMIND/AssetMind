@@ -34,6 +34,11 @@ public class StockMetadataProvider {
         log.info("[StockMetadataProvider] {} 개의 주식 메타데이터 캐싱", stockNameCache.size());
     }
 
+    // 종목 코드를 기반으로 해당 종목 코드가 캐싱되어있는지 확인
+    public boolean isExist(String stockCode) {
+        return stockNameCache.containsKey(stockCode);
+    }
+
     // 종목 코드를 기반으로 종목 이름 조회
     public String getStockName(String stockCode) {
         return stockNameCache.getOrDefault(stockCode, stockCode);

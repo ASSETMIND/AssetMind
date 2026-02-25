@@ -97,8 +97,8 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
-        if (payload == null || payload.isEmpty()) return;
 
+        if (payload.isEmpty()) return;
 
         try {
             if (payload.startsWith("{")) {
@@ -132,7 +132,6 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         dataList.forEach(data -> {
             log.info("[KIS WS] 실시간 체결 데이터 : {}", data.toString());
             eventPublisher.publishEvent(eventMapper.toEvent(data));
-
         });
     }
 
