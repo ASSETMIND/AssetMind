@@ -130,8 +130,12 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         List<KisRealTimeData> dataList = dataParser.parse(payload);
 
         dataList.forEach(data -> {
-            log.info("[KIS WS] 실시간 체결 데이터 : {}", data.toString());
-            eventPublisher.publishEvent(eventMapper.toEvent(data));
+            try {
+                log.info("[KIS WS] 실시간 체결 데이터 : {}", data.toString());
+                eventPublisher.publishEvent(eventMapper.toEvent(data));
+            } catch (Exception e) {
+                log.error("[KIS WS] 개별 체결 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
+            }
         });
     }
 
