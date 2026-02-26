@@ -299,7 +299,7 @@ export const handlers = [
 										10000 + i * 500 + Math.floor(Math.random() * 1000),
 									changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
 									cumulativeAmount: 1000000000 + i * 50000000,
-									cumulativeVolume: 100000 + i * 5000,
+									cumulativeVolume: 10000000 - i * 5000,
 								}),
 							);
 
@@ -326,7 +326,7 @@ export const handlers = [
 
 						sendUpdate();
 						if (intervalId) clearInterval(intervalId);
-						intervalId = setInterval(sendUpdate, 2000);
+						intervalId = setInterval(sendUpdate, 1000);
 					}
 				}
 				return;

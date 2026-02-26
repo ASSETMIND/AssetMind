@@ -9,8 +9,13 @@ export const useStockRankLogic = (type: RankingType, limit = 20) => {
 		if (!rankingData) return [];
 
 		return rankingData.map((stock, index) => {
-			// 거래대금 포맷팅: 원 단위 -> 억원 단위 절삭
-			const tradeVolume = Math.floor(stock.cumulativeAmount / 100000000);
+			// 랭킹 타입에 따라 표시할 데이터와 단위 결정
+			let tradeVolumeStr = '';
+			if (type === 'VOLUME') {
+				tradeVolumeStr = `${stock.cumulativeVolume.toLocaleString()}주`;
+			} else {
+				tradeVolumeStr = `${Math.floor(stock.cumulativeAmount / 100000000).toLocaleString()}억원`;
+			}
 
 			// 매수/매도 비율 시뮬레이션 (데이터 부재로 인한 등락률 기반 추정)
 			// 등락률이 높을수록 매수세가 강하다고 가정 (기본 50% + 등락률 가중치)
@@ -24,12 +29,16 @@ export const useStockRankLogic = (type: RankingType, limit = 20) => {
 				name: stock.stockName,
 				price: stock.currentPrice.toLocaleString(),
 				changeRate: stock.changeRate,
-				tradeVolume: `${tradeVolume.toLocaleString()}억원`,
+				tradeVolume: tradeVolumeStr,
 				buyRatio,
 				sellRatio,
 			};
 		});
-	}, [rankingData]);
+	}, [rankingData, type]);
 
-	return { stockList, isConnected };
+	return {
+		stockList,
+		isConnected,
+		sortType: type === 'VALUE' ? 'value' : 'volume',
+	};
 };
