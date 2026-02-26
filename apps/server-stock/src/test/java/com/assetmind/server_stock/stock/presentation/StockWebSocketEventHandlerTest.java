@@ -13,10 +13,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class StockWebSocketEventHandlerTest {
 
     @Mock
@@ -48,7 +50,8 @@ class StockWebSocketEventHandlerTest {
 
     @Test
     @DisplayName("실패: StockHistorySavedEvent를 받고 데이터를 전송 중 예외가 발생해도 프로세스가 중단되지 않고 로그를 남기고 종료한다.")
-    void givenStockHistorySavedEvent_whenOccurErrorInSending_thenNotThrowExceptionLogging() {
+    void givenStockHistorySavedEvent_whenOccurErrorInSending_thenNotThrowExceptionLogging(
+            CapturedOutput output) {
         // given
         String stockCode = "005930";
         StockHistoryResponse mockHistoryResponse = StockHistoryResponse.builder()
@@ -66,6 +69,10 @@ class StockWebSocketEventHandlerTest {
         // handleSavedHistory 메서드 수행 도중 예외가 밖으로 던져지지 않았는지 검증
         assertThatCode(() -> stockWebSocketEventHandler.handleSavedHistory(historyEvent))
                 .doesNotThrowAnyException();
+
+        // 의도한 ERROR 로그가 콘솔에 잘 찍혔는지 검증
+        assertThat(output.getOut())
+                .contains("[Stock WebSocket Event Handler] 특정 종목 시계열 데이터 전송 에러");
     }
 
     @Test
@@ -91,7 +98,7 @@ class StockWebSocketEventHandlerTest {
 
     @Test
     @DisplayName("실패: StockRankingUpdatedEvent를 받고 데이터를 전송 중 예외가 발생해도 프로세스가 중단되지 않고 로그를 남기고 종료한다.")
-    void givenStockRankingUpdatedEvent_whenOccurErrorInSending_thenNotThrowExceptionLogging() {
+    void givenStockRankingUpdatedEvent_whenOccurErrorInSending_thenNotThrowExceptionLogging(CapturedOutput output) {
         // given
         String stockCode = "005930";
         StockRankingResponse mockRankingResponse = StockRankingResponse.builder()
@@ -101,9 +108,17 @@ class StockWebSocketEventHandlerTest {
         StockRankingUpdatedEvent rankingUpdatedEvent = new StockRankingUpdatedEvent(
                 mockRankingResponse);
 
+        willThrow(new MessagingException("랭킹 브로드캐스트 브로커 에러"))
+                .given(messagingTemplate)
+                .convertAndSend(any(String.class), any(Object.class));
+
         // when & then
         // handleUpdatedRanking 메서드 수행 도중 예외가 밖으로 던져지지 않았는지 검증
         assertThatCode(() -> stockWebSocketEventHandler.handleUpdatedRanking(rankingUpdatedEvent))
                 .doesNotThrowAnyException();
+
+        // 의도한 ERROR 로그가 콘솔에 잘 찍혔는지 검증
+        assertThat(output.getOut())
+                .contains("[Stock WebSocket Event Handler] 랭킹 데이터 전송 에러");
     }
 }

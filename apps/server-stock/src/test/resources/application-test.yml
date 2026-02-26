@@ -5,7 +5,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop # 테스트 시작 시 생성, 끝나면 삭제
+      ddl-auto: create # 테스트 시작 시 생성
     show-sql: true
     properties:
       hibernate:
