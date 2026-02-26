@@ -1,5 +1,12 @@
+import type { RankingType } from '../../hooks/stock/use-stock-value-ranking';
+
+interface Props {
+	activeType: RankingType;
+	onTypeChange: (type: RankingType) => void;
+}
+
 // 랭킹 필터 버튼 그룹
-export default function StockFilterGroup() {
+export default function StockFilterGroup({ activeType, onTypeChange }: Props) {
 	const wrapperClass = 'flex items-center rounded-xl bg-[#282932] p-1';
 	const activeBtnClass =
 		'rounded-lg bg-[#41434D] px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm whitespace-nowrap';
@@ -17,10 +24,20 @@ export default function StockFilterGroup() {
 
 			{/* 정렬 기준 필터 */}
 			<div className={wrapperClass}>
-				<button className={activeBtnClass}>증권 거래대금</button>
-				<button className={inactiveBtnClass}>증권 거래량</button>
-				<button className={inactiveBtnClass}>거래대금</button>
-				<button className={inactiveBtnClass}>거래량</button>
+				<button
+					className={activeType === 'VALUE' ? activeBtnClass : inactiveBtnClass}
+					onClick={() => onTypeChange('VALUE')}
+				>
+					거래대금순
+				</button>
+				<button
+					className={
+						activeType === 'VOLUME' ? activeBtnClass : inactiveBtnClass
+					}
+					onClick={() => onTypeChange('VOLUME')}
+				>
+					거래량순
+				</button>
 				<button className={inactiveBtnClass}>급상승</button>
 				<button className={inactiveBtnClass}>급하락</button>
 			</div>

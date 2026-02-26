@@ -1,7 +1,7 @@
 import RatioBar from './ratio-bar';
 
 export interface StockItemData {
-	id: number;
+	id: string;
 	rank: number;
 	name: string;
 	price: string;
