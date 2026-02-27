@@ -1,7 +1,9 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
+import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +15,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -27,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class KisWebSocketHandlerTest {
 
     @InjectMocks
@@ -41,6 +46,12 @@ class KisWebSocketHandlerTest {
 
     @Mock
     private KisRealTimeDataParser dataParser;
+
+    @Mock
+    private KisEventMapper eventMapper;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private final String TEST_KEY = "TEST_APP_KEY";
 
@@ -153,6 +164,57 @@ class KisWebSocketHandlerTest {
 
             // Then: 반복문이 멈추지 않고 2번 모두 시도했는지 확인
             verify(session, times(2)).sendMessage(any(TextMessage.class));
+        }
+
+        @Test
+        @DisplayName("성공/실패: 다건 데이터 중 1건의 이벤트 발행에 실패해도, 나머지 데이터는 정상적으로 발행되어야 한다")
+        void givenMultipleData_whenOneFails_thenContinuePublishing(CapturedOutput output) throws Exception {
+            // Given: 2건의 데이터가 들어왔다고 가정
+            String payload = "0|H0STCNT0|002|MockData...";
+            KisRealTimeData successData = new KisRealTimeData("005930", "123000", 80000L, "1", 0L, 2.5,
+                    80000L, 81000L, 79000L, 100L, 1000L, 1000000L, 100.0, "20");
+            KisRealTimeData failData = new KisRealTimeData("035420", "123000", 80000L, "1", 0L, 2.5,
+                    80000L, 81000L, 79000L, 100L, 1000L, 1000000L, 100.0, "20");
+
+            when(dataParser.parse(payload)).thenReturn(List.of(failData, successData));
+
+            RealTimeStockTradeEvent dummyEvent = RealTimeStockTradeEvent.builder()
+                    .stockCode("005930")
+                    .currentPrice(80000L)
+                    .build();
+
+            // Mock: 첫 번째 데이터(failData) 매핑 시 RuntimeException 발생, 두 번째는 정상 통과
+            when(eventMapper.toEvent(failData)).thenThrow(new RuntimeException("매핑 도중 에러 발생"));
+            when(eventMapper.toEvent(successData)).thenReturn(dummyEvent);
+
+            // When: 메시지 핸들링 실행
+            assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(payload)));
+
+            // Then 1: 첫 번째가 실패했어도 반복문이 멈추지 않고 두 번째 데이터에 대해 publishEvent가 1번 호출되어야 함
+            verify(eventPublisher, times(1)).publishEvent(any(RealTimeStockTradeEvent.class));
+
+            // Then 2: 실패한 데이터에 대한 정확한 에러 로그가 찍혔는지 검증
+            assertThat(output.getOut())
+                    .contains("[KIS WS] 개별 체결 데이터 처리 및 발행 중 에러 발생")
+                    .contains("매핑 도중 에러 발생");
+        }
+
+        @Test
+        @DisplayName("실패: 수신된 메시지 처리 중 치명적인 에러가 발생해도 세션이 죽지 않고 에러 로그를 남겨야 한다")
+        void givenFatalError_whenHandleMessage_thenCatchAndLog(CapturedOutput output) throws Exception {
+            // Given: payload 파싱 단계에서 NullPointerException이 터지도록 강제 설정
+            String badPayload = "CRITICAL_BAD_PAYLOAD";
+            when(dataParser.parse(badPayload)).thenThrow(new NullPointerException("Parser Crashed!"));
+
+            TextMessage message = new TextMessage(badPayload);
+
+            // When: 메시지 핸들링 실행
+            assertDoesNotThrow(() -> handler.handleMessage(session, message));
+
+            // Then: 로그 캡처 객체를 통해 에러 로그가 남았는지 확인
+            assertThat(output.getOut())
+                    .contains("[KIS WS] 메시지 처리 중 에러 발생")
+                    .contains("Parser Crashed!");
         }
     }
 

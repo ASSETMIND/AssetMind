@@ -45,13 +45,10 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private WebSocketHandler kisWebSocketHandler;
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
-
     private WebSocketStompClient socketStompClient;
 
     private static final String WEBSOCKET_ENDPOINT = "/ws-stock";
-    private static final String SUBSCRIBE_SPECIFIC_TOPIC = "/topic/stocks/005930";
+    private static final String SUBSCRIBE_SPECIFIC_TOPIC = "/topic/stocks/035420";
     private static final String SUBSCRIBE_RANKING_TOPIC = "/topic/ranking";
 
     @BeforeEach
@@ -137,7 +134,7 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
 
         // when
         // MockDataFeeder로 가짜 다건 데이터 생성 후 강제 주입
-        String mockKisData = MockKisDataFeeder.createMockDataWithCount("005930", "75000", 3);
+        String mockKisData = MockKisDataFeeder.createMockDataWithCount("035420", "75000", 3);
 
         WebSocketSession mockSession = Mockito.mock(WebSocketSession.class);
         TextMessage textMessage = new TextMessage(mockKisData);
