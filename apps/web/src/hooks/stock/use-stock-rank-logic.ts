@@ -39,6 +39,6 @@ export const useStockRankLogic = (type: RankingType, limit = 20) => {
 	return {
 		stockList,
 		isConnected,
-		sortType: type === 'VALUE' ? 'value' : 'volume',
+		sortType: (type === 'VALUE' ? 'value' : 'volume') as 'value' | 'volume',
 	};
 };
