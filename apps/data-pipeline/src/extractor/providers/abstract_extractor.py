@@ -53,8 +53,8 @@ class AbstractExtractor(IExtractor, ABC):
             ConfigurationError: 필수 의존성(Config 등)이 누락된 경우.
         """
         # Rationale: 의존성 주입 시점에 None 체크를 수행하여 런타임 NullReference 에러 방지.
-        if not config:
-             raise ConfigurationError("초기화 실패: ConfigManager 인스턴스가 필요합니다.")
+        if config is None:
+            raise ConfigurationError("초기화 실패: ConfigManager 인스턴스가 필요합니다.")
              
         self.http_client = http_client
         self.config = config
