@@ -1,5 +1,5 @@
 export default {
-	preset: 'ts-jest',
+	preset: 'ts-jest/presets/js-with-ts',
 	testEnvironment: 'jsdom',
 	testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
 	setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
@@ -10,6 +10,7 @@ export default {
 		'src/hooks/auth/use-social-login-logic.ts',
 	],
 	coverageDirectory: 'coverage',
+	transformIgnorePatterns: ['node_modules/(?!(msw|@mswjs|until-async)/)'],
 	testEnvironmentOptions: {
 		customExportConditions: [''],
 	},
@@ -19,7 +20,7 @@ export default {
 		'^@/(.*)$': '<rootDir>/src/$1',
 	},
 	transform: {
-		'^.+\\.tsx?$': [
+		'^.+\\.[tj]sx?$': [
 			'ts-jest',
 			{
 				// ts-jest를 위한 별도 설정
@@ -30,6 +31,7 @@ export default {
 					// import 호환성 문제를 해결하기 위해 킴
 					esModuleInterop: true,
 					jsx: 'react-jsx',
+					allowJs: true,
 				},
 			},
 		],
