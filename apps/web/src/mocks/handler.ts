@@ -265,6 +265,7 @@ export const handlers = [
 
 		let intervalId: any;
 		let currentLimit = 10;
+		let cachedData: any[] = [];
 
 		client.addEventListener('message', (event) => {
 			const data = event.data as string;
@@ -291,17 +292,43 @@ export const handlers = [
 						console.log(`[MSW] STOMP 구독 시작: ${destination}`);
 
 						const sendUpdate = () => {
-							let mockData = Array.from({ length: currentLimit }).map(
-								(_, i) => ({
-									stockCode: String(i + 1).padStart(6, '0'),
-									stockName: `테스트종목 ${i + 1}`,
-									currentPrice:
-										10000 + i * 500 + Math.floor(Math.random() * 1000),
-									changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
-									cumulativeAmount: 1000000000 + i * 50000000,
-									cumulativeVolume: 10000000 - i * 5000,
-								}),
-							);
+							// 데이터가 없거나 limit이 변경되었을 때 초기화
+							if (cachedData.length !== currentLimit) {
+								cachedData = Array.from({ length: currentLimit }).map(
+									(_, i) => ({
+										stockCode: String(i + 1).padStart(6, '0'),
+										stockName: `테스트종목 ${i + 1}`,
+										currentPrice:
+											10000 + i * 500 + Math.floor(Math.random() * 1000),
+										changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
+										cumulativeAmount: 1000000000 + i * 50000000,
+										cumulativeVolume: 10000000 - i * 5000,
+									}),
+								);
+							} else {
+								// 기존 데이터 중 5개만 랜덤 업데이트
+								const updateIndices = new Set<number>();
+								while (
+									updateIndices.size < 5 &&
+									updateIndices.size < currentLimit
+								) {
+									updateIndices.add(Math.floor(Math.random() * currentLimit));
+								}
+
+								cachedData = cachedData.map((item, index) => {
+									if (updateIndices.has(index)) {
+										return {
+											...item,
+											currentPrice:
+												10000 + index * 500 + Math.floor(Math.random() * 1000),
+											changeRate: Number((Math.random() * 20 - 10).toFixed(2)),
+										};
+									}
+									return item;
+								});
+							}
+
+							let mockData = [...cachedData];
 
 							// 거래량 순일 경우 데이터 특성 약간 변경 (테스트용)
 							if (destination === '/topic/ranking/volume') {
