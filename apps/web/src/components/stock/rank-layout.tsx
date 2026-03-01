@@ -8,7 +8,7 @@ import TableHeader from './table-header';
 // 랭킹 페이지의 전체 레이아웃 담당
 export default function RankLayout() {
 	const [rankingType, setRankingType] = useState<RankingType>('VALUE');
-	const { stockList } = useStockRankLogic(rankingType);
+	const { stockList, sortType } = useStockRankLogic(rankingType);
 
 	return (
 		<div className='w-full max-w-6xl mx-auto px-4'>
@@ -20,7 +20,7 @@ export default function RankLayout() {
 
 			{/* 랭킹 리스트 영역 */}
 			<div className='rounded-lg'>
-				<TableHeader />
+				<TableHeader sortType={sortType} />
 				<div className='flex flex-col'>
 					{stockList.map((item) => (
 						<StockItem key={item.id} data={item} />
