@@ -1,3 +1,5 @@
+# DataMarger 테스트 문서
+
 ## 1. 문서 정보 및 전략
 
 - **대상 모듈:** `src.transformer.processors.data_merger.DataMerger`
