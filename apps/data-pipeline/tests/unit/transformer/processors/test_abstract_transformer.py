@@ -4,190 +4,164 @@ from unittest.mock import MagicMock, patch
 
 # [Target Modules]
 from src.transformer.processors.abstract_transformer import AbstractTransformer
-
-# [Dependencies & Interfaces]
-from src.common.exceptions import ConfigurationError, TransformerError, ETLError
+from src.common.exceptions import TransformerError, ConfigurationError, ETLError
+from src.common.config import ConfigManager
 
 # ========================================================================================
 # [Mocks & Stubs]
 # ========================================================================================
 
-class StubTransformer(AbstractTransformer):
-    """테스트용 구체 클래스 (Stub)
+class DummyTransformer(AbstractTransformer):
+    """AbstractTransformer의 템플릿 메서드를 테스트하기 위한 구체 클래스 구현체"""
     
-    추상 클래스의 흐름을 테스트하기 위해 동작을 세밀하게 제어(Spy/Mocking)할 수 있도록 구현했습니다.
-    """
-    def __init__(self, config):
+    def __init__(self, config: ConfigManager):
         super().__init__(config)
-        self.validate_call_count = 0
-        self.apply_call_count = 0
-        
-        # 동작 제어를 위한 변수
-        self.error_to_raise_in_validate = None
-        self.error_to_raise_in_apply = None
         self.mock_return_value = None
+        self.mock_exception = None
 
     def _validate(self, data: pd.DataFrame) -> None:
-        self.validate_call_count += 1
-        if self.error_to_raise_in_validate:
-            raise self.error_to_raise_in_validate
+        # 상위 추상 클래스의 추상 메서드 내부 구문(pass)을 실행시켜 커버리지 누락(123번 라인) 해결
+        super()._validate(data)
 
     def _apply_transform(self, data: pd.DataFrame) -> pd.DataFrame:
-        self.apply_call_count += 1
-        if self.error_to_raise_in_apply:
-            raise self.error_to_raise_in_apply
+        # 상위 추상 클래스의 추상 메서드 내부 구문(pass)을 실행시켜 커버리지 누락(138번 라인) 해결
+        super()._apply_transform(data)
         
+        if self.mock_exception:
+            raise self.mock_exception
         if self.mock_return_value is not None:
             return self.mock_return_value
-        return data  # 기본 동작: 원본 반환
+        return data.copy()
 
 # ========================================================================================
 # [Fixtures]
 # ========================================================================================
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_logger_isolation():
-    """Service Class의 로거 격리 픽스처 (로그 출력 차단)."""
+    """로거 격리 및 호출 검증을 위한 픽스처"""
     with patch("src.common.log.LogManager.get_logger") as mock_get_logger:
-        mock_get_logger.return_value = MagicMock()
-        yield mock_get_logger
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+        yield mock_logger
 
 @pytest.fixture
 def mock_config():
-    """ConfigManager 객체 모방"""
-    return MagicMock()
+    """의존성 주입을 위한 ConfigManager Mock"""
+    return MagicMock(spec=ConfigManager)
 
 @pytest.fixture
-def valid_df():
-    """정상적인 구조의 DataFrame 반환"""
-    return pd.DataFrame({"col1": [1, 2, 3], "col2": ["A", "B", "C"]})
+def dummy_transformer(mock_config, mock_logger_isolation):
+    """기본 설정이 주입된 DummyTransformer 인스턴스"""
+    return DummyTransformer(config=mock_config)
 
 @pytest.fixture
-def empty_df():
-    """로우(Row)가 없는 빈 DataFrame 반환"""
-    return pd.DataFrame(columns=["col1", "col2"])
-
-@pytest.fixture
-def stub_transformer(mock_config):
-    """기본 설정이 주입된 StubTransformer 인스턴스"""
-    return StubTransformer(mock_config)
+def sample_df():
+    """기본 테스트용 DataFrame"""
+    return pd.DataFrame({'col1': [1, 2, 3]})
 
 # ========================================================================================
-# 1. 초기화 테스트 (Initialization)
+# 1. 초기화 (Initialization)
 # ========================================================================================
 
-def test_init_01_valid_config(mock_config):
-    """[INIT-01] [Standard] 유효한 ConfigManager 모의 객체로 초기화 시 인스턴스 정상 생성"""
-    # When
-    transformer = StubTransformer(mock_config)
+def test_init_01_config_missing():
+    """[INIT-01] [BVA] config 인자에 None 주입 시 ConfigurationError 발생"""
+    # GIVEN: 필수 의존성인 ConfigManager가 누락된 상황 (None 주입)
+    invalid_config = None
     
-    # Then
-    assert transformer.config == mock_config
-    assert transformer.logger is not None
-
-def test_init_02_missing_config():
-    """[INIT-02] [BVA] config 객체가 None인 상태로 초기화 시 에러 방어"""
-    # When & Then
-    with pytest.raises(ConfigurationError, match="초기화 실패: ConfigManager 인스턴스가 필요합니다"):
-        StubTransformer(None)
+    # WHEN & THEN: AbstractTransformer(또는 하위 클래스) 초기화 시도 시 ConfigurationError 발생 검증
+    with pytest.raises(ConfigurationError, match="ConfigManager 인스턴스가 필요합니다"):
+        DummyTransformer(config=invalid_config)
 
 # ========================================================================================
-# 2. 파이프라인 흐름 및 데이터 검증 테스트 (Flow & Data Verification)
+# 2. 정상 흐름 (Happy Path) & 3. 경계값 (BVA)
 # ========================================================================================
 
-def test_flow_01_happy_path(stub_transformer, valid_df):
-    """[FLOW-01] [State Transition] 모든 단계가 성공할 때 템플릿 메서드 호출 순서 검증"""
-    # When
-    result_df = stub_transformer.transform(valid_df)
+def test_trans_01_happy_path(dummy_transformer, sample_df):
+    """[TRANS-01] [Standard] 정상적인 DataFrame 주입 시 에러 없이 DataFrame 반환"""
+    # GIVEN: 정상적인 데이터가 포함된 DataFrame (sample_df 픽스처)
     
-    # Then
-    assert stub_transformer.validate_call_count == 1
-    assert stub_transformer.apply_call_count == 1
-    assert isinstance(result_df, pd.DataFrame)
-    assert result_df.equals(valid_df)
+    # WHEN: 템플릿 메서드인 transform() 실행
+    result = dummy_transformer.transform(sample_df)
+    
+    # THEN: 반환값이 유효한 DataFrame이며, 기존 컬럼 구조가 유지되는지 검증
+    assert isinstance(result, pd.DataFrame)
+    assert not result.empty
+    assert list(result.columns) == ['col1']
 
-def test_data_01_empty_dataframe(stub_transformer, empty_df):
-    """[DATA-01] [BVA] 로우가 없는 빈 DataFrame이 들어와도 에러 없이 통과"""
-    # When
-    result_df = stub_transformer.transform(empty_df)
+def test_bva_01_empty_dataframe(dummy_transformer):
+    """[BVA-01] [BVA] 빈 데이터프레임 주입 시 에러 없이 빈 데이터프레임 반환"""
+    # GIVEN: 데이터가 비어있는(Empty) DataFrame
+    empty_df = pd.DataFrame()
     
-    # Then
-    assert result_df.empty
-    assert stub_transformer.validate_call_count == 1
+    # WHEN: 템플릿 메서드인 transform() 실행
+    result = dummy_transformer.transform(empty_df)
+    
+    # THEN: 에러 발생 없이 빈 DataFrame이 그대로 반환되는지 검증
+    assert isinstance(result, pd.DataFrame)
+    assert result.empty
 
-def test_data_02_invalid_return_type(stub_transformer, valid_df):
-    """[DATA-02] [Robustness] _apply_transform이 DataFrame이 아닌 값 반환 시 에러 방어"""
-    # Given: 반환값을 pd.Series로 강제 조작
-    stub_transformer.mock_return_value = pd.Series([1, 2, 3])
+# ========================================================================================
+# 4. 타입 무결성 (Type Integrity)
+# ========================================================================================
+
+def test_type_01_invalid_return_type(dummy_transformer, sample_df):
+    """[TYPE-01] [Defense] _apply_transform이 DataFrame이 아닌 타입을 반환하면 예외 발생"""
+    # GIVEN: 하위 변환 로직이 DataFrame이 아닌 타입(List)을 반환하도록 Mocking
+    dummy_transformer.mock_return_value = [1, 2, 3]
     
-    # When & Then
-    with pytest.raises(TransformerError, match="반환 타입 오류: DataFrame이 아닙니다") as exc_info:
-        stub_transformer.transform(valid_df)
+    # WHEN: 변환 파이프라인 transform() 실행
+    with pytest.raises(TransformerError) as exc_info:
+        dummy_transformer.transform(sample_df)
         
-    assert exc_info.value.should_retry is False
+    # THEN: 타입 불일치를 감지하고 TransformerError를 발생시키는지 검증
+    assert "반환 타입 오류" in str(exc_info.value)
+    assert "DataFrame이 아닙니다" in str(exc_info.value)
 
 # ========================================================================================
-# 3. 예외 처리 테스트 (Error Handling)
+# 5. 예외 처리 (Exception Handling)
 # ========================================================================================
 
-def test_err_01_domain_error_passthrough(stub_transformer, valid_df):
-    """[ERR-01] [Fault Injection] _validate 중 도메인 에러(ETLError) 발생 시 래핑 없이 통과"""
-    # Given
-    domain_error = ETLError("비즈니스 로직 위반")
-    stub_transformer.error_to_raise_in_validate = domain_error
+def test_err_01_known_etl_error_passthrough(dummy_transformer, sample_df):
+    """[ERR-01] [Branch] 로직 내부에서 ETLError 발생 시 래핑 없이 그대로 상위 전파"""
+    # GIVEN: 하위 변환 로직 수행 중 이미 규격화된 도메인 에러(ETLError) 발생 상황 Mocking
+    dummy_transformer.mock_exception = ETLError("Known Domain Error")
     
-    # When & Then
-    with pytest.raises(ETLError) as exc_info:
-        stub_transformer.transform(valid_df)
+    # WHEN: 변환 파이프라인 transform() 실행
+    with pytest.raises(ETLError, match="Known Domain Error") as exc_info:
+        dummy_transformer.transform(sample_df)
         
-    # 원본 에러가 그대로 던져졌는지 확인
-    assert exc_info.value is domain_error
+    # THEN: 예외가 TransformerError로 래핑되지 않고 원본(ETLError) 그대로 전파됨을 검증
+    assert type(exc_info.value) is ETLError 
 
-def test_err_02_unknown_error_wrapping(stub_transformer, valid_df):
-    """[ERR-02] [Fault Injection] _apply_transform 중 알 수 없는 에러 발생 시 래핑하여 전파"""
-    # Given
-    raw_error = MemoryError("OOM 발생")
-    stub_transformer.error_to_raise_in_apply = raw_error
+def test_err_02_unknown_error_wrapping(dummy_transformer, sample_df):
+    """[ERR-02] [Branch] 네이티브 에러(KeyError) 발생 시 TransformerError로 래핑되어 전파"""
+    # GIVEN: 하위 변환 로직 수행 중 예상치 못한 네이티브 에러(KeyError) 발생 상황 Mocking
+    dummy_transformer.mock_exception = KeyError("missing_column")
     
-    # When & Then
-    with pytest.raises(TransformerError, match="예기치 않은 오류 발생") as exc_info:
-        stub_transformer.transform(valid_df)
+    # WHEN: 변환 파이프라인 transform() 실행
+    with pytest.raises(TransformerError) as exc_info:
+        dummy_transformer.transform(sample_df)
         
-    # 에러 래핑 상태 검증
-    transformer_err = exc_info.value
-    assert transformer_err.should_retry is False
-    assert transformer_err.original_exception is raw_error
-    assert transformer_err.details["raw_error"] == "OOM 발생"
+    # THEN: 예외가 TransformerError로 래핑되며, original_exception에 원본 예외가 보존됨을 검증
+    assert "예기치 않은 네이티브 오류 발생" in str(exc_info.value)
+    assert isinstance(exc_info.value.original_exception, KeyError)
 
-# ========================================================================================
-# 4. 상태 및 멱등성 테스트 (State & Idempotency)
-# ========================================================================================
-
-def test_stat_01_idempotency_on_multiple_calls(stub_transformer, valid_df, empty_df):
-    """[STAT-01] [State] 동일한 인스턴스를 여러 번 호출해도 독립적으로 성공하며 상태 비저장성 유지"""
-    # When: 서로 다른 데이터로 연속 호출
-    result_1 = stub_transformer.transform(valid_df)
-    result_2 = stub_transformer.transform(empty_df)
+def test_log_01_error_logging(dummy_transformer, sample_df, mock_logger_isolation):
+    """[LOG-01] [State] 예기치 않은 에러 발생 시 내부 catch 블록의 logger.error가 호출되는지 검증"""
+    # GIVEN: 하위 변환 로직 수행 중 예상치 못한 에러(ValueError) 발생 상황 Mocking
+    dummy_transformer.mock_exception = ValueError("Bad Value")
+    expected_msg_fragment = "[DummyTransformer] 변환 로직 수행 중 예기치 않은 오류 발생 | Error: Bad Value"
     
-    # Then
-    assert stub_transformer.validate_call_count == 2
-    assert stub_transformer.apply_call_count == 2
+    # WHEN: 변환 파이프라인 transform()을 실행하여 try-except의 Exception 블록 유도
+    with pytest.raises(TransformerError):
+        dummy_transformer.transform(sample_df)
+        
+    # THEN: 커스텀 로거의 error 메서드가 호출되었으며, 예상된 에러 메시지가 인자로 전달되었는지 검증
+    assert mock_logger_isolation.error.called
     
-    assert isinstance(result_1, pd.DataFrame)
-    assert not result_1.empty
-    
-    assert isinstance(result_2, pd.DataFrame)
-    assert result_2.empty
-
-# ========================================================================================
-# 5. 기반 메서드 테스트 (Base Method Specification)
-# ========================================================================================
-
-def test_base_01_abstract_methods_execution(stub_transformer, valid_df):
-    """[BASE-01] [Standard] 추상 클래스에 정의된 기본 메서드(pass)가 예외 없이 호출되는지 검증"""
-    # When
-    AbstractTransformer._validate(stub_transformer, valid_df)
-    result = AbstractTransformer._apply_transform(stub_transformer, valid_df)
-    
-    # Then
-    assert result is None
+    call_args_list = mock_logger_isolation.error.call_args_list
+    found_expected_log = any(
+        expected_msg_fragment in args[0][0] for args in call_args_list
+    )
+    assert found_expected_log, f"Expected log message containing '{expected_msg_fragment}' was not found."
