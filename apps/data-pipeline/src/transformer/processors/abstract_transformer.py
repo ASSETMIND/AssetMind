@@ -30,6 +30,8 @@ from src.common.exceptions import TransformerError, ConfigurationError, ETLError
 from src.common.log import LogManager
 from src.common.config import ConfigManager
 
+from src.common.decorators.log_decorator import log_decorator
+
 class AbstractTransformer(ITransformer):
     """모든 데이터 변환기의 기반이 되는 추상 클래스.
     
@@ -56,6 +58,7 @@ class AbstractTransformer(ITransformer):
         self.config = config
         self.logger = LogManager.get_logger(self.__class__.__name__)
 
+    @log_decorator()
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """데이터 변환 파이프라인의 뼈대(Template)를 실행합니다.
         
@@ -71,7 +74,6 @@ class AbstractTransformer(ITransformer):
             TransformerError: 데이터 검증 실패 또는 변환 중 발생한 모든 런타임 에러.
         """
         transformer_name = self.__class__.__name__
-        self.logger.info(f"[{transformer_name}] 데이터 변환 작업을 시작합니다. (Input shape: {data.shape})")
 
         try:
             # 1. 사전 검증: 입력 데이터의 스키마 및 무결성 사전 검증
@@ -87,12 +89,10 @@ class AbstractTransformer(ITransformer):
                     should_retry=False
                 )
             
-            self.logger.info(f"[{transformer_name}] 데이터 변환 작업을 완료했습니다. (Output shape: {transformed_data.shape})")
             return transformed_data
 
         except ETLError as e:
-            # 하위 클래스에서 발생시킨 비즈니스/도메인 에러는 로깅 후 그대로 통과(Pass-through)
-            self.logger.error(f"[{transformer_name}] 도메인 로직 실패 | Error: {e.message}")
+            # 이미 도메인 에러로 규격화되었으므로 그대로 전파
             raise e
             
         except Exception as e:
@@ -101,11 +101,11 @@ class AbstractTransformer(ITransformer):
             error_msg = f"[{transformer_name}] 변환 로직 수행 중 예기치 않은 오류 발생"
             self.logger.error(f"{error_msg} | Error: {e}", exc_info=True)
             raise TransformerError(
-                message=error_msg,
+                message=f"[{transformer_name}] 변환 로직 수행 중 예기치 않은 네이티브 오류 발생",
                 details={"transformer": transformer_name, "raw_error": str(e)},
                 original_exception=e,
                 should_retry=False
-            )
+            ) from e
 
     @abstractmethod
     def _validate(self, data: pd.DataFrame) -> None:
