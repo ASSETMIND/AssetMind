@@ -11,7 +11,11 @@ from src.common.exceptions import (
     NetworkConnectionError,
     HttpError,
     RateLimitError,
-    AuthError
+    AuthError,
+    MergeKeyNotFoundError,
+    MergeColumnCollisionError,
+    MergeCardinalityError,
+    MergeExecutionError
 )
 
 # ========================================================================================
@@ -205,3 +209,83 @@ def test_hier_01_auth_inheritance():
     
     # AuthError는 재시도하지 않음 (401/403은 영구적 오류로 취급)
     assert error.should_retry is False
+
+# ========================================================================================
+# 4. 변환 계층 예외 테스트 (Transformer Exceptions)
+# ========================================================================================
+
+def test_trf_01_merge_key_not_found():
+    """[TRF-01] [Property] MergeKeyNotFoundError 생성 시 missing_keys 보존 및 재시도 불가 강제 검증"""
+    # Given
+    missing = ["user_id", "product_id"]
+    target_name = "df_sales"
+    
+    # When
+    error = MergeKeyNotFoundError(
+        message="Join keys are missing.", 
+        missing_keys=missing, 
+        target_df_name=target_name
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["missing_keys"] == missing
+    assert result["details"]["target_df_name"] == target_name
+    assert result["should_retry"] is False
+
+def test_trf_02_merge_column_collision():
+    """[TRF-02] [Property] MergeColumnCollisionError 생성 시 colliding_columns 보존 및 재시도 불가 강제 검증"""
+    # Given
+    colliding = ["status", "created_at"]
+    
+    # When
+    error = MergeColumnCollisionError(
+        message="Column collision detected.", 
+        colliding_columns=colliding
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["colliding_columns"] == colliding
+    assert result["should_retry"] is False
+
+def test_trf_03_merge_cardinality():
+    """[TRF-03] [Property] MergeCardinalityError 생성 시 shape 튜플 보존 및 재시도 불가 강제 검증"""
+    # Given
+    left = (100, 5)
+    right = (200, 6)
+    relation = "1:1"
+    
+    # When
+    error = MergeCardinalityError(
+        message="Cardinality explosion detected.", 
+        expected_relation=relation, 
+        left_shape=left, 
+        right_shape=right
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["expected_relation"] == relation
+    assert result["details"]["left_shape"] == left
+    assert result["details"]["right_shape"] == right
+    assert result["should_retry"] is False
+
+def test_trf_04_merge_execution_chaining():
+    """[TRF-04] [Chaining] MergeExecutionError 생성 시 join_type 보존 및 원본 런타임 예외 체이닝 검증"""
+    # Given
+    original = MemoryError("Out of memory during pandas merge")
+    join_type = "left"
+    
+    # When
+    error = MergeExecutionError(
+        message="Pandas merge failed unexpectedly.", 
+        join_type=join_type, 
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["join_type"] == join_type
+    assert result["cause"] == "Out of memory during pandas merge"
+    assert result["should_retry"] is False

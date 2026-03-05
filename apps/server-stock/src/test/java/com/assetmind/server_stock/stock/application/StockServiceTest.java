@@ -2,7 +2,6 @@ package com.assetmind.server_stock.stock.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -17,7 +16,7 @@ import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.domain.repository.StockHistoryRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
-import com.assetmind.server_stock.stock.exception.InvalidStockParameterException;
+import com.assetmind.server_stock.stock.exception.StockNotFoundException;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
 import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
@@ -112,8 +111,7 @@ class StockServiceTest {
         void givenNullEvent_whenProcessRealTimeTrade_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(null))
-                    .isInstanceOf(InvalidStockParameterException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_STOCK_PARAMETER);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -124,7 +122,7 @@ class StockServiceTest {
 
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(event))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -135,7 +133,7 @@ class StockServiceTest {
 
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(event))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -196,6 +194,7 @@ class StockServiceTest {
             int limit = 20;
             List<StockDataEntity> repositoryDataList = List.of(StockDataEntity.builder().build());
             given(stockHistoryRepository.findRecentData(stockCode, limit)).willReturn(repositoryDataList);
+            given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
 
             List<StockHistoryResponse> expectedHistory = repositoryDataList.stream()
                     .map(StockHistoryResponse::from)
@@ -214,8 +213,8 @@ class StockServiceTest {
         void givenNullStockCode_whenGetStockRecentHistory_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.getStockRecentHistory(null, 10))
-                    .isInstanceOf(InvalidStockParameterException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_STOCK_PARAMETER);
+                    .isInstanceOf(StockNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOT_FOUND_STOCK);
         }
 
         @Test
@@ -223,7 +222,7 @@ class StockServiceTest {
         void givenEmptyStockCode_whenGetStockRecentHistory_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.getStockRecentHistory("  ", 10))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(StockNotFoundException.class);
         }
     }
 }

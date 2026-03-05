@@ -20,7 +20,7 @@ public record RealTimeStockTradeEvent(
         String changeSign,              // 대비 부호 (1:상한, 2:상승, 3:보합, 4:하한, 5:하락)
         Double changeRate,              // 등락률
 
-        // --- 가격 정보 ---
+        // --- 거래량 정보 ---
         Long executionVolume,           // 순간 체결량
         Long cumulativeAmount,          // 누적 거래대금
         Long cumulativeVolume,          // 누적 거래량

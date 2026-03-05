@@ -79,7 +79,6 @@ storybook-static/
 *.sw?
 .vscode/
 
-<<<<<<< HEAD
 # ===== 추가 설정 (Merged) =====
 
 # Storybook & Frontend

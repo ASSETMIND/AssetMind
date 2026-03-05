@@ -37,7 +37,7 @@ public class StockTradeEventListener {
         } catch (Exception e) {
             // @Async가 적용된 비동기 메서드 이므로 메인 스레드로 예외가 전파되지 않음
             // 문제 파악을 위한 로그를 남김
-            log.error("[Stock Trade Event] 처리 중 에러 발생 : {}", e.getMessage());
+            log.error("[Stock Trade Event] 처리 중 에러 발생 : {}", e.getMessage(), e);
         }
     }
 
