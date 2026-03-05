@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { UseWebSocketReturn } from '../../types/web-socket';
+import { Client, type IMessage } from '@stomp/stompjs';
 import { useWebSocketStore } from '../../store/web-socket';
 
 /*
- * 웹소켓 연결 관리를 위한 커스텀 훅
+ * STOMP 기반 웹소켓 연결 관리를 위한 커스텀 훅
  *
  * [반환 속성]
  * - isConnected: 웹소켓 연결 상태 (boolean)
  * - lastMessage: 최근 수신된 메시지 이벤트 객체
  * - error: 발생한 에러 이벤트 객체
- * - sendMessage: 서버로 메시지 전송 함수
+ * - sendMessage: STOMP 메시지 발행 (publish) 함수
+ * - subscribe: 특정 채널 구독 함수
  * - connect: 수동 연결 함수
  * - disconnect: 수동 연결 해제 함수
  */
 
 export const useWebSocket = (
 	url: string,
-	reconnectInterval = 3000,
-): UseWebSocketReturn => {
+	reconnectInterval = 5000,
+	onConnect?: () => void,
+) => {
 	const {
 		isConnected,
 		lastMessage,
@@ -27,71 +29,45 @@ export const useWebSocket = (
 		setError,
 	} = useWebSocketStore();
 
-	const ws = useRef<WebSocket | null>(null);
-	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-		null,
-	);
-	const shouldReconnect = useRef(true);
+	const client = useRef<Client | null>(null);
 	const connectRef = useRef<() => void>(() => {});
 
+	// onConnect 콜백을 ref로 관리하여 의존성 배열 문제 해결
+	const onConnectRef = useRef(onConnect);
+	useEffect(() => {
+		onConnectRef.current = onConnect;
+	}, [onConnect]);
+
 	const connect = useCallback(() => {
-		// 연결 검증
-		// - 현재 상태가 OPEN 또는 CONNECTING인 경우 실행 중단
-		// - 중복 연결 방지
-		if (
-			ws.current?.readyState === WebSocket.OPEN ||
-			ws.current?.readyState === WebSocket.CONNECTING
-		) {
-			return;
-		}
+		// 이미 활성화된 클라이언트가 있으면 중단
+		if (client.current?.active) return;
 
-		// 재연결 타이머 초기화
-		if (reconnectTimeoutRef.current) {
-			clearTimeout(reconnectTimeoutRef.current);
-			reconnectTimeoutRef.current = null;
-		}
+		const stompClient = new Client({
+			brokerURL: url,
+			reconnectDelay: reconnectInterval, // 자동 재연결 간격 설정
+			onConnect: () => {
+				setIsConnected(true);
+				setError(null);
+				console.log('STOMP Connected');
+				onConnectRef.current?.();
+			},
+			onStompError: (frame) => {
+				// IFrame은 Event 타입이 아니므로 CustomEvent로 래핑하여 전달
+				const errorEvent = new CustomEvent('stomp-error', { detail: frame });
+				setError(errorEvent);
+				console.error('STOMP Error:', frame);
+			},
+			onWebSocketClose: () => {
+				setIsConnected(false);
+				console.log('STOMP Disconnected');
+			},
+			// 디버그 로그가 필요하면 아래 주석 해제
+			// debug: (str) => console.log(str),
+		});
 
-		shouldReconnect.current = true;
-		const socket = new WebSocket(url);
-
-		// 이벤트 핸들러 등록: 연결 성공
-		// - 연결 상태 활성화 및 에러 초기화
-		socket.onopen = () => {
-			setIsConnected(true);
-			setError(null);
-			console.log('WebSocket Connected');
-		};
-
-		// 이벤트 핸들러 등록: 메시지 수신
-		// - 최신 메시지 상태 업데이트
-		socket.onmessage = (event) => {
-			setLastMessage(event);
-		};
-
-		// 이벤트 핸들러 등록: 에러 발생
-		// - 에러 상태 업데이트
-		socket.onerror = (event) => {
-			setError(event);
-			console.error('WebSocket Error:', event);
-		};
-
-		// 이벤트 핸들러 등록: 연결 종료
-		// - 연결 상태 비활성화
-		socket.onclose = () => {
-			setIsConnected(false);
-			console.log('WebSocket Disconnected');
-
-			// 자동 재연결 로직
-			if (shouldReconnect.current) {
-				console.log(`Reconnecting in ${reconnectInterval}ms...`);
-				reconnectTimeoutRef.current = setTimeout(() => {
-					connectRef.current();
-				}, reconnectInterval);
-			}
-		};
-
-		ws.current = socket;
-	}, [url, reconnectInterval, setIsConnected, setLastMessage, setError]);
+		stompClient.activate();
+		client.current = stompClient;
+	}, [url, reconnectInterval, setIsConnected, setError]);
 
 	// connect 함수가 변경될 때마다 ref 업데이트 (재귀 호출 지원)
 	useEffect(() => {
@@ -99,29 +75,48 @@ export const useWebSocket = (
 	}, [connect]);
 
 	const disconnect = useCallback(() => {
-		shouldReconnect.current = false;
-		if (reconnectTimeoutRef.current) {
-			clearTimeout(reconnectTimeoutRef.current);
-			reconnectTimeoutRef.current = null;
+		if (client.current) {
+			client.current.deactivate();
+			client.current = null;
 		}
-		// 연결 종료 처리
-		// - 웹소켓 객체가 존재할 경우 close 호출 및 참조 초기화
-		if (ws.current) {
-			ws.current.close();
-			ws.current = null;
+		setIsConnected(false);
+	}, [setIsConnected]);
+
+	// STOMP 메시지 발행 (Publish)
+	const sendMessage = useCallback((destination: string, body: any = {}) => {
+		if (client.current && client.current.connected) {
+			client.current.publish({
+				destination,
+				body: typeof body === 'string' ? body : JSON.stringify(body),
+			});
+		} else {
+			console.warn('STOMP client is not connected');
 		}
 	}, []);
 
-	const sendMessage = useCallback((message: string | ArrayBuffer | Blob) => {
-		// 메시지 전송 처리
-		// - 정상 연결(OPEN) 상태에서만 메시지 전송
-		// - 미연결 상태일 경우 경고 로그 출력
-		if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-			ws.current.send(message);
-		} else {
-			console.warn('WebSocket is not connected');
-		}
-	}, []);
+	// STOMP 구독 (Subscribe)
+	const subscribe = useCallback(
+		(destination: string, callback?: (msg: any) => void) => {
+			if (!client.current || !client.current.connected) return;
+
+			return client.current.subscribe(destination, (message: IMessage) => {
+				// 기존 store와의 호환성을 위해 data 프로퍼티가 있는 객체로 변환하여 저장
+				const eventLike = new MessageEvent('message', {
+					data: message.body,
+				});
+				setLastMessage(eventLike);
+
+				if (callback) {
+					try {
+						callback(JSON.parse(message.body));
+					} catch (e) {
+						console.error('Failed to parse message body', e);
+					}
+				}
+			});
+		},
+		[setLastMessage],
+	);
 
 	// 생명주기 관리
 	// - 마운트 시: 자동 연결 (connect)
@@ -138,6 +133,7 @@ export const useWebSocket = (
 		lastMessage,
 		error,
 		sendMessage,
+		subscribe,
 		connect,
 		disconnect,
 	};

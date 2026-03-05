@@ -13,7 +13,7 @@ LogManager(log.py)와 결합하여 ELK/Datadog 등의 시스템에서 즉시 쿼
 Exception 발생 -> to_dict() 호출 -> LogManager가 JSON 직렬화 및 시간(KST/UTC) 태깅 -> 로그 저장
 """
 
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 # ==============================================================================
 # 1. Global Base Exception
@@ -151,7 +151,79 @@ class AuthError(HttpError):
 # 5. Transformer Layer Detailed Exceptions
 # ==============================================================================
 
+class MergeKeyNotFoundError(TransformerError):
+    """병합 기준 키(Join Keys)가 대상 데이터프레임에 존재하지 않을 때 발생하는 예외.
+    
+    DataMerger 실행 전 DataFrame 검증 단계에서 누락된 키를 
+    조기에 발견하여, 잘못된 조인으로 인한 데이터 유실이나 메모리 낭비를 방지합니다.
+    """
 
+    def __init__(self, message: str, missing_keys: List[str], target_df_name: str) -> None:
+        # missing_keys를 Set이 아닌 List로 받는 이유: 
+        # Python의 Set 구조는 기본적으로 JSON 직렬화(Serialization)를 지원하지 않으므로,
+        # LogManager(ELK/Datadog 연동)에서 에러 없이 바로 파싱할 수 있도록 List 타입을 강제합니다.
+        details = {
+            "missing_keys": missing_keys,
+            "target_df_name": target_df_name
+        }
+        
+        # 데이터 누락은 재시도(Retry)한다고 해결되는 일시적 네트워크 에러가 아니므로
+        # should_retry=False로 설정하여 무한 루프나 불필요한 리소스 낭비를 원천 차단합니다.
+        super().__init__(message, details=details, should_retry=False)
+
+
+class MergeColumnCollisionError(TransformerError):
+    """조인 키가 아닌 동일한 이름의 컬럼이 두 데이터프레임에 존재할 때 발생하는 예외.
+    
+    Pandas가 자동으로 `_x`, `_y` 등의 접미사(Suffix)를 붙여 원본 스키마를 
+    은밀하게 변형하는 것을 방지하기 위한 방어적 예외입니다.
+    """
+
+    def __init__(self, message: str, colliding_columns: List[str]) -> None:
+        details = {
+            "colliding_columns": colliding_columns
+        }
+        
+        super().__init__(message, details=details, should_retry=False)
+
+
+class MergeCardinalityError(TransformerError):
+    """병합 과정에서 데이터(Row)가 폭발적으로 증가하거나 복제될 때 발생하는 예외.
+    
+    1:1 또는 N:1 병합을 의도했으나, 조인 키의 중복으로 인해 M:N 조인이 발생하여 
+    원본 데이터가 왜곡되는(Row 수가 늘어나는) 현상을 차단합니다.
+    """
+
+    def __init__(self, message: str, expected_relation: str, left_shape: Tuple[int, int], right_shape: Tuple[int, int]) -> None:
+        # shape 정보를 기록할 때 단순히 row count만 남기지 않고 Tuple 형태(행, 열)를 통째로 보존함으로써, 
+        # 컬럼 수가 함께 변형되었는지 여부를 디버깅 단계에서 추적할 수 있게 합니다.
+        details = {
+            "expected_relation": expected_relation,
+            "left_shape": left_shape,
+            "right_shape": right_shape
+        }
+        
+        super().__init__(message, details=details, should_retry=False)
+
+
+class MergeExecutionError(TransformerError):
+    """데이터프레임 병합 연산 중 발생하는 예측 불가한 런타임 예외.
+    
+    컬럼 타입 불일치(dtype mismatch), 메모리 초과(MemoryError) 등 
+    pandas의 merge() 호출 과정에서 발생하는 에러를 포착하고 원본 예외를 보존합니다.
+    """
+
+    def __init__(self, message: str, join_type: str, original_exception: Optional[Exception] = None) -> None:
+        details = {
+            "join_type": join_type
+        }
+        
+        super().__init__(
+            message, 
+            details=details, 
+            original_exception=original_exception, 
+            should_retry=False
+        )
 
 # ==============================================================================
 # 6. Loader Layer Detailed Exceptions

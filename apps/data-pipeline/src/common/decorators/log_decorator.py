@@ -25,20 +25,10 @@ import functools
 import inspect
 import time
 import json
+
 from typing import Any, Callable, Dict, Optional, Set, Tuple, Union
 
-# [Dependency]
-# 프로젝트 루트에서 실행된다고 가정하고 절대 경로를 사용합니다.
-# ImportError 발생 시, PYTHONPATH 설정을 확인해야 합니다.
-try:
-    from src.common.log import LogManager, request_id_ctx
-except ImportError:
-    # 단위 테스트 등에서 상대 경로로 접근해야 할 경우를 위한 예외 처리
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).parents[3]))  # src 상위로 경로 추가
-    from src.common.log import LogManager, request_id_ctx
-
+from src.common.log import LogManager, request_id_ctx
 from src.common.exceptions import ETLError
 
 # ==============================================================================
@@ -59,6 +49,33 @@ DEFAULT_TRUNCATE_LIMIT: int = 2000
 # ==============================================================================
 # [Helper Functions] Data Sanitization
 # ==============================================================================
+def _is_dataframe(obj: Any) -> bool:
+    """객체가 Pandas DataFrame인지 무거운 임포트 없이 확인합니다 (Duck Typing)."""
+    return obj.__class__.__name__ == "DataFrame" and hasattr(obj, "shape")
+
+def _serialize_value(value: Any, string_limit: int = 100, container_preview_limit: int = 50) -> str:
+    """객체의 타입에 따라 최적화된 로깅용 문자열을 생성합니다."""
+    # 1. Pandas DataFrame 처리 (최우선)
+    if _is_dataframe(value):
+        return f"[DataFrame shape={value.shape}]"
+    
+    # 2. 컨테이너 타입 (List, Dict, Set, Tuple) 처리
+    if isinstance(value, (list, dict, set, tuple)):
+        count = len(value)
+        s_value = str(value)
+        prefix = f"[{type(value).__name__} len={count}] : "
+        
+        if len(s_value) > container_preview_limit:
+            return prefix + s_value[:container_preview_limit] + "..."
+        return prefix + s_value
+
+    # 3. 일반 스칼라 타입 (String, Int, Float 등) 처리
+    s_value = str(value)
+    if len(s_value) > string_limit:
+        return s_value[:string_limit] + f"... (truncated, total={len(s_value)})"
+    
+    return s_value
+
 def _sanitize_args(args: Tuple, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """함수 인자에서 민감 정보를 마스킹하여 반환합니다.
 
@@ -75,14 +92,14 @@ def _sanitize_args(args: Tuple, kwargs: Dict[str, Any]) -> Dict[str, Any]:
     
     # 위치 인자는 'arg_N' 형식으로 키 생성
     for i, arg in enumerate(args):
-        sanitized[f"arg_{i}"] = str(arg)
+        sanitized[f"arg_{i}"] = _serialize_value(arg)
 
     # 키워드 인자는 키 이름을 검사하여 마스킹 적용
     for key, value in kwargs.items():
         if key.lower() in SENSITIVE_KEYS:
             sanitized[key] = "***** (MASKED)"
         else:
-            sanitized[key] = str(value)
+            sanitized[key] = _serialize_value(value)
             
     return sanitized
 
@@ -97,6 +114,9 @@ def _truncate_output(value: Any, limit: int) -> str:
     Returns:
         str: 잘린 문자열.
     """
+    if _is_dataframe(value):
+        return f"[DataFrame shape={value.shape}]"
+
     s_value = str(value)
     if len(s_value) > limit:
         return s_value[:limit] + f"... (truncated, total_len={len(s_value)})"
@@ -143,7 +163,6 @@ class LoggingDecorator:
             Callable: 래핑된 함수.
         """
         # 대상 함수의 모듈 경로를 파악하여 기본 로거 이름으로 활용
-        # 예: src.extractor.service
         if not self.logger_name:
             self.logger_name = func.__module__
 
@@ -151,7 +170,7 @@ class LoggingDecorator:
         if inspect.iscoroutinefunction(func):
             return self._create_async_wrapper(func)
         
-        # 동기 함수(Sync) -> Sync Wrapper 사용
+        # 동기 함수(Sync) 감지 -> Sync Wrapper 사용
         return self._create_sync_wrapper(func)
 
     def _ensure_context(self) -> None:
@@ -170,8 +189,7 @@ class LoggingDecorator:
         """함수 진입(Start) 로그를 기록합니다."""
         try:
             sanitized_input = _sanitize_args(args, kwargs)
-            # ensure_ascii=False: 한글 깨짐 방지
-            params_str = json.dumps(sanitized_input, ensure_ascii=False)
+            params_str = json.dumps(sanitized_input, ensure_ascii=False) # ensure_ascii=False: 한글 깨짐 방지
             logger.info(f"[{func_name}] START | Params: {params_str}")
         except Exception:
             # 로깅 과정의 에러가 비즈니스 로직을 방해해서는 안 됨
@@ -188,7 +206,7 @@ class LoggingDecorator:
     def _log_error(self, logger, func_name, error, elapsed_time):
         """에러 발생(Failure) 로그를 기록합니다 (Structured Logging 적용)."""
         if isinstance(error, ETLError):
-            # [Rationale] ETLError 계열은 to_dict()를 통해 ELK/Datadog 최적화 데이터를 제공함
+            # ETLError 계열은 to_dict()를 통해 ELK/Datadog 최적화 데이터를 제공함
             error_info = error.to_dict()
             error_msg = (
                 f"[{func_name}] FAILED | Time: {elapsed_time:.4f}s | "
