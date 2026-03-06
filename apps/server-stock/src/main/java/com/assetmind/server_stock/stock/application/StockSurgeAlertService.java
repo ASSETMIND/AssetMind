@@ -1,6 +1,7 @@
 package com.assetmind.server_stock.stock.application;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
+import com.assetmind.server_stock.stock.application.port.AlertMessagingPort;
 import com.assetmind.server_stock.stock.application.port.AlertThrottlingPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,8 @@ public class StockSurgeAlertService {
 
     private final AlertThrottlingPort alertThrottlingPort;
 
+    private final AlertMessagingPort alertMessagingPort;
+
     /**
      * 수신된 실시간 체결 데이터를 기반으로 급등락 알림 로직을 처리
      * @param event - KIS 웹소켓 핸들러를 통해 수신한 파싱된 실시간 주식 체결 데이터 DTO
@@ -35,6 +38,7 @@ public class StockSurgeAlertService {
         // 알림 발송 조건(등락률 10% 이상)을 만족했더라도, ThrottlingPort를 호출하여 알림을 보내고 30분이 지났는지 확인(중복방지)
         if (alertThrottlingPort.allowAlert(event.stockCode())) {
             String rate = event.changeRate() > 0 ? "급등" : "급락";
+            alertMessagingPort.send(event, rate);
             log.info("[StockSurgeAlertService] {} 종목 {}! 현재가: {}원", event.stockCode(), rate, event.currentPrice());
         }
     }
