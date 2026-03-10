@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
+import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisSubscriptionRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
@@ -148,7 +149,19 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         log.warn("[KIS WS] 연결 종료됨. Code: {}, Reason: {}", status.getCode(), status.getReason());
         this.currentSession = null;
-        this.subscribedStock.clear(); // 연결 끊기면 구독 정보도 초기화
+
+        // 기존 구독 정보 살리기
+        if (!this.subscribedStock.isEmpty()) {
+            log.info("[KIS WS] 기존 구독 종목 {}개를 재연결 대기열로 이동.", this.subscribedStock.size());
+            this.pendingSubscriptionList.addAll(this.subscribedStock);
+            this.subscribedStock.clear();
+        }
+
+        // 의도적으로 끊은게 아닐 때 Adapter 에게 재연결 요청 이벤트 발행
+        if (status.getCode() != CloseStatus.NORMAL.getCode() || status.getCode() == 1000) {
+            log.info("[KIS WS] 재연결 이벤트 발행");
+            eventPublisher.publishEvent(new KisWebSocketDisconnectedEvent(this.approveKey));
+        }
     }
 
     private void sendSubscriptionRequest(String stockCode) {
