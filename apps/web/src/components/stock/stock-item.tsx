@@ -2,9 +2,9 @@ import { useStockItemLogic } from '../../hooks/stock/use-stock-item-logic';
 import RatioBar from './ratio-bar';
 
 export interface StockItemData {
-	id: string;
+	stockCode: string;
 	rank: number;
-	name: string;
+	stockName: string;
 	price: string;
 	changeRate: number;
 	tradeVolume: string;
@@ -17,9 +17,10 @@ interface Props {
 }
 
 export default function StockItem({ data }: Props) {
-	const { formattedChangeRate, badgeClass } = useStockItemLogic(
-		data.changeRate,
-	);
+	const { name, formattedChangeRate, badgeClass } = useStockItemLogic({
+		stockName: data.stockName,
+		changeRate: data.changeRate,
+	});
 
 	return (
 		<div className='grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr] gap-4 items-center py-2 text-sm hover:bg-neutral-800 hover:rounded-md transition-colors '>
@@ -32,7 +33,7 @@ export default function StockItem({ data }: Props) {
 				<div className='w-8 h-8 rounded-full bg-blue-300 flex items-center justify-center text-[10px] font-bold'>
 					로고
 				</div>
-				<span className='font-semibold'>{data.name}</span>
+				<span className='font-semibold'>{name}</span>
 			</div>
 
 			{/* 현재가 */}

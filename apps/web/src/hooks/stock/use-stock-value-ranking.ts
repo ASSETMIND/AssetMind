@@ -10,6 +10,11 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 
 	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
 
+	// 랭킹 타입이 변경되면 기존 데이터 초기화
+	useEffect(() => {
+		setRankingData([]);
+	}, [type]);
+
 	// 연결(및 재연결) 시 STOMP 구독 및 초기 데이터 요청
 	useEffect(() => {
 		if (!isConnected) return;
@@ -19,8 +24,7 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 
 		// 1. 토픽 구독 (데이터 수신)
 		const subscription = subscribe(topic, (data: any) => {
-			// 명세서상 데이터는 String 타입의 필드들을 가짐
-			// 배열 형태로 온다고 가정하고 처리 (단일 객체일 경우 배열로 변환)
+			console.log('웹소켓 수신 데이터:', data);
 			const rawList = Array.isArray(data) ? data : [data];
 
 			try {
@@ -36,14 +40,24 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 					}),
 				);
 
-				// 클라이언트 측 정렬 및 제한
-				if (type === 'VALUE') {
-					parsedList.sort((a, b) => b.cumulativeAmount - a.cumulativeAmount);
-				} else {
-					parsedList.sort((a, b) => b.cumulativeVolume - a.cumulativeVolume);
-				}
+				setRankingData((prev) => {
+					// 기존 데이터와 새로운 데이터를 병합 (stockCode 기준)
+					const stockMap = new Map(prev.map((item) => [item.stockCode, item]));
+					parsedList.forEach((item) => {
+						stockMap.set(item.stockCode, item);
+					});
 
-				setRankingData(parsedList.slice(0, limit));
+					const mergedList = Array.from(stockMap.values());
+
+					// 정렬 및 제한
+					if (type === 'VALUE') {
+						mergedList.sort((a, b) => b.cumulativeAmount - a.cumulativeAmount);
+					} else {
+						mergedList.sort((a, b) => b.cumulativeVolume - a.cumulativeVolume);
+					}
+
+					return mergedList.slice(0, limit);
+				});
 			} catch (error) {
 				console.error('Failed to parse stock ranking data:', error);
 			}
