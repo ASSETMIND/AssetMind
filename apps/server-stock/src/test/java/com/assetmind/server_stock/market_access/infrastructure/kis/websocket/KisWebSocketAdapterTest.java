@@ -117,4 +117,18 @@ class KisWebSocketAdapterTest {
         verify(mockFuture).cancel(true); // 태스크 취소 확인
         verify(handler).closeConnection(); // 핸들러 종료 확인
     }
+
+    @Test
+    @DisplayName("성공: 웹소켓 끊김 이벤트를 수신하면 3초 뒤 재연결 스케줄러를 등록해야 한다")
+    void givenDisconnectEvent_whenOnEvent_thenScheduleReconnect() {
+        // Given: Handler가 발행했다고 가정할 가짜 이벤트 객체 생성
+        com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent event =
+                new com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent(TEST_KEY);
+
+        // When: Adapter의 이벤트 리스너 메서드가 호출됨 (Spring Event가 동작한 상황을 시뮬레이션)
+        adapter.onKisWebSocketDisconnected(event);
+
+        // Then: TaskScheduler의 schedule() 메서드가 1번 호출되어 재연결이 예약되었는지 검증
+        verify(taskScheduler, times(1)).schedule(any(Runnable.class), any(java.time.Instant.class));
+    }
 }
