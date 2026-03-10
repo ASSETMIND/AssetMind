@@ -6,6 +6,7 @@ import lombok.Builder;
 @Builder
 public record StockSurgeAlertResponse(
         String stockCode,           // 종목 코드
+        String stockName,           // 종목 이름
         String rate,                // "급등" 또는 "급락"
         Long currentPrice,          // 현재가
         Double changeRate,          // 등락률

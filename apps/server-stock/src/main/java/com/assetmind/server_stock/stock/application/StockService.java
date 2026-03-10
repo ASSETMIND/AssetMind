@@ -39,11 +39,11 @@ public class StockService {
     @Transactional // 쓰기 작업
     public void processRealTimeTrade(RealTimeStockTradeEvent event) {
 
-        log.info("[StockService] 체결 데이터 수신: {}", event.stockCode());
-
         if (event == null || event.stockCode() == null || event.stockCode().isBlank()) {
             throw new IllegalArgumentException("실시간 체결 데이터 이벤트에 필수 값이 누락되었습니다. (event: " + event + ")");
         }
+
+        log.info("[StockService] 체결 데이터 수신: {}", event.stockCode());
 
         // 캐싱된 국내 전체 주식에서 실시간 주식 데이터의 주식 이름 추출
         String stockName = stockMetadataProvider.getStockName(event.stockCode());

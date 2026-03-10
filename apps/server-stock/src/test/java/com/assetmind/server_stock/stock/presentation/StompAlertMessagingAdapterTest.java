@@ -5,11 +5,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
+import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.presentation.dto.StockSurgeAlertResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.BDDMockito;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +22,9 @@ class StompAlertMessagingAdapterTest {
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private StockMetadataProvider provider;
 
     @InjectMocks
     private StompAlertMessagingAdapter adapter;
@@ -35,6 +40,8 @@ class StompAlertMessagingAdapterTest {
                 .build();
         String trend = "급등";
 
+        BDDMockito.given(provider.getStockName(event.stockCode())).willReturn("삼성전자");
+
         // when
         adapter.send(event, trend);
 
@@ -45,6 +52,7 @@ class StompAlertMessagingAdapterTest {
 
         StockSurgeAlertResponse sentResponse = captor.getValue();
         assertEquals("005930", sentResponse.stockCode());
+        assertEquals("삼성전자", sentResponse.stockName());
         assertEquals("급등", sentResponse.rate());
         assertEquals(80000L, sentResponse.currentPrice());
         assertEquals(10.5, sentResponse.changeRate());
