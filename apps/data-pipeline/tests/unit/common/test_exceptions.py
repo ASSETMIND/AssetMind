@@ -6,6 +6,8 @@ from src.common.exceptions import (
     ETLError,
     ConfigurationError,
     ExtractorError,
+    LoaderValidationError,
+    S3UploadError,
     TransformerError,
     LoaderError,
     NetworkConnectionError,
@@ -15,7 +17,8 @@ from src.common.exceptions import (
     MergeKeyNotFoundError,
     MergeColumnCollisionError,
     MergeCardinalityError,
-    MergeExecutionError
+    MergeExecutionError,
+    ZstdCompressionError
 )
 
 # ========================================================================================
@@ -289,3 +292,76 @@ def test_trf_04_merge_execution_chaining():
     assert result["details"]["join_type"] == join_type
     assert result["cause"] == "Out of memory during pandas merge"
     assert result["should_retry"] is False
+
+# ========================================================================================
+# 5. 적재 계층 예외 테스트 (Loader Exceptions)
+# ========================================================================================
+
+def test_ldr_01_validation_error():
+    """[LDR-01] [Property] LoaderValidationError 생성 시 invalid_fields 및 dto_name 보존, 재시도 불가 검증"""
+    # Given
+    invalid_fields = ["user_id", "transaction_amount"]
+    dto_name = "FinanceDTO"
+    
+    # When
+    error = LoaderValidationError(
+        message="Required fields are missing.",
+        invalid_fields=invalid_fields,
+        dto_name=dto_name
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["invalid_fields"] == invalid_fields
+    assert result["details"]["dto_name"] == dto_name
+    assert result["should_retry"] is False
+
+
+def test_ldr_02_compression_error():
+    """[LDR-02] [Chaining] ZstdCompressionError 생성 시 data_size 보존, 원본 예외 체이닝 및 재시도 불가 검증"""
+    # Given
+    data_size = 1024 * 1024  # 1MB
+    original = MemoryError("Out of memory during zstd compression")
+    
+    # When
+    error = ZstdCompressionError(
+        message="Compression failed.",
+        data_size_bytes=data_size,
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["data_size_bytes"] == data_size
+    assert result["cause"] == "Out of memory during zstd compression"
+    assert error.original_exception is original
+    assert result["should_retry"] is False
+
+
+def test_ldr_03_s3_upload_error():
+    """[LDR-03] [Property] S3UploadError 생성 시 업로드 메타데이터 보존, 원본 예외 체이닝 및 재시도 강제 검증"""
+    # Given
+    bucket = "test-data-bucket"
+    key = "etl/2026/data.csv.zst"
+    upload_id = "abc123_multipart_id"
+    original = ConnectionError("Read timeout on endpoint URL")
+    
+    # When
+    error = S3UploadError(
+        message="S3 multipart upload failed.",
+        bucket_name=bucket,
+        s3_key=key,
+        upload_id=upload_id,
+        is_multipart=True,
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["bucket_name"] == bucket
+    assert result["details"]["s3_key"] == key
+    assert result["details"]["upload_id"] == upload_id
+    assert result["details"]["is_multipart"] is True
+    assert result["cause"] == "Read timeout on endpoint URL"
+    assert error.original_exception is original
+    assert result["should_retry"] is True
