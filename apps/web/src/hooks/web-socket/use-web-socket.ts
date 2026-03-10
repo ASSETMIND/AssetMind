@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Client, type IMessage } from '@stomp/stompjs';
 import { useWebSocketStore } from '../../store/web-socket';
+import SockJS from 'sockjs-client';
 
 /*
  * STOMP 기반 웹소켓 연결 관리를 위한 커스텀 훅
@@ -43,7 +44,7 @@ export const useWebSocket = (
 		if (client.current?.active) return;
 
 		const stompClient = new Client({
-			brokerURL: url,
+			webSocketFactory: () => new SockJS(url),
 			reconnectDelay: reconnectInterval, // 자동 재연결 간격 설정
 			onConnect: () => {
 				setIsConnected(true);
@@ -62,7 +63,7 @@ export const useWebSocket = (
 				console.log('STOMP Disconnected');
 			},
 			// 디버그 로그가 필요하면 아래 주석 해제
-			// debug: (str) => console.log(str),
+			debug: (str) => console.log(str),
 		});
 
 		stompClient.activate();

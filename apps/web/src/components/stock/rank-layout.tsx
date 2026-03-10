@@ -23,7 +23,7 @@ export default function RankLayout() {
 				<TableHeader sortType={sortType} />
 				<div className='flex flex-col'>
 					{stockList.map((item) => (
-						<StockItem key={item.id} data={item} />
+						<StockItem key={item.stockCode} data={item} />
 					))}
 				</div>
 			</div>

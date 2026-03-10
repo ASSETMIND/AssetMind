@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 import { useWebSocketStore } from '../../store/web-socket';
 import { Client } from '@stomp/stompjs';
-import type { StockRankingDto } from '../../types/stock';
+import type { StockRankingResponse } from '../../types/stock';
 
 /**
  * [Mocking & Setup]
@@ -48,22 +48,24 @@ describe('주식 실시간 랭킹 통합 테스트 (Integration)', () => {
 		 * - 서버에서 내려줄 Mock 데이터(삼성전자, 현대차) 준비
 		 */
 		const { result } = renderHook(() => useStockRankLogic('VALUE', 10));
-		const mockServerData: StockRankingDto[] = [
+		const mockServerData: StockRankingResponse[] = [
 			{
 				stockCode: '005930',
 				stockName: '삼성전자',
-				currentPrice: 217500,
-				changeRate: -0.22,
-				cumulativeAmount: 73200000000,
-				cumulativeVolume: 15200000,
+				currentPrice: '217500',
+				priceChange: '-500',
+				changeRate: '-0.22',
+				cumulativeAmount: '73200000000',
+				cumulativeVolume: '15200000',
 			},
 			{
 				stockCode: '005380',
 				stockName: '현대차',
-				currentPrice: 673000,
-				changeRate: 10.5,
-				cumulativeAmount: 39300000000,
-				cumulativeVolume: 420000,
+				currentPrice: '673000',
+				priceChange: '64000',
+				changeRate: '10.5',
+				cumulativeAmount: '39300000000',
+				cumulativeVolume: '420000',
 			},
 		];
 
@@ -81,10 +83,7 @@ describe('주식 실시간 랭킹 통합 테스트 (Integration)', () => {
 			mockClientInstance.subscribe.mock.calls[0][1];
 		act(() => {
 			stompSubscribeCallback({
-				body: JSON.stringify({
-					type: 'RANKING_VALUE_UPDATE',
-					data: mockServerData,
-				}),
+				body: JSON.stringify(mockServerData),
 			});
 		});
 
@@ -98,7 +97,7 @@ describe('주식 실시간 랭킹 통합 테스트 (Integration)', () => {
 		expect(isConnected).toBe(true);
 		expect(stockList[0]).toEqual(
 			expect.objectContaining({
-				name: '삼성전자',
+				stockName: '삼성전자',
 				price: '217,500', // 콤마 포맷팅 검증
 				tradeVolume: '732억원', // 단위 변환 검증
 				buyRatio: 49, // 비즈니스 로직(비율 계산) 검증

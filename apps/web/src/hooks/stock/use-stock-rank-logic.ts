@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStockRanking, type RankingType } from './use-stock-value-ranking';
 import type { StockItemData } from '../../components/stock/stock-item';
 
-export const useStockRankLogic = (type: RankingType, limit = 20) => {
+export const useStockRankLogic = (type: RankingType, limit = 10) => {
 	const { rankingData, isConnected } = useStockRanking(type, limit);
 
 	const stockList: StockItemData[] = useMemo(() => {
@@ -24,9 +24,9 @@ export const useStockRankLogic = (type: RankingType, limit = 20) => {
 			const sellRatio = 100 - buyRatio;
 
 			return {
-				id: stock.stockCode,
+				stockCode: stock.stockCode,
 				rank: index + 1,
-				name: stock.stockName,
+				stockName: stock.stockName,
 				price: stock.currentPrice.toLocaleString(),
 				changeRate: stock.changeRate,
 				tradeVolume: tradeVolumeStr,

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useWebSocket } from '../web-socket/use-web-socket';
-import { StockRankingResponseSchema } from '../../libs/schema/stock';
-import type { StockRankingDto } from '../../types/stock';
+import type { StockRankingDto, StockRankingResponse } from '../../types/stock';
 import { STOCK_WS_URL } from '../../api/stock';
 
 export type RankingType = 'VALUE' | 'VOLUME';
@@ -9,42 +8,65 @@ export type RankingType = 'VALUE' | 'VOLUME';
 export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 	const [rankingData, setRankingData] = useState<StockRankingDto[]>([]);
 
-	const { isConnected, subscribe, sendMessage } = useWebSocket(STOCK_WS_URL);
+	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
+
+	// 랭킹 타입이 변경되면 기존 데이터 초기화
+	useEffect(() => {
+		setRankingData([]);
+	}, [type]);
 
 	// 연결(및 재연결) 시 STOMP 구독 및 초기 데이터 요청
 	useEffect(() => {
 		if (!isConnected) return;
 
-		// 타입에 따른 토픽 및 메시지 타입 설정
-		const topic =
-			type === 'VALUE' ? '/topic/ranking/value' : '/topic/ranking/volume';
-		const appDestination =
-			type === 'VALUE' ? '/app/ranking/value' : '/app/ranking/volume';
-		const responseType =
-			type === 'VALUE' ? 'RANKING_VALUE_UPDATE' : 'RANKING_VOLUME_UPDATE';
+		// API 명세서에 따른 구독 토픽 (/topic/ranking)
+		const topic = '/topic/ranking';
 
 		// 1. 토픽 구독 (데이터 수신)
-		const subscription = subscribe(topic, (data) => {
-			// Zod 스키마를 통한 런타임 데이터 검증
-			const result = StockRankingResponseSchema.safeParse(data);
+		const subscription = subscribe(topic, (data: any) => {
+			console.log('웹소켓 수신 데이터:', data);
+			const rawList = Array.isArray(data) ? data : [data];
 
-			if (result.success) {
-				// 요청한 타입에 맞는 응답인지 확인
-				if (result.data.type === responseType) {
-					setRankingData(result.data.data);
-				}
-			} else {
-				console.warn('Invalid stock ranking data format:', result.error);
+			try {
+				const parsedList: StockRankingDto[] = rawList.map(
+					(item: StockRankingResponse) => ({
+						stockCode: item.stockCode,
+						stockName: item.stockName,
+						currentPrice: Number(item.currentPrice),
+						priceChange: Number(item.priceChange),
+						changeRate: Number(item.changeRate),
+						cumulativeAmount: Number(item.cumulativeAmount),
+						cumulativeVolume: Number(item.cumulativeVolume),
+					}),
+				);
+
+				setRankingData((prev) => {
+					// 기존 데이터와 새로운 데이터를 병합 (stockCode 기준)
+					const stockMap = new Map(prev.map((item) => [item.stockCode, item]));
+					parsedList.forEach((item) => {
+						stockMap.set(item.stockCode, item);
+					});
+
+					const mergedList = Array.from(stockMap.values());
+
+					// 정렬 및 제한
+					if (type === 'VALUE') {
+						mergedList.sort((a, b) => b.cumulativeAmount - a.cumulativeAmount);
+					} else {
+						mergedList.sort((a, b) => b.cumulativeVolume - a.cumulativeVolume);
+					}
+
+					return mergedList.slice(0, limit);
+				});
+			} catch (error) {
+				console.error('Failed to parse stock ranking data:', error);
 			}
 		});
-
-		// 2. 파라미터 전송 (Limit 설정 등)
-		sendMessage(appDestination, { limit });
 
 		return () => {
 			subscription?.unsubscribe();
 		};
-	}, [isConnected, subscribe, sendMessage, limit, type]);
+	}, [isConnected, subscribe, limit, type]);
 
 	return { rankingData, isConnected };
 };

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 
-export function useStockItemLogic(changeRate: number) {
+interface Props {
+	stockName: string;
+	changeRate: number;
+}
+
+export function useStockItemLogic({ stockName, changeRate }: Props) {
 	const [isBlinking, setIsBlinking] = useState(false);
 
 	useEffect(() => {
@@ -18,5 +23,5 @@ export function useStockItemLogic(changeRate: number) {
 		? `text-red-500 ${isBlinking ? 'bg-red-500/50' : 'bg-transparent'}`
 		: `text-blue-500 ${isBlinking ? 'bg-blue-500/50' : 'bg-transparent'}`;
 
-	return { formattedChangeRate, badgeClass };
+	return { name: stockName, formattedChangeRate, badgeClass };
 }
