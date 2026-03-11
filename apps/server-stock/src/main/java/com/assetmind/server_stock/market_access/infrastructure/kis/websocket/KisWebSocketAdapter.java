@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
+import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
@@ -12,6 +13,7 @@ import java.util.concurrent.ScheduledFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketSession;
@@ -70,7 +72,7 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
 
     @Override
     public void disconnect() {
-        log.info("[KIS Adapter] 연결 종료 요청");
+        log.info("[KIS Adapter] 의도적인 연결 종료 요청");
 
         // 재접속 예약된게 있다면 취소
         if (reconnectTask != null && !reconnectTask.isDone()) {
@@ -85,6 +87,12 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
     @Override
     public void subscribe(List<String> stockCode) {
         kisWebSocketHandler.subscribeNewStock(stockCode);
+    }
+
+    @EventListener
+    public void onKisWebSocketDisconnected(KisWebSocketDisconnectedEvent event) {
+        log.warn("[KIS Adapter] 웹소켓 끊김 이벤트 수신. 재연결 프로세스 시작");
+        scheduleReconnect(event.approveKey());
     }
 
     private void scheduleReconnect(String approvalKey) {

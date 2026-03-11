@@ -2,6 +2,7 @@ package com.assetmind.server_stock.stock.presentation;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.port.AlertMessagingPort;
+import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.presentation.dto.StockSurgeAlertResponse;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +18,13 @@ import org.springframework.stereotype.Component;
 public class StompAlertMessagingAdapter implements AlertMessagingPort {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final StockMetadataProvider provider;
 
     @Override
     public void send(RealTimeStockTradeEvent event, String rate) {
         StockSurgeAlertResponse response = StockSurgeAlertResponse.builder()
                 .stockCode(event.stockCode())
+                .stockName(provider.getStockName(event.stockCode()))
                 .rate(rate)
                 .currentPrice(event.currentPrice())
                 .changeRate(event.changeRate())

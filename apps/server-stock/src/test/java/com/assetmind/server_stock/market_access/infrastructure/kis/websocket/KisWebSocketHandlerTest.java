@@ -263,4 +263,45 @@ class KisWebSocketHandlerTest {
             assertThat(currentSession).isNull();
         }
     }
+
+    @Nested
+    @DisplayName("재연결 로직 테스트")
+    class ReconnectHandlingTests {
+
+        @Test
+        @DisplayName("성공: KIS 서버와 연결이 끊어지면 기존 구독 목록을 대기열(Pending)로 백업해야 한다")
+        void givenSubscribedStocks_whenConnectionClosed_thenMoveToPendingList() {
+            // Given: 이미 2개의 종목을 구독 중이라고 가정 (내부 상태 강제 조작)
+            Set<String> subscribed = (Set<String>) ReflectionTestUtils.getField(handler,
+                    "subscribedStock");
+            subscribed.add("005930");
+            subscribed.add("000660");
+
+            List<String> pending = (List<String>) ReflectionTestUtils.getField(handler,
+                    "pendingSubscriptionList");
+            assertThat(pending).isEmpty(); // 대기열은 처음엔 비어있어야 함
+
+            // When: KIS 서버가 에러(예: 1011 서버 에러)로 세션을 닫음
+            handler.afterConnectionClosed(session, CloseStatus.SERVER_ERROR);
+
+            // Then: 구독 목록은 초기화되고, 대기열(Pending)로 2개가 무사히 대피해야 한다
+            assertThat(subscribed).isEmpty();
+            assertThat(pending).hasSize(2).containsExactlyInAnyOrder("005930", "000660");
+        }
+
+        @Test
+        @DisplayName("성공: 연결이 끊어지면 Adapter를 깨우기 위해 재연결 이벤트를 발행해야 한다")
+        void whenConnectionClosed_thenPublishDisconnectedEvent() {
+            // Given: Setup()에서 이미 TEST_APP_KEY가 세팅되어 있음
+
+            // When: KIS 서버와 연결이 끊어짐
+            handler.afterConnectionClosed(session, CloseStatus.SERVER_ERROR);
+
+            // Then: eventPublisher를 통해 KisWebSocketDisconnectedEvent가 정확히 1번 발행되어야 한다
+            verify(eventPublisher, times(1))
+                    .publishEvent(
+                            any(com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent.class));
+        }
+    }
+
 }

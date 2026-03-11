@@ -15,6 +15,7 @@ import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
 import com.assetmind.server_stock.stock.presentation.dto.StockRankingResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 주가 데이터를 저장소를 이용하여 저장 및 조회를 해주고 예외를 처리하는 오케스트레이션 역할을 한다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true) // 기본적으로 조회 전용으로 설정 (성능 향상)
@@ -41,6 +43,8 @@ public class StockService {
             throw new IllegalArgumentException("실시간 체결 데이터 이벤트에 필수 값이 누락되었습니다. (event: " + event + ")");
         }
 
+        log.info("[StockService] 체결 데이터 수신: {}", event.stockCode());
+
         // 캐싱된 국내 전체 주식에서 실시간 주식 데이터의 주식 이름 추출
         String stockName = stockMetadataProvider.getStockName(event.stockCode());
 
@@ -50,6 +54,7 @@ public class StockService {
 
         // 메인 랭킹용(메인 차트 페이지) 이벤트 발행
         StockRankingResponse rankingResponse = StockRankingResponse.from(redisEntity);
+        log.info("[StockService] Redis Entity: {}", rankingResponse);
         eventPublisher.publishEvent(new StockRankingUpdatedEvent(rankingResponse));
 
         // 실시간 주식 시계열 데이터 저장
