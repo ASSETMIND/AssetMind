@@ -2,101 +2,159 @@ package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
-import jakarta.websocket.ContainerProvider;
-import jakarta.websocket.WebSocketContainer;
+import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
+import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 
 /**
- * KIS(한국투자증권) 웹소켓 서버에 연결 및 재접속 관리
- * 실제 웹소켓 라이브러리를 사용해서 연결하고 핑을 쏘고 재접속을 관리
+ * KIS 실시간 주식 데이터 수집 어댑터
+ * 40개 제한 멀티플렉싱(Multiplexing), 다중 AppKey 관리 등
+ * KIS에 종속적인 모든 인프라 로직을 이곳에서 담당
  */
 @Slf4j
 @Component
-public class KisWebSocketAdapter implements RealTimeStockDataPort {
+@RequiredArgsConstructor
+public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
 
-    private final KisWebSocketHandler kisWebSocketHandler;
-    private final ThreadPoolTaskScheduler taskScheduler;
-    private final WebSocketClient client;
+    private final KisProperties kisProperties;
+    private final MarketTokenProvider marketTokenProvider;
+    private final TaskScheduler taskScheduler;
 
-    @Value("${kis.websocket-url}")
-    private String kisWsUrl;
+    // KisWebSocketHandler 생성을 위한 의존객체들
+    private final ObjectMapper objectMapper;
+    private final KisRealTimeDataParser dataParser;
+    private final KisEventMapper eventMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
-    private ScheduledFuture<?> reconnectTask;
 
-    public KisWebSocketAdapter(KisWebSocketHandler kisWebSocketHandler, ThreadPoolTaskScheduler taskScheduler) {
-        this.kisWebSocketHandler = kisWebSocketHandler;
-        this.taskScheduler = taskScheduler;
+    private WebSocketClient webSocketClient;
 
-        // 버퍼 사이즈를 늘린 컨테이너 생성
-        WebSocketContainer webSocketContainer = ContainerProvider.getWebSocketContainer();
-        webSocketContainer.setDefaultMaxTextMessageBufferSize(1024 * 1024); // 1MB (텍스트)
-        webSocketContainer.setDefaultMaxBinaryMessageBufferSize(1024 * 1024); // 1MB (바이너리)
+    // 활성화된 핸들러(세션)들을 추적 및 관리
+    private final List<KisWebSocketHandler> activeHandlers = new CopyOnWriteArrayList<>();
 
-        // 설정된 컨테이너로 클라이언트 생성
-        this.client = new StandardWebSocketClient(webSocketContainer);
-    }
+    private static final int MAX_SUBSCRIBE_PER_SESSION = 40;
 
     @Override
     public void prepareConnection() {
-        log.info("[KIS Adapter] 웹소켓 연결 시도... URL: {}", kisWsUrl);
-
-        kisWebSocketHandler.setApproveKey(approvalKey);
-
-        CompletableFuture<WebSocketSession> future = client.execute(kisWebSocketHandler, kisWsUrl);
-
-        future.whenComplete((session, throwable) -> {
-            if (throwable != null) {
-                // [실패] 에러(throwable)가 존재하면 연결 실패
-                log.error("[KIS Adapter] 연결 실패. 에러: {}", throwable.getMessage());
-                scheduleReconnect(approvalKey);
-            } else {
-                // [성공] 에러가 없으면 연결 성공
-                log.info("[KIS Adapter] 연결 성공! Session ID: {}", session.getId());
-            }
-        });
+        log.info("[KIS Adapter] 웹소켓 클라이언트 초기화");
+        this.webSocketClient = new StandardWebSocketClient();
     }
 
     @Override
     public void subscribe(List<String> stockCodes) {
-        
+        if (this.webSocketClient == null) {
+            prepareConnection(); // 호출 순서 보장
+        }
+
+        List<Account> accounts = kisProperties.getAccounts();
+        String websocketUrl = kisProperties.getWebsocketUrl();
+
+        // KIS 웹소켓 요청 한도에 맞춰 40개씩 분할
+        List<List<String>> partitionedStocks = partitionList(stockCodes, MAX_SUBSCRIBE_PER_SESSION);
+
+        for (int i = 0; i < partitionedStocks.size(); i++) {
+            if (i >= accounts.size()) {
+                log.warn("App Key가 부족합니다. (등록된 키: {}개, 필요한 키: {}개", accounts.size(), partitionedStocks.size());
+                break;
+            }
+
+            List<String> chunk = partitionedStocks.get(i);
+            Account account = accounts.get(i);
+            int sessionIndex = i + 1;
+
+            // KIS 서버 부하 방지를 위해 각 세션 연결 시도는 1초 간격으로 스케일링
+            Instant executionTime = Instant.now().plusSeconds(i);
+            taskScheduler.schedule(() -> {
+                log.info("[KIS WS Session #{}] {}개 종목 연결 및 구독 시도", sessionIndex, chunk.size());
+
+                try {
+                    establishSession(account, chunk);
+                } catch (Exception e) {
+                    log.error("[KIS WS Session #{}] 연결 실패", sessionIndex, e);
+                }
+            }, executionTime);
+        }
+
     }
 
     @Override
     public void disconnect() {
-        log.info("[KIS Adapter] 의도적인 연결 종료 요청");
-
-        // 재접속 예약된게 있다면 취소
-        if (reconnectTask != null && !reconnectTask.isDone()) {
-            reconnectTask.cancel(true);
+        log.info("🛑 열려있는 모든 KIS 웹소켓 세션을 종료합니다. (현재 활성 세션: {}개)", activeHandlers.size());
+        for (KisWebSocketHandler handler : activeHandlers) {
+            handler.closeConnection();
         }
-
-        kisWebSocketHandler.closeConnection();
-
-        log.info("[KIS Adapter] 연결 종료 완료");
+        activeHandlers.clear();
     }
 
+    /**
+     * 핸들러가 연결이 끊어지면서 보낸 이벤트를 수신하여 해당 핸들러 객체를 지우고 재연결을 시도
+     * @param event
+     */
     @EventListener
-    public void onKisWebSocketDisconnected(KisWebSocketDisconnectedEvent event) {
-        log.warn("[KIS Adapter] 웹소켓 끊김 이벤트 수신. 재연결 프로세스 시작");
-        scheduleReconnect(event.approveKey());
+    public void handleWebSocketDisconnected(KisWebSocketDisconnectedEvent event) {
+        log.warn("[KIS Adapter] 웹소켓 끊김 이벤트 수신. 재연결 프로세스 시작 - Reconnect Task");
+        KisWebSocketHandler deadHandler = event.disconnectedHandler();
+        Account deadAccount = event.account();
+        List<String> failedChunk = event.disconnectedStocks();
+
+        // 연결이 끊긴 핸들러를 리스트에서 제거
+        boolean removed = activeHandlers.remove(deadHandler);
+        log.warn(">>> [Reconnect Task] 세션 끊어짐 감지. 기존 핸들러 제거({}), 3초 뒤 복구 시작", deadHandler);
+
+        // 3초 뒤에 새로운 핸들러 생성
+        Instant executionTime = Instant.now().plusSeconds(3);
+        taskScheduler.schedule(() -> {
+            log.info(">>> [Reconnect Task] 새로운 핸들러로 {}개 종목 재연결 시도", failedChunk.size());
+
+            try {
+                establishSession(deadAccount, failedChunk);
+            } catch (Exception e) {
+                log.error(">>> [Reconnect Task] 재연결 실패", e);
+            }
+        }, executionTime);
     }
 
-    private void scheduleReconnect(String approvalKey) {
-        log.info("[KIS Adapter] 3초 후 재접속을 시도합니다...");
-        this.reconnectTask = taskScheduler.schedule(
-                () -> this.connect(approvalKey),
-                Instant.now().plusSeconds(3)
+    // ["삼성전자", "하이닉스" .. ] -> [ ["삼성전자", ...], ["하이닉스", ...] ] 로 쪼개주는 메서드
+    private <T> List<List<T>> partitionList(List<T> list, int size) {
+        List<List<T>> partitions = new ArrayList<>();
+        for (int i = 0; i < list.size(); i+= size) {
+            // 40개 씩 나눠야하는데 40개 보다 작으면 IndexOutOfBounds 에러를 방지하기 위해 40개보다 작은 값으로 자름
+            partitions.add(new ArrayList<>(list.subList(i, Math.min(i + size, list.size()))));
+        }
+        return partitions;
+    }
+
+    /**
+     * 특정 계좌 정보와 종목 리스트를 받아 실제 웹소켓 세션을 확립합니다.
+     */
+    private void establishSession(Account account, List<String> chunk) {
+        // 접속키 발급
+        ApiApprovalKey approvalKey = marketTokenProvider.fetchApprovalKey(account.appKey(), account.appSecret());
+
+        // 핸들러 생성
+        KisWebSocketHandler handler = new KisWebSocketHandler(
+                approvalKey.value(), account, chunk,
+                objectMapper, dataParser, eventMapper, eventPublisher, taskScheduler
         );
+
+        // 관리 리스트에 추가 및 물리적 연결 실행
+        activeHandlers.add(handler);
+        webSocketClient.execute(handler, kisProperties.getWebsocketUrl());
     }
 }
