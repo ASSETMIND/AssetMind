@@ -4,13 +4,10 @@ import com.assetmind.server_stock.market_access.application.event.KisWebSocketDi
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
-import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
@@ -51,7 +48,7 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
     }
 
     @Override
-    public void connect(String approvalKey) {
+    public void prepareConnection() {
         log.info("[KIS Adapter] 웹소켓 연결 시도... URL: {}", kisWsUrl);
 
         kisWebSocketHandler.setApproveKey(approvalKey);
@@ -71,6 +68,11 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
     }
 
     @Override
+    public void subscribe(List<String> stockCodes) {
+        
+    }
+
+    @Override
     public void disconnect() {
         log.info("[KIS Adapter] 의도적인 연결 종료 요청");
 
@@ -82,11 +84,6 @@ public class KisWebSocketAdapter implements RealTimeStockDataPort {
         kisWebSocketHandler.closeConnection();
 
         log.info("[KIS Adapter] 연결 종료 완료");
-    }
-
-    @Override
-    public void subscribe(List<String> stockCode) {
-        kisWebSocketHandler.subscribeNewStock(stockCode);
     }
 
     @EventListener
