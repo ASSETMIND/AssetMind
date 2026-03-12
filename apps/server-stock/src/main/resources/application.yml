@@ -2,9 +2,6 @@ spring:
   application:
     name: stock-service
 
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
-
   sql:
     init:
       mode: always
