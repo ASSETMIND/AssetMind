@@ -43,7 +43,7 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 		// API 명세서에 따른 구독 토픽 (/topic/ranking)
 		const topic = '/topic/ranking';
 
-		// 1. 토픽 구독 (데이터 수신)
+		// 토픽 구독 (데이터 수신)
 		const subscription = subscribe(topic, (data: any) => {
 			// console.log('웹소켓 수신 데이터:', data);
 			const rawList = Array.isArray(data) ? data : [data];
