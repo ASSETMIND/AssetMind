@@ -5,7 +5,7 @@ import { STOCK_WS_URL } from '../../api/stock';
 
 export type RankingType = 'VALUE' | 'VOLUME';
 
-export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
+export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 	const [rankingData, setRankingData] = useState<StockRankingDto[]>([]);
 
 	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
@@ -24,7 +24,7 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 10) => {
 
 		// 1. 토픽 구독 (데이터 수신)
 		const subscription = subscribe(topic, (data: any) => {
-			console.log('웹소켓 수신 데이터:', data);
+			// console.log('웹소켓 수신 데이터:', data);
 			const rawList = Array.isArray(data) ? data : [data];
 
 			try {
