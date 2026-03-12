@@ -10,7 +10,7 @@ export function useStockItemLogic({ stockName, changeRate }: Props) {
 
 	useEffect(() => {
 		setIsBlinking(true);
-		const timer = setTimeout(() => setIsBlinking(false), 200);
+		const timer = setTimeout(() => setIsBlinking(false), 10);
 		return () => clearTimeout(timer);
 	}, [changeRate]);
 
