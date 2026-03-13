@@ -1,0 +1,35 @@
+services:
+  # 1. 메인 스토리지 컨테이너 (LocalStack)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: local_s3_mock
+    ports:
+      - "4566:4566"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - SERVICES=s3
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  # 2. 버킷 자동 생성 전용 1회용 컨테이너 (Init Container)
+  aws-cli-init:
+    image: amazon/aws-cli:latest
+    container_name: local_s3_setup
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+    volumes:
+      # [수정 완료] 언더스코어(_)로 통일된 정확한 경로 매핑
+      - ./scripts/init_aws.sh:/tmp/init_aws.sh
+    entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
