@@ -10,6 +10,7 @@ import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprov
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprovalKeyResponse;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenResponse;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 /**
  * KIS API를 이용하여(외부 시스템) Auth를 위한 토큰을 가져오는 역할
@@ -53,6 +55,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
                                 .flatMap(errorBody -> Mono.error(new MarketAccessFailedException("KIS API Error: " + errorBody)))
                     )
                     .bodyToMono(KisTokenResponse.class)
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                     .block();
 
             if (response == null) {
@@ -95,6 +98,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
                                                     "KIS WebSocket API Error: " + errorBody)))
                     )
                     .bodyToMono(KisApprovalKeyResponse.class)
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                     .block();
 
             if (response == null) {

@@ -94,6 +94,12 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
      */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+        // 기본 스프링과 톰캣의 버퍼크기는 8KB로 증권사의 문자열 데이터를 받기에는 너무 적다고 판단
+        // 현재 세션의 버퍼크기를 5MB로 설정
+        int maxBufferSize = 5 * 1024 * 1024; // 5MB
+        session.setTextMessageSizeLimit(maxBufferSize);
+        session.setBinaryMessageSizeLimit(maxBufferSize);
+
         log.info("[KIS WS Handler] 세션 연결 성공 (Session ID : {})", session.getId());
         this.currentSession = session;
 

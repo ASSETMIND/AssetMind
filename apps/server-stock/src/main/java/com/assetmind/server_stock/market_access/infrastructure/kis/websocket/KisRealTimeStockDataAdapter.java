@@ -53,6 +53,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
     @Override
     public void prepareConnection() {
         log.info("[KIS Adapter] 웹소켓 클라이언트 초기화");
+
         this.webSocketClient = new StandardWebSocketClient();
     }
 
@@ -63,7 +64,6 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
         }
 
         List<Account> accounts = kisProperties.getAccounts();
-        String websocketUrl = kisProperties.getWebsocketUrl();
 
         // KIS 웹소켓 요청 한도에 맞춰 40개씩 분할
         List<List<String>> partitionedStocks = partitionList(stockCodes, MAX_SUBSCRIBE_PER_SESSION);
