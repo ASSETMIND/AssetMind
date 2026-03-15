@@ -9,19 +9,18 @@ import java.util.List;
 public interface RealTimeStockDataPort {
 
     /**
-     * 실시간 데이터 서버에 연결 시도
-     * @param approvalKey - 접속에 필요한 인증 키
+     * 실시간 데이터 수집을 위한 사전 준비
+     * 웹소켓 클라이언트 초기화 등 네티워크 연결을 위한 기초 세팅을 수행
      */
-    void connect(String approvalKey);
+    void prepareConnection();
 
     /**
-     * 연결 종료
+     * 특정 종목들에 대한 실시간 데이터 구독을 추가
+     */
+    void subscribe(List<String> stockCodes);
+
+    /**
+     * 진행 중인 모든 실시간 데이터 수집(연결)을 안전하게 종료
      */
     void disconnect();
-
-    /**
-     * 특정 종목들을 구독
-     * @param stockCode - 종목 코드 리스트 (예: ["590042", "293000"])
-     */
-    void subscribe(List<String> stockCode);
 }

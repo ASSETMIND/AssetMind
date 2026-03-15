@@ -2,8 +2,8 @@ package com.assetmind.server_stock.market_access.application;
 
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
 import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class RealTimeMarketService {
 
-    private final MarketAccessService marketAccessService; // 인증 담당
     private final RealTimeStockDataPort realTimeStockDataPort; // 연결 담당
     private final StockMetadataProvider stockMetadataProvider; // 구독 요청 주식 메타데이터 제공자
 
@@ -40,7 +39,6 @@ public class RealTimeMarketService {
         log.info(">>> [RealTimeMarketService] 실시간 주식 데이터 수집 서비스를 시작합니다.");
 
         try {
-
             // 1. StockMetaDataProvider에서 캐싱된 전체 종목 코드 가져오기
             List<String> stockCodes = stockMetadataProvider.getAllStockCodes();
 
@@ -51,18 +49,10 @@ public class RealTimeMarketService {
 
             log.info(">>> [RealTimeMarketService] 구독 대상 종목 수: {}", stockCodes.size());
 
-            // 2. 인증키 가져오기 (이미 구현된 로직 활용)
-            ApiApprovalKey approvalKey = marketAccessService.getApprovalKey();
-            String keyString = approvalKey.value();
 
-            // 3. 연결 시작
-            realTimeStockDataPort.connect(keyString);
-
-            // 4. 구독 요청
-            // 주의: connect()는 비동기라 연결 되기 전에 subscribe가 호출될 수 있음.
-            // 하지만 Handler 내부에서 세션 체크를 하고 있으므로 안전하거나,
-            // 혹은 연결 확립 후(Handler.afterConnectionEstablished)에 구독하는 방식이 더 안전함.
-            // 여기서는 '명령을 내린다'는 의미로 호출함.
+            // 2. 어댑터에게 실시간 데이터 수집 준비 및 구독 명령 전달
+            // 내부적인 인증키 발급, 멀티플렉싱 커넥션 분할 등은 Adapter가 담당
+            realTimeStockDataPort.prepareConnection();
             realTimeStockDataPort.subscribe(stockCodes);
 
         } catch (Exception e) {

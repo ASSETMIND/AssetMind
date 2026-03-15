@@ -77,8 +77,8 @@ public class MarketAccessService {
      * 연결 유지 중에는 approval_key가 필요없어서 최초 연결시에만 발급받아서 사용하면 됨
      * @return ApiApprovalKey
      */
-    public ApiApprovalKey getApprovalKey() {
+    public ApiApprovalKey getApprovalKey(String appKey, String appSecret) {
         log.info(">>> 외부 WebSocket API 연결을 위한 접속키 신규 발급 요청");
-        return marketTokenProvider.fetchApprovalKey();
+        return marketTokenProvider.fetchApprovalKey(appKey, appSecret);
     }
 }
