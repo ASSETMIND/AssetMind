@@ -75,3 +75,28 @@
     * `cumulativeAmount`: 누적 거래대금 (String)
     * `cumulativeVolume`: 누적 거래량 (String)
 > 모든 필드는 String 타입입니다.
+
+--- 
+### C. 실시간 급등락 알림 데이터 (전역 알림용)
+특정 종목의 주가가 지정된 기준치(현재 기준: ±10%) 이상 급등하거나 급락했을 때, 알림 쿨타임(스로틀링)이 적용된 상태로 실시간 알림 데이터를 브로드캐스트합니다. 사이트 전역의 상단 알림 바(Toast) 또는 푸시 알림 용도로 사용됩니다.
+
+* **Destination:** `/topic/surge-alerts`
+* **Response Payload (JSON):**
+```json
+{
+  "stockCode": "005930",
+  "stockName": "삼성전자",
+  "rate": "+10%",
+  "currentPrice": "82500",
+  "changeRate": "10.5",
+  "alertTime": "2026-03-17T09:30:15.123"
+}
+```
+* **필드 설명:**
+  * `stockCode`: 종목코드 (String)
+  * `stockName`: 종목 이름 (String)
+  * `rate`: 발생한 알림의 기준 등락률 (String, 예: "+10%", "-10%")
+  * `currentPrice`: 알림 발생 시점의 현재가 (String)
+  * `changeRate`: 알림 발생 시점의 전일 대비 등락률 (String)
+  * `alertTime`: 알림이 발생한 서버 시간 (String, ISO-8601 포맷 `YYYY-MM-DDThh:mm:ss.SSS`)
+> 모든 필드는 String 타입으로 제공됩니다.
