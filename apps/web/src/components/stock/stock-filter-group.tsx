@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { RankingType } from '../../hooks/stock/use-stock-value-ranking';
 
 interface Props {
@@ -6,7 +7,7 @@ interface Props {
 }
 
 // 랭킹 필터 버튼 그룹
-export default function StockFilterGroup({ activeType, onTypeChange }: Props) {
+function StockFilterGroup({ activeType, onTypeChange }: Props) {
 	const wrapperClass = 'flex items-center rounded-xl bg-[#282932] p-1';
 	const activeBtnClass =
 		'rounded-lg bg-[#41434D] px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm whitespace-nowrap';
@@ -55,3 +56,5 @@ export default function StockFilterGroup({ activeType, onTypeChange }: Props) {
 		</div>
 	);
 }
+
+export default memo(StockFilterGroup);

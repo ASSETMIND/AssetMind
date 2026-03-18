@@ -1,10 +1,12 @@
+import { memo } from 'react';
+
 interface Props {
 	buy: number;
 	sell: number;
 }
 
 // 매수, 매도 비율 시각화 바
-export default function RatioBar({ buy, sell }: Props) {
+function RatioBar({ buy, sell }: Props) {
 	return (
 		<div className='flex flex-col gap-1 w-full max-w-30'>
 			{/* 바 그래프 영역 */}
@@ -20,3 +22,5 @@ export default function RatioBar({ buy, sell }: Props) {
 		</div>
 	);
 }
+
+export default memo(RatioBar);

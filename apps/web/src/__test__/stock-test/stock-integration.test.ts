@@ -4,8 +4,10 @@ import { useWebSocket } from '../../hooks/web-socket/use-web-socket';
 
 // WebSocket 훅 모킹: 실제 네트워크 연결 없이 동작 시뮬레이션
 jest.mock('../../hooks/web-socket/use-web-socket');
-jest.mock('../../api/stock.ts', () => ({
+jest.mock('../../api/stock', () => ({
+	__esModule: true,
 	STOCK_WS_URL: 'ws://localhost:8080/stocks',
+	getStockRanking: jest.fn().mockResolvedValue([]), // 초기 API 호출 모킹 (TypeError 방지)
 }));
 
 describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
@@ -15,6 +17,7 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		jest.spyOn(console, 'log').mockImplementation(() => {}); // 콘솔 로그 숨김 처리
 
 		// subscribe 함수가 호출될 때, 내부 콜백 함수를 캡처하여 테스트에서 호출할 수 있도록 설정
 		mockSubscribe = jest.fn((_topic, callback) => {
@@ -31,6 +34,11 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 	it('웹소켓을 통해 데이터를 수신하면 랭킹 리스트가 업데이트되고 거래대금순(VALUE)으로 정렬되어야 한다', async () => {
 		const { result } = renderHook(() => useStockRankLogic('VALUE', 10));
+
+		// 초기 API 데이터 패치 대기 (act 경고 및 빈 배열 덮어쓰기 방지)
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
 
 		// 초기 상태 확인
 		expect(result.current.stockList).toEqual([]);
@@ -59,13 +67,8 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 		// act를 사용하여 비동기 상태 업데이트 유발
 		await act(async () => {
-			// 데이터가 순차적으로 들어온다고 가정 (하이닉스 먼저 수신)
-			if (messageCallback) messageCallback(hynix);
-		});
-
-		await act(async () => {
-			// 삼성전자 수신
-			if (messageCallback) messageCallback(samsung);
+			// 실제 환경과 동일하게 정렬된 배열로 한 번에 전달
+			if (messageCallback) messageCallback([samsung, hynix]);
 		});
 
 		// 검증: 삼성전자가 거래대금이 더 많으므로 1위, 하이닉스가 2위여야 함
@@ -82,6 +85,11 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 	it('랭킹 타입이 VOLUME(거래량)일 때는 거래량 순으로 정렬되고 단위가 "주"로 표시되어야 한다', async () => {
 		const { result } = renderHook(() => useStockRankLogic('VOLUME', 10));
+
+		// 초기 API 데이터 패치 완료 대기
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
 
 		// 거래량: A(100주) < B(200주)
 		const stockA = {
@@ -106,7 +114,7 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 		await act(async () => {
 			// 배열 형태로 한 번에 들어오는 경우도 처리 가능한지 확인
-			if (messageCallback) messageCallback([stockA, stockB]);
+			if (messageCallback) messageCallback([stockB, stockA]);
 		});
 
 		await waitFor(() => {
@@ -119,8 +127,13 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 		});
 	});
 
-	it('기존 데이터가 있을 때 동일한 종목의 새로운 데이터가 오면 병합(업데이트)되어야 한다', async () => {
+	it('서버로부터 새로운 랭킹 배열이 수신되면 기존 데이터가 최신 데이터로 대체(업데이트)되어야 한다', async () => {
 		const { result } = renderHook(() => useStockRankLogic('VALUE', 10));
+
+		// 초기 API 데이터 패치 완료 대기
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
 
 		// 1. 초기 데이터 (삼성전자 7만원)
 		const initialData = {
@@ -134,7 +147,7 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 		};
 
 		await act(async () => {
-			if (messageCallback) messageCallback(initialData);
+			if (messageCallback) messageCallback([initialData]);
 		});
 
 		expect(result.current.stockList[0].price).toBe('70,000');
@@ -145,16 +158,26 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 			currentPrice: '75000',
 			cumulativeAmount: '150000000000', // 거래대금 증가
 		};
+		const newData = {
+			stockCode: '000660',
+			stockName: 'SK하이닉스',
+			currentPrice: '120000',
+			priceChange: '0',
+			changeRate: '0',
+			cumulativeAmount: '100000000000',
+			cumulativeVolume: '1000000',
+		};
 
 		await act(async () => {
-			if (messageCallback) messageCallback(updatedData);
+			if (messageCallback) messageCallback([updatedData, newData]);
 		});
 
-		// 리스트 길이는 여전히 1이어야 하고(중복 제거), 가격 정보가 업데이트되어야 함
+		// 리스트가 새로운 배열로 대체되었는지 확인
 		await waitFor(() => {
-			expect(result.current.stockList).toHaveLength(1);
+			expect(result.current.stockList).toHaveLength(2);
 			expect(result.current.stockList[0].price).toBe('75,000');
 			expect(result.current.stockList[0].stockName).toBe('삼성전자');
+			expect(result.current.stockList[1].stockName).toBe('SK하이닉스');
 		});
 	});
 
@@ -166,6 +189,11 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 				initialProps: { type: 'VALUE' as const },
 			},
 		);
+
+		// 초기 API 데이터 패치 완료 대기
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
 
 		const mockData = {
 			stockCode: '005930',
@@ -179,16 +207,63 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 		// 데이터 주입
 		await act(async () => {
-			if (messageCallback) messageCallback(mockData);
+			if (messageCallback) messageCallback([mockData]);
 		});
 
 		expect(result.current.stockList).toHaveLength(1);
 
 		// 타입 변경: VALUE -> VOLUME
-		// @ts-ignore - 테스트 편의상 타입 캐스팅 생략
-		rerender({ type: 'VOLUME' });
+		await act(async () => {
+			// @ts-ignore - 테스트 편의상 타입 캐스팅 생략
+			rerender({ type: 'VOLUME' });
+			await new Promise((resolve) => setTimeout(resolve, 0)); // 재호출된 API 대기
+		});
 
-		// 데이터가 초기화되었는지 확인
-		expect(result.current.stockList).toEqual([]);
+		// 데이터가 초기화되었는지 비동기 대기
+		await waitFor(() => {
+			expect(result.current.stockList).toEqual([]);
+		});
+	});
+
+	it('고빈도 소켓 메시지가 수신될 때 시스템이 뻗지 않고 마지막 상태를 잘 렌더링해야 한다 (Stress Test)', async () => {
+		const LIMIT = 20;
+		const { result } = renderHook(() => useStockRankLogic('VALUE', LIMIT));
+
+		// 초기 API 데이터 패치 완료 대기
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		const BATCH_SIZE = LIMIT;
+		const ITERATIONS = 100; // 100번의 메시지 수신 시뮬레이션
+
+		// 서버가 항상 LIMIT 개수만큼의 랭킹을 통째로 갱신해서 보내준다고 가정
+		await act(async () => {
+			for (let i = 0; i < ITERATIONS; i++) {
+				const batch = Array.from({ length: BATCH_SIZE }, (_, j) => ({
+					stockCode: `CODE_${j}`,
+					stockName: `Stock ${j}`,
+					currentPrice: (1000 + i).toString(), // 가격이 매번 오름
+					priceChange: '0',
+					changeRate: '0',
+					cumulativeAmount: (100000000 * j).toString(),
+					cumulativeVolume: '1000',
+				}));
+				if (messageCallback) messageCallback(batch);
+			}
+		});
+
+		await waitFor(() => {
+			// 1. 리스트 크기는 제한(LIMIT)과 정확히 일치해야 한다
+			expect(result.current.stockList.length).toBe(LIMIT);
+
+			// 2. 순위(rank)가 1부터 순차적으로 부여되었는지 확인
+			result.current.stockList.forEach((stock, index) => {
+				expect(stock.rank).toBe(index + 1);
+			});
+
+			// 3. 마지막으로 보낸 99번째 값(1000 + 99 = 1099)이 정상적으로 반영되었는지 확인
+			expect(result.current.stockList[0].price).toBe('1,099');
+		});
 	});
 });
