@@ -10,8 +10,10 @@ import type { StockRankingResponse } from '../../types/stock';
  * - 전역 상태 초기화: 테스트 간 상태 전이를 방지하기 위해 Zustand 상태 리셋
  */
 jest.mock('@stomp/stompjs');
-jest.mock('../../api/stock.ts', () => ({
+jest.mock('../../api/stock', () => ({
+	__esModule: true,
 	STOCK_WS_URL: 'ws://localhost:8080/stocks',
+	getStockRanking: jest.fn(() => new Promise(() => {})), // 무한 대기 Promise (웹소켓 테스트 간섭 및 act 경고 방지)
 }));
 
 describe('주식 실시간 랭킹 통합 테스트 (Integration)', () => {
@@ -20,6 +22,7 @@ describe('주식 실시간 랭킹 통합 테스트 (Integration)', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		jest.spyOn(console, 'log').mockImplementation(() => {}); // 콘솔 로그 숨김 처리
 		useWebSocketStore.setState({
 			isConnected: false,
 			lastMessage: null,

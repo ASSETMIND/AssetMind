@@ -11,6 +11,7 @@ const mockUseWebSocket = useWebSocket as jest.Mock;
 // api 상수 모킹
 jest.mock('../../api/stock.ts', () => ({
 	STOCK_WS_URL: 'ws://localhost:8080/stocks',
+	getStockRanking: jest.fn(() => new Promise(() => {})), // 무한 대기 Promise (비동기 업데이트로 인한 act 경고 방지)
 }));
 
 describe('useStockRanking Hook', () => {
