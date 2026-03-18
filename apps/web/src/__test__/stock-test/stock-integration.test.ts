@@ -4,8 +4,9 @@ import { useWebSocket } from '../../hooks/web-socket/use-web-socket';
 
 // WebSocket 훅 모킹: 실제 네트워크 연결 없이 동작 시뮬레이션
 jest.mock('../../hooks/web-socket/use-web-socket');
-jest.mock('../../api/stock.ts', () => ({
+jest.mock('../../api/stock', () => ({
 	STOCK_WS_URL: 'ws://localhost:8080/stocks',
+	getStockRanking: jest.fn().mockResolvedValue([]), // 초기 API 호출 모킹 (TypeError 방지)
 }));
 
 describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
@@ -190,5 +191,63 @@ describe('주식 랭킹 시스템 통합 테스트 (Hooks & WebSocket)', () => {
 
 		// 데이터가 초기화되었는지 확인
 		expect(result.current.stockList).toEqual([]);
+	});
+
+	it('고빈도 소켓 메시지가 수신될 때 시스템이 안정적으로 데이터를 병합하고 정렬해야 한다 (Stress Test)', async () => {
+		const LIMIT = 20;
+		const { result } = renderHook(() => useStockRankLogic('VALUE', LIMIT));
+
+		// 50개의 임의의 종목 데이터 생성 (초기 데이터 풀)
+		const baseStocks = Array.from({ length: 50 }, (_, i) => ({
+			stockCode: `CODE_${i}`,
+			stockName: `Stock ${i}`,
+			currentPrice: '1000',
+			priceChange: '0',
+			changeRate: '0',
+			cumulativeAmount: (100000000 * i).toString(), // 초기 거래대금
+			cumulativeVolume: '1000',
+		}));
+
+		const BATCH_SIZE = 50;
+		const ITERATIONS = 20; // 50 * 20 = 총 1,000개의 메시지
+
+		// 총 1,000번의 웹소켓 메시지 수신을 배열 배칭(Batching)으로 시뮬레이션
+		await act(async () => {
+			for (let i = 0; i < ITERATIONS; i++) {
+				const batch = [];
+				for (let j = 0; j < BATCH_SIZE; j++) {
+					const randomIdx = Math.floor(Math.random() * baseStocks.length);
+					const targetStock = baseStocks[randomIdx];
+
+					const updatedStock = {
+						...targetStock,
+						currentPrice: (Number(targetStock.currentPrice) + j).toString(),
+						cumulativeAmount: (
+							Number(targetStock.cumulativeAmount) + 500000000
+						).toString(),
+					};
+					baseStocks[randomIdx] = updatedStock;
+					batch.push(updatedStock);
+				}
+				// 한 번에 배열 형태로 수신 (과도한 렌더링 부하 방지 및 실제 최적화 환경 모방)
+				if (messageCallback) messageCallback(batch);
+			}
+		});
+
+		await waitFor(() => {
+			// 1. 리스트 크기는 제한(LIMIT)과 정확히 일치해야 한다 (50개 중 상위 20개)
+			expect(result.current.stockList.length).toBe(LIMIT);
+
+			// 2. 순위(rank)가 1부터 순차적으로 부여되었는지 확인
+			result.current.stockList.forEach((stock, index) => {
+				expect(stock.rank).toBe(index + 1);
+			});
+
+			// 3. 중복된 종목이 리스트에 존재하지 않아야 한다
+			const uniqueNames = new Set(
+				result.current.stockList.map((s) => s.stockName),
+			);
+			expect(uniqueNames.size).toBe(LIMIT);
+		});
 	});
 });

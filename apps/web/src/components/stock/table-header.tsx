@@ -1,5 +1,7 @@
+import { memo } from 'react';
+
 // 테이블의 헤더를 담당
-export default function TableHeader({
+function TableHeader({
 	sortType = 'VALUE',
 }: {
 	sortType?: 'VALUE' | 'VOLUME';
@@ -16,3 +18,5 @@ export default function TableHeader({
 		</div>
 	);
 }
+
+export default memo(TableHeader);
