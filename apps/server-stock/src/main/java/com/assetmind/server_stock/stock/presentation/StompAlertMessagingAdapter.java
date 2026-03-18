@@ -26,8 +26,8 @@ public class StompAlertMessagingAdapter implements AlertMessagingPort {
                 .stockCode(event.stockCode())
                 .stockName(provider.getStockName(event.stockCode()))
                 .rate(rate)
-                .currentPrice(event.currentPrice())
-                .changeRate(event.changeRate())
+                .currentPrice(String.valueOf(event.currentPrice()))
+                .changeRate(String.valueOf(event.changeRate()))
                 .alertTime(LocalDateTime.now())
                 .build();
         messagingTemplate.convertAndSend("/topic/surge-alerts", response);
