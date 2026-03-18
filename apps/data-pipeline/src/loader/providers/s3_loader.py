@@ -21,6 +21,7 @@ Trade-off:
 
 import io
 import json
+import os
 import uuid
 import datetime
 from typing import Any
@@ -90,10 +91,29 @@ class S3Loader(AbstractLoader):
             ConfigurationError: Boto3 클라이언트 초기화 중 설정 문제가 발생할 경우.
         """
         try:
-            return boto3.client(
-                's3',
-                region_name=self._config.get("aws.region", "ap-northeast-2")
-            )
+            # 1. 공통 파라미터 세팅 (loader.yml의 운영 설정 기반)
+            client_kwargs = {
+                "service_name": 's3',
+                "region_name": self._config.get("aws.region", "ap-northeast-2")
+            }
+
+            # 2. 환경 변수를 통한 자동 분기 처리 (휴먼 에러 방지 로직)
+            local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT")
+            
+            if local_endpoint:
+                # 로컬 환경 변수가 감지되면 자동으로 LocalStack 모드로 오버라이딩
+                client_kwargs.update({
+                    "endpoint_url": local_endpoint,
+                    "aws_access_key_id": "test",      # LocalStack Dummy Key
+                    "aws_secret_access_key": "test"   # LocalStack Dummy Key
+                })
+                self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
+            else:
+                self._logger.info("[운영 환경 감지] 실제 AWS S3 클라이언트로 초기화합니다.")
+
+            # 3. 클라이언트 생성
+            return boto3.client(**client_kwargs)
+
         except (BotoCoreError, ClientError) as e:
             self._logger.error("Boto3 S3 클라이언트 초기화 실패", exc_info=True)
             raise ConfigurationError(f"AWS 설정 오류: {e}") from e
