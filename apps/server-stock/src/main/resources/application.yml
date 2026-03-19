@@ -19,6 +19,10 @@ spring:
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -29,7 +33,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
