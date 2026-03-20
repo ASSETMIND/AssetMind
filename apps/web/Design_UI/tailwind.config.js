@@ -187,9 +187,15 @@ export default {
           '0%': { transform: 'translateY(-100%)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        'skeleton-pulse': {
+          '0%, 100%': { backgroundColor: '#21242C' },
+          '50%':      { backgroundColor: '#2C2C30' },
+        },
       },
+      
       animation: {
         'toast-in': 'toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'skeleton-pulse': 'skeleton-pulse 700ms ease-out 400ms infinite',
       },
 
     },
