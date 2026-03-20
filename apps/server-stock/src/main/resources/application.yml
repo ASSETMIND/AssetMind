@@ -31,16 +31,16 @@ spring:
       lettuce:
         shutdown-timeout: 100ms
 
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
+    jpa:
       hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-    database: postgresql
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
-    defer-datasource-initialization: true
+        ddl-auto: validate
+      properties:
+        hibernate:
+          format_sql: true
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+      database: postgresql
+      database-platform: org.hibernate.dialect.PostgreSQLDialect
+      defer-datasource-initialization: true
 
 
 kis:
