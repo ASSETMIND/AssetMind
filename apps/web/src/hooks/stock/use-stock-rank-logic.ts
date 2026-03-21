@@ -3,7 +3,7 @@ import { useStockRanking, type RankingType } from './use-stock-value-ranking';
 import type { StockItemData } from '../../components/stock/stock-item';
 
 export const useStockRankLogic = (type: RankingType, limit = 40) => {
-	const { rankingData, isConnected } = useStockRanking(type, limit);
+	const { rankingData, isConnected, isLoading } = useStockRanking(type, limit);
 
 	const stockList: StockItemData[] = useMemo(() => {
 		if (!rankingData) return [];
@@ -38,6 +38,7 @@ export const useStockRankLogic = (type: RankingType, limit = 40) => {
 	return {
 		stockList,
 		isConnected,
+		isLoading,
 		sortType: (type === 'VALUE' ? 'value' : 'volume') as 'value' | 'volume',
 	};
 };

@@ -1,93 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from '../web-socket/use-web-socket';
-import type { StockRankingDto, StockRankingResponse } from '../../types/stock';
+import type { StockRankingDto } from '../../types/stock';
 import { STOCK_WS_URL, getStockRanking } from '../../api/stock';
 
 export type RankingType = 'VALUE' | 'VOLUME';
 
-export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
-	const [rankingData, setRankingData] = useState<StockRankingDto[]>([]);
+const formatStockData = (item: any): StockRankingDto => ({
+	stockCode: item.stockCode,
+	stockName: item.stockName,
+	currentPrice: Number(item.currentPrice) || 0,
+	priceChange: Number(item.priceChange) || 0,
+	changeRate: Number(item.changeRate) || 0,
+	cumulativeAmount: Number(item.cumulativeAmount) || 0,
+	cumulativeVolume: Number(item.cumulativeVolume) || 0,
+});
 
+export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
+	const queryClient = useQueryClient();
 	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
 
-	// 랭킹 타입이 변경되면 기존 데이터 초기화 후 HTTP 요청으로 초기 데이터 로드
-	useEffect(() => {
-		setRankingData([]);
+	const queryKey = ['stockRanking', type, limit];
+	const { data: rankingData = [], isLoading } = useQuery<StockRankingDto[]>({
+		queryKey,
+		queryFn: async () => {
+			const data = await getStockRanking(type, limit);
+			return data.map(formatStockData);
+		},
+		staleTime: 1000 * 60, // 1분간 캐시 유지 (웹소켓 연결 전 임시 유지용)
+		gcTime: 1000 * 60 * 5,
+	});
 
-		const fetchInitialData = async () => {
-			try {
-				const data = await getStockRanking(type, limit);
-				// HTTP 응답 데이터를 내부 상태 포맷에 맞게 변환 (안전한 숫자형 변환 적용)
-				const formattedData = data.map((item: any) => ({
-					stockCode: item.stockCode,
-					stockName: item.stockName,
-					currentPrice: Number(item.currentPrice) || 0,
-					priceChange: Number(item.priceChange) || 0,
-					changeRate: Number(item.changeRate) || 0,
-					cumulativeAmount: Number(item.cumulativeAmount) || 0,
-					cumulativeVolume: Number(item.cumulativeVolume) || 0,
-				}));
-				setRankingData(formattedData);
-			} catch (error) {
-				console.error('Failed to fetch initial stock ranking:', error);
-			}
-		};
-
-		fetchInitialData();
-	}, [type, limit]);
-
-	// 연결(및 재연결) 시 STOMP 구독 및 초기 데이터 요청
 	useEffect(() => {
 		if (!isConnected) return;
 
-		// API 명세서에 따른 구독 토픽 (/topic/ranking)
 		const topic = '/topic/ranking';
 
-		// 토픽 구독 (데이터 수신)
 		const subscription = subscribe(topic, (data: any) => {
-			// console.log('웹소켓 수신 데이터:', data);
 			const rawList = Array.isArray(data) ? data : [data];
+			const parsedList = rawList.map(formatStockData);
 
-			try {
-				const parsedList: StockRankingDto[] = rawList.map(
-					(item: StockRankingResponse) => ({
-						stockCode: item.stockCode,
-						stockName: item.stockName,
-						currentPrice: Number(item.currentPrice) || 0,
-						priceChange: Number(item.priceChange) || 0,
-						changeRate: Number(item.changeRate) || 0,
-						cumulativeAmount: Number(item.cumulativeAmount) || 0,
-						cumulativeVolume: Number(item.cumulativeVolume) || 0,
-					}),
-				);
-
-				setRankingData((prev) => {
-					// 기존 데이터와 새로운 데이터를 병합 (stockCode 기준)
-					const stockMap = new Map(prev.map((item) => [item.stockCode, item]));
-					parsedList.forEach((item) => {
-						stockMap.set(item.stockCode, item);
-					});
-
-					const mergedList = Array.from(stockMap.values());
-
-					// 정렬 및 제한
-					if (type === 'VALUE') {
-						mergedList.sort((a, b) => b.cumulativeAmount - a.cumulativeAmount);
-					} else {
-						mergedList.sort((a, b) => b.cumulativeVolume - a.cumulativeVolume);
-					}
-
-					return mergedList.slice(0, limit);
+			// 웹소켓 수신 시 React Query 캐시 업데이트
+			queryClient.setQueryData<StockRankingDto[]>(queryKey, (prev = []) => {
+				const stockMap = new Map(prev.map((item) => [item.stockCode, item]));
+				parsedList.forEach((item) => {
+					stockMap.set(item.stockCode, item);
 				});
-			} catch (error) {
-				console.error('Failed to parse stock ranking data:', error);
-			}
+
+				const mergedList = Array.from(stockMap.values());
+
+				if (type === 'VALUE') {
+					mergedList.sort((a, b) => b.cumulativeAmount - a.cumulativeAmount);
+				} else {
+					mergedList.sort((a, b) => b.cumulativeVolume - a.cumulativeVolume);
+				}
+
+				return mergedList.slice(0, limit);
+			});
 		});
 
 		return () => {
 			subscription?.unsubscribe();
 		};
-	}, [isConnected, subscribe, limit, type]);
+	}, [isConnected, subscribe, limit, type, queryClient]);
 
-	return { rankingData, isConnected };
+	return { rankingData, isConnected, isLoading };
 };
