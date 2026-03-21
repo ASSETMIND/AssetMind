@@ -4,6 +4,7 @@ import { ToastItem } from './ToastItem';
 const meta: Meta<typeof ToastItem> = {
   title: 'Components/Common/Toast',
   component: ToastItem,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     controls: { disable: true },

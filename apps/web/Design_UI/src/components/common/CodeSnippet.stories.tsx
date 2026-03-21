@@ -4,6 +4,7 @@ import { CodeSnippet } from './CodeSnippet';
 const meta: Meta<typeof CodeSnippet> = {
   title: 'Components/Common/CodeSnippet',
   component: CodeSnippet,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     backgrounds: {

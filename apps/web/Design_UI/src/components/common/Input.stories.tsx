@@ -6,6 +6,7 @@ import { useState } from 'react';
 const meta: Meta<typeof Input> = {
   title: 'Components/Common/Input',
   component: Input,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     backgrounds: { default: 'surface' },
