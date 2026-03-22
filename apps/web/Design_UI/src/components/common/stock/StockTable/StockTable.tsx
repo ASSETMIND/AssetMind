@@ -42,33 +42,22 @@ const HeartIcon = ({ active }: { active: boolean }) => (
 // ─── SlotPrice ────────────────────────────────────────────────
 
 const SlotPrice = ({ value }: { value: number }) => {
-  const formatted = value.toLocaleString("ko-KR") + "원";
-  const [current, setCurrent] = useState(formatted);
-  const [next, setNext] = useState(formatted);
-  const [phase, setPhase] = useState<"idle" | "exit" | "enter">("idle");
+  const [display, setDisplay] = useState(value.toLocaleString("ko-KR") + "원");
+  const [animating, setAnimating] = useState(false);
   const prevRef = useRef(value);
 
   useEffect(() => {
     if (prevRef.current === value) return;
     prevRef.current = value;
-    const newFormatted = value.toLocaleString("ko-KR") + "원";
 
-    // 1단계: 현재 값 위로 퇴장
-    setNext(newFormatted);
-    setPhase("exit");
+    // 새 값이 아래에서 올라오는 것만 — 200ms
+    setAnimating(true);
+    const t = setTimeout(() => {
+      setDisplay(value.toLocaleString("ko-KR") + "원");
+      setAnimating(false);
+    }, 200);
 
-    // 2단계: 새 값 아래에서 진입
-    const t1 = setTimeout(() => {
-      setCurrent(newFormatted);
-      setPhase("enter");
-    }, 300);
-
-    // 3단계: idle 복귀
-    const t2 = setTimeout(() => {
-      setPhase("idle");
-    }, 600);
-
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    return () => clearTimeout(t);
   }, [value]);
 
   return (
@@ -88,34 +77,11 @@ const SlotPrice = ({ value }: { value: number }) => {
       <span
         style={{
           display: "inline-block",
-          transition: "transform 300ms ease-out, opacity 300ms ease-out",
-          transform:
-            phase === "exit"
-              ? "translateY(-100%)"
-              : phase === "enter"
-              ? "translateY(100%)"
-              : "translateY(0)",
-          opacity: phase === "idle" ? 1 : 0,
+          animation: animating ? "slotEnter 200ms ease-out forwards" : "none",
         }}
       >
-        {current}
+        {display}
       </span>
-      {phase === "enter" && (
-        <span
-          style={{
-            display: "inline-block",
-            position: "absolute",
-            left: 0,
-            top: 0,
-            transition: "transform 300ms ease-out, opacity 300ms ease-out",
-            transform: "translateY(0)",
-            opacity: 1,
-            animation: "slotEnter 300ms ease-out forwards",
-          }}
-        >
-          {next}
-        </span>
-      )}
       <style>{`
         @keyframes slotEnter {
           from { transform: translateY(100%); opacity: 0; }
