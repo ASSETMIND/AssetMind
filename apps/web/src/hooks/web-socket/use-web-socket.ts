@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Client, type IMessage } from '@stomp/stompjs';
-import { useWebSocketStore } from '../../store/web-socket';
 import SockJS from 'sockjs-client';
 
 /*
@@ -8,7 +8,7 @@ import SockJS from 'sockjs-client';
  *
  * [반환 속성]
  * - isConnected: 웹소켓 연결 상태 (boolean)
- * - lastMessage: 최근 수신된 메시지 이벤트 객체
+ * - lastMessage: (성능 최적화를 위해 전역 상태에서 제거됨)
  * - error: 발생한 에러 이벤트 객체
  * - sendMessage: STOMP 메시지 발행 (publish) 함수
  * - subscribe: 특정 채널 구독 함수
@@ -21,14 +21,19 @@ export const useWebSocket = (
 	reconnectInterval = 5000,
 	onConnect?: () => void,
 ) => {
-	const {
-		isConnected,
-		lastMessage,
-		error,
-		setIsConnected,
-		setLastMessage,
-		setError,
-	} = useWebSocketStore();
+	const queryClient = useQueryClient();
+	const queryKey = ['websocket', 'status', url];
+
+	// React Query를 전역 상태 저장소처럼 사용하여 연결 상태 관리 (Zustand 대체)
+	const { data: status } = useQuery({
+		queryKey,
+		queryFn: () => ({ isConnected: false, error: null as Event | null }),
+		staleTime: Infinity, // 상태 자동 만료 방지
+		gcTime: Infinity, // 언마운트 후에도 상태 유지
+	});
+
+	const isConnected = status?.isConnected ?? false;
+	const error = status?.error ?? null;
 
 	const client = useRef<Client | null>(null);
 	const connectRef = useRef<() => void>(() => {});
@@ -47,19 +52,24 @@ export const useWebSocket = (
 			webSocketFactory: () => new SockJS(url),
 			reconnectDelay: reconnectInterval, // 자동 재연결 간격 설정
 			onConnect: () => {
-				setIsConnected(true);
-				setError(null);
+				queryClient.setQueryData(queryKey, { isConnected: true, error: null });
 				console.log('STOMP Connected');
 				onConnectRef.current?.();
 			},
 			onStompError: (frame) => {
 				// IFrame은 Event 타입이 아니므로 CustomEvent로 래핑하여 전달
 				const errorEvent = new CustomEvent('stomp-error', { detail: frame });
-				setError(errorEvent);
+				queryClient.setQueryData(queryKey, (prev: any) => ({
+					...prev,
+					error: errorEvent,
+				}));
 				console.error('STOMP Error:', frame);
 			},
 			onWebSocketClose: () => {
-				setIsConnected(false);
+				queryClient.setQueryData(queryKey, (prev: any) => ({
+					...prev,
+					isConnected: false,
+				}));
 				console.log('STOMP Disconnected');
 			},
 			// 디버그 로그가 필요하면 아래 주석 해제
@@ -68,7 +78,7 @@ export const useWebSocket = (
 
 		stompClient.activate();
 		client.current = stompClient;
-	}, [url, reconnectInterval, setIsConnected, setError]);
+	}, [url, reconnectInterval, queryClient]);
 
 	// connect 함수가 변경될 때마다 ref 업데이트 (재귀 호출 지원)
 	useEffect(() => {
@@ -80,8 +90,11 @@ export const useWebSocket = (
 			client.current.deactivate();
 			client.current = null;
 		}
-		setIsConnected(false);
-	}, [setIsConnected]);
+		queryClient.setQueryData(['websocket', 'status', url], (prev: any) => ({
+			...prev,
+			isConnected: false,
+		}));
+	}, [url, queryClient]);
 
 	// STOMP 메시지 발행 (Publish)
 	const sendMessage = useCallback((destination: string, body: any = {}) => {
@@ -101,12 +114,8 @@ export const useWebSocket = (
 			if (!client.current || !client.current.connected) return;
 
 			return client.current.subscribe(destination, (message: IMessage) => {
-				// 기존 store와의 호환성을 위해 data 프로퍼티가 있는 객체로 변환하여 저장
-				const eventLike = new MessageEvent('message', {
-					data: message.body,
-				});
-				setLastMessage(eventLike);
-
+				// 💡 lastMessage 전역 상태 업데이트 제거 (성능 최적화)
+				// 데이터를 소비하는 곳(개별 훅)에서 callback을 통해 즉시 처리하도록 강제합니다.
 				if (callback) {
 					try {
 						callback(JSON.parse(message.body));
@@ -116,7 +125,7 @@ export const useWebSocket = (
 				}
 			});
 		},
-		[setLastMessage],
+		[],
 	);
 
 	// 생명주기 관리
@@ -131,7 +140,6 @@ export const useWebSocket = (
 
 	return {
 		isConnected,
-		lastMessage,
 		error,
 		sendMessage,
 		subscribe,

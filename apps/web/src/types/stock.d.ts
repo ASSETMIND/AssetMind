@@ -44,3 +44,16 @@ export interface StockDetailResponse {
 	cumulativeVolume: string;
 	time: string; // HHMMSS
 }
+
+/**
+ * [API Spec] STOMP: /topic/surge-alerts
+ * 실시간 급등락 전역 알림 응답 데이터 타입 (모든 필드가 String)
+ */
+export interface SurgeAlertPayload {
+	stockCode: string;
+	stockName: string;
+	rate: string;
+	currentPrice: string;
+	changeRate: string;
+	alertTime: string;
+}
