@@ -1,0 +1,42 @@
+-- 레거시 테이블(stock_data) 삭제
+DROP TABLE IF EXISTS stock_data;
+
+-- 실시간 체결 데이터 파티셔닝 테이블(부모 테이블) 생성
+CREATE TABLE raw_tick (
+    stock_code VARCHAR(20) NOT NULL,
+    current_price INTEGER NOT NULL,
+    price_change INTEGER NOT NULL,
+    volume INTEGER NOT NULL,
+    trade_timestamp TIMESTAMPTZ NOT NULL
+) PARTITION BY RANGE (trade_timestamp);
+
+CREATE INDEX idx_raw_tick_stock_time ON raw_tick (stock_code, trade_timestamp DESC);
+
+-- 차트 생성에 필요한 OHLCV(시가, 고가, 저가, 종가, 거래량) 캔들 테이블 생성
+-- 1분봉 테이블
+CREATE TABLE ohlcv_1m (
+    stock_code VARCHAR(20) NOT NULL,
+    candle_timestamp TIMESTAMPTZ NOT NULL,
+    open_price INTEGER NOT NULL,
+    high_price INTEGER NOT NULL,
+    low_price INTEGER NOT NULL,
+    close_price INTEGER NOT NULL,
+    volume BIGINT NOT NULL,
+    PRIMARY KEY (stock_code, candle_timestamp)
+);
+-- 1분봉 최신순 조회를 위한 인덱스
+CREATE INDEX idx_ohlcv_1m_lookup ON ohlcv_1m (stock_code, candle_timestamp DESC);
+
+-- 일봉 테이블
+CREATE TABLE ohlcv_1d (
+    stock_code VARCHAR(20) NOT NULL,
+    candle_timestamp TIMESTAMPTZ NOT NULL,
+    open_price INTEGER NOT NULL,
+    high_price INTEGER NOT NULL,
+    low_price INTEGER NOT NULL,
+    close_price INTEGER NOT NULL,
+    volume BIGINT NOT NULL,
+    PRIMARY KEY (stock_code, candle_timestamp)
+);
+-- 1일봉 최신순 조회를 위한 인덱스
+CREATE INDEX idx_ohlcv_1d_lookup ON ohlcv_1d (stock_code, candle_timestamp DESC);

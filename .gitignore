@@ -121,3 +121,7 @@ bin/
 db/
 *.db
 *.sqlite
+
+# Flyway 마이그레이션 스크립트 예외 처리
+!apps/server-stock/src/main/resources/db/
+!apps/server-stock/src/main/resources/db/migration/
