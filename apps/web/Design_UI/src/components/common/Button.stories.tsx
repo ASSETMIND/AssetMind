@@ -7,6 +7,7 @@ import { useState } from 'react';
 const meta: Meta<typeof Button> = {
   title: 'Components/Common/Button',
   component: Button,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     backgrounds: { 

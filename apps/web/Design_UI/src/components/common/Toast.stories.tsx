@@ -131,6 +131,7 @@ const MultipleToastsDemo = () => {
 const meta: Meta<typeof ToastTester> = {
   title:'Components/Common/Toast/Interactive',
   component: ToastTester,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     backgrounds: { 

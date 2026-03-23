@@ -66,7 +66,7 @@ const preview: Preview = {
         { name: "light", value: "#ffffff" },
       ],
     },
-    layout: "centered",
+    layout: "fullscreen",
     controls: { hideNoControlsWarning: true },
     docs: {
       theme: {

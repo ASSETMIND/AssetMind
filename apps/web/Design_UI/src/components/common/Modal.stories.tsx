@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 const meta: Meta<typeof Modal> = {
   title: 'Components/Common/Modal',
   component: Modal,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     backgrounds: { 
