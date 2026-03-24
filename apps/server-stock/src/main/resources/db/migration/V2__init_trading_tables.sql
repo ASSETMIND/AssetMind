@@ -12,6 +12,10 @@ CREATE TABLE raw_tick (
 
 CREATE INDEX idx_raw_tick_stock_time ON raw_tick (stock_code, trade_timestamp DESC);
 
+-- 테스트용 더미 파티셔닝 테이블
+CREATE TABLE raw_tick_20260320 PARTITION OF raw_tick
+    FOR VALUES FROM ('2026-03-20 00:00:00+09') TO ('2026-03-21 00:00:00+09');
+
 -- 차트 생성에 필요한 OHLCV(시가, 고가, 저가, 종가, 거래량) 캔들 테이블 생성
 -- 1분봉 테이블
 CREATE TABLE ohlcv_1m (
