@@ -54,8 +54,8 @@ class StompAlertMessagingAdapterTest {
         assertEquals("005930", sentResponse.stockCode());
         assertEquals("삼성전자", sentResponse.stockName());
         assertEquals("급등", sentResponse.rate());
-        assertEquals(80000L, sentResponse.currentPrice());
-        assertEquals(10.5, sentResponse.changeRate());
+        assertEquals("80000", sentResponse.currentPrice());
+        assertEquals("10.5", sentResponse.changeRate());
         assertNotNull(sentResponse.alertTime());
     }
 }

@@ -1,6 +1,13 @@
 -- 레거시 테이블(stock_data) 삭제
 DROP TABLE IF EXISTS stock_data;
 
+-- 종목 메타 데이터 테이블 생성
+CREATE TABLE IF NOT EXISTS stock_meta_data (
+    stock_code VARCHAR(20) PRIMARY KEY,
+    stock_name VARCHAR(100) NOT NULL,
+    market VARCHAR(50)
+);
+
 -- 실시간 체결 데이터 파티셔닝 테이블(부모 테이블) 생성
 CREATE TABLE raw_tick (
     stock_code VARCHAR(20) NOT NULL,

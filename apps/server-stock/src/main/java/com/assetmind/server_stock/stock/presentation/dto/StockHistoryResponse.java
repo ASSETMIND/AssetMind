@@ -2,7 +2,6 @@ package com.assetmind.server_stock.stock.presentation.dto;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
 import java.time.format.DateTimeFormatter;
 import lombok.Builder;
 
