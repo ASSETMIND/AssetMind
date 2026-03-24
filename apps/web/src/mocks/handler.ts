@@ -224,8 +224,25 @@ const stockRankingResolver: HttpResponseResolver = ({ request }) => {
 	});
 };
 
-// WebSocket 핸들러 정의
-const stockSocket = ws.link('ws://localhost:8080/stocks');
+// SockJS 통신 초기화 HTTP 요청 모킹 (웹소켓 연결 전 사전 요청)
+const sockJsInfoResolver: HttpResponseResolver = () => {
+	return HttpResponse.json(
+		{
+			websocket: true, // 웹소켓 사용 가능 여부
+			origins: ['*:*'],
+			cookie_needed: false,
+			entropy: Math.floor(Math.random() * 9999999999),
+		},
+		{
+			status: 200,
+		},
+	);
+};
+
+// WebSocket 핸들러 정의 (SockJS 동적 URL 패턴으로 변경)
+const stockSocket = ws.link(
+	'ws://localhost:8080/ws-stock/:serverId/:sessionId/websocket',
+);
 
 /*
   [Handlers]
@@ -259,24 +276,62 @@ export const handlers = [
 	// 주식 랭킹 조회 (GET)
 	http.get('*/api/stocks/ranking/value', stockRankingResolver),
 
+	// SockJS Info 사전 요청 (GET)
+	http.get('*/ws-stock/info', sockJsInfoResolver),
+
+	// SockJS Fallback XHR 폴링 요청 무시 (콘솔 에러 방지용 안전장치)
+	http.post('*/ws-stock/:serverId/:sessionId/xhr', () =>
+		HttpResponse.text('o\n'),
+	),
+	http.post('*/ws-stock/:serverId/:sessionId/xhr_streaming', () =>
+		HttpResponse.text('o\n'),
+	),
+	http.post('*/ws-stock/:serverId/:sessionId/xhr_send', () =>
+		HttpResponse.text('', { status: 204 }),
+	),
+
 	// WebSocket 연결 핸들링
 	stockSocket.addEventListener('connection', ({ client }) => {
-		console.log('[MSW] WebSocket connected');
+		console.log('[MSW] WebSocket connected (SockJS Mocking)');
 
-		let intervalId: any;
+		// SockJS 연결 성공을 알리는 Open 프레임('o') 전송
+		client.send('o');
+
+		// STOMP 메시지를 SockJS 배열 포맷으로 래핑하는 헬퍼 함수
+		const sendStomp = (frame: string) => {
+			client.send('a' + JSON.stringify([frame]));
+		};
+
+		// SockJS 하트비트 주기적 전송 (연결 유지를 위해 20초마다 'h' 프레임 전송)
+		const sockJsHeartbeatId = setInterval(() => {
+			client.send('h');
+		}, 20000);
+
+		let rankingIntervalId: any;
+		let alertIntervalId: any;
 		let currentLimit = 10;
 		let cachedData: any[] = [];
 
 		client.addEventListener('message', (event) => {
-			const data = event.data as string;
+			let data = event.data as string;
 
-			// 1. CONNECT 프레임 처리
+			// SockJS 클라이언트가 보낸 JSON 배열 래핑에서 실제 STOMP 문자열 추출
+			if (data.startsWith('["') && data.endsWith('"]')) {
+				try {
+					data = JSON.parse(data)[0];
+				} catch (e) {
+					console.error('[MSW] SockJS 파싱 에러:', e);
+				}
+			}
+
+			// CONNECT 프레임 처리
 			if (data.startsWith('CONNECT') || data.startsWith('STOMP')) {
-				client.send('CONNECTED\nversion:1.2\n\n\0');
+				// STOMP.js의 Heart-beat 타임아웃을 방지하기 위해 heart-beat:0,0 헤더 추가
+				sendStomp('CONNECTED\nversion:1.2\nheart-beat:0,0\n\n\0');
 				return;
 			}
 
-			// 2. SUBSCRIBE 프레임 처리
+			// SUBSCRIBE 프레임 처리
 			if (data.startsWith('SUBSCRIBE')) {
 				const destMatch = data.match(/destination:([^\n]+)/);
 				const idMatch = data.match(/id:([^\n]+)/);
@@ -348,18 +403,75 @@ export const handlers = [
 							// STOMP MESSAGE 프레임 구성
 							const messageFrame = `MESSAGE\ndestination:${destination}\nsubscription:${id}\nmessage-id:${Date.now()}\ncontent-type:application/json\n\n${payload}\0`;
 
-							client.send(messageFrame);
+							sendStomp(messageFrame);
 						};
 
 						sendUpdate();
-						if (intervalId) clearInterval(intervalId);
-						intervalId = setInterval(sendUpdate, 1000);
+						if (rankingIntervalId) clearInterval(rankingIntervalId);
+						rankingIntervalId = setInterval(sendUpdate, 1000);
+					}
+
+					// 급등락 알림 구독 처리
+					if (destination === '/topic/surge-alerts') {
+						console.log(`[MSW] STOMP 구독 시작: ${destination}`);
+
+						// 실제 시장과 유사한 모의 데이터 풀 구성
+						const mockStocks = [
+							{ stockCode: '005930', stockName: '삼성전자', basePrice: 75000 },
+							{
+								stockCode: '000660',
+								stockName: 'SK하이닉스',
+								basePrice: 130000,
+							},
+							{ stockCode: '035420', stockName: 'NAVER', basePrice: 190000 },
+							{ stockCode: '035720', stockName: '카카오', basePrice: 53000 },
+							{ stockCode: '005380', stockName: '현대차', basePrice: 240000 },
+							{
+								stockCode: '373220',
+								stockName: 'LG에너지솔루션',
+								basePrice: 400000,
+							},
+						];
+
+						const sendAlert = () => {
+							const targetStock =
+								mockStocks[Math.floor(Math.random() * mockStocks.length)];
+							const isSurge = Math.random() > 0.5;
+							const changePercent = (Math.random() * 10 + 5).toFixed(2); // 5% ~ 15% 사이 등락
+							const multiplier = isSurge
+								? 1 + Number(changePercent) / 100
+								: 1 - Number(changePercent) / 100;
+							const currentPrice = Math.floor(
+								targetStock.basePrice * multiplier,
+							);
+
+							const mockAlert = {
+								stockCode: targetStock.stockCode,
+								stockName: targetStock.stockName,
+								rate: isSurge ? 'UP' : 'DOWN',
+								currentPrice: String(currentPrice),
+								changeRate: (isSurge ? '+' : '-') + changePercent + '%',
+								alertTime: new Date().toLocaleTimeString('ko-KR', {
+									hour12: false,
+								}),
+							};
+
+							const payload = JSON.stringify(mockAlert);
+							const messageFrame = `MESSAGE\ndestination:${destination}\nsubscription:${id}\nmessage-id:${Date.now()}\ncontent-type:application/json\n\n${payload}\0`;
+
+							sendStomp(messageFrame);
+						};
+
+						// 연결 후 2초 뒤 첫 알림, 이후 8초마다 알림 전송
+						setTimeout(sendAlert, 2000);
+						if (alertIntervalId) clearInterval(alertIntervalId);
+						alertIntervalId = setInterval(sendAlert, 8000);
 					}
 				}
 				return;
 			}
 
-			// 3. SEND 프레임 처리 (Limit 업데이트 등)
+			// SEND 프레임 처리 (Limit 업데이트 등)
 			if (data.startsWith('SEND')) {
 				const destMatch = data.match(/destination:([^\n]+)/);
 				if (destMatch && destMatch[1].trim().startsWith('/app/ranking/')) {
@@ -381,7 +493,9 @@ export const handlers = [
 		});
 
 		client.addEventListener('close', () => {
-			if (intervalId) clearInterval(intervalId);
+			if (rankingIntervalId) clearInterval(rankingIntervalId);
+			if (alertIntervalId) clearInterval(alertIntervalId);
+			clearInterval(sockJsHeartbeatId);
 		});
 	}),
 ];
