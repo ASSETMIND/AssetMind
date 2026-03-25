@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { OrderbookTable } from "./OrderbookTable";
-import type { OrderbookRow, TradeTickRow, MarketInfo } from "./OrderbookTable";
+import type { OrderbookRow, MarketInfo } from "./OrderbookTable";
+import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
+
 
 // ─── Mock Data ────────────────────────────────────────────────
 
@@ -34,20 +36,20 @@ const MOCK_BIDS: OrderbookRow[] = [
 ];
 
 const MOCK_TRADES: TradeTickRow[] = [
-  { price: 94800, quantity: 1, isBuy: true  },
-  { price: 94750, quantity: 1, isBuy: false },
-  { price: 94800, quantity: 1, isBuy: true  },
-  { price: 94700, quantity: 1, isBuy: false },
-  { price: 94750, quantity: 1, isBuy: true  },
-  { price: 94800, quantity: 1, isBuy: false },
-  { price: 94750, quantity: 1, isBuy: true  },
-  { price: 94700, quantity: 1, isBuy: false },
-  { price: 94800, quantity: 1, isBuy: true  },
-  { price: 94750, quantity: 1, isBuy: false },
-  { price: 94700, quantity: 1, isBuy: true  },
-  { price: 94750, quantity: 1, isBuy: false },
-  { price: 94800, quantity: 1, isBuy: true  },
-  { price: 94700, quantity: 1, isBuy: false },
+  { id: "t1", price: 94800, quantity: 1, isBuy: true  },
+  { id: "t2", price: 94750, quantity: 1, isBuy: false },
+  { id: "t3", price: 94800, quantity: 1, isBuy: true  },
+  { id: "t4", price: 94700, quantity: 1, isBuy: false },
+  { id: "t5", price: 94750, quantity: 1, isBuy: true  },
+  { id: "t6", price: 94800, quantity: 1, isBuy: false },
+  { id: "t7", price: 94750, quantity: 1, isBuy: true  },
+  { id: "t8", price: 94700, quantity: 1, isBuy: false },
+  { id: "t9", price: 94800, quantity: 1, isBuy: true  },
+  { id: "t10", price: 94750, quantity: 1, isBuy: false },
+  { id: "t11", price: 94700, quantity: 1, isBuy: true  },
+  { id: "t12", price: 94750, quantity: 1, isBuy: false },
+  { id: "t13", price: 94800, quantity: 1, isBuy: true  },
+  { id: "t14", price: 94700, quantity: 1, isBuy: false },
 ];
 
 const MOCK_MARKET_INFO: MarketInfo = {

@@ -1,4 +1,6 @@
 import { cn } from "../../../../lib/utils";
+import { TradeTickerList } from "../TradeTickerList/TradeTickerList";
+import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 import { ExternalLinkIcon } from "../../../icons/ExternalLinkIcon";
 import { GlobalEmptyState } from "../../../common/GlobalEmptyState/GlobalEmptyState";
 
@@ -10,11 +12,11 @@ export interface OrderbookRow {
   quantity: number;
 }
 
-export interface TradeTickRow {
+/*export interface TradeTickRow {
   price: number;
   quantity: number;
   isBuy: boolean;
-}
+}*/
 
 export interface MarketInfo {
   weekHigh: number;
@@ -321,34 +323,11 @@ export const OrderbookTable = ({
           {asks.map((ask, i) => (
             <AskRow key={i} row={ask} maxQty={maxAskQty} />
           ))}
-          {/* 체결강도 */}
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "4px 8px 4px 0",
-            gap: "10px",
-            height: "24px",
-          }}>
-            <span style={{ fontSize: "12px", fontWeight: 400, color: "#9F9F9F" }}>체결강도</span>
-            <span style={{ fontSize: "12px", fontWeight: 400, color: "#256AF4" }}>{tradeStrength}%</span>
-          </div>
-          {/* 체결 내역 */}
-          {trades.map((trade, i) => (
-            <div key={i} style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              height: "32px",
-              padding: "0 8px 0 0",
-              gap: "10px",
-            }}>
-              <span style={{ fontSize: "12px", fontWeight: 400, color: "#9F9F9F" }}>{fmt(trade.price)}</span>
-              <span style={{ fontSize: "12px", fontWeight: 400, color: trade.isBuy ? "#EA580C" : "#256AF4" }}>
-                {trade.quantity}
-              </span>
-            </div>
-          ))}
+        <TradeTickerList
+            trades={trades.map((t, i) => ({ ...t, id: `trade-${i}` }))}
+            tradeStrength={tradeStrength}
+             height={trades.length * 32 + 24}
+            />
         </div>
 
         {/* 중앙: 현재가 + 호가 가격 */}
