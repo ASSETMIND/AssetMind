@@ -51,30 +51,28 @@ stateDiagram-v2
 
 ## 3. BDD 테스트 시나리오
 
-**시나리오 요약 (총 17건):**
+**시나리오 요약 (총 16건):**
 
-1.  **자원 생명주기 (Lifecycle Management):** 4건 (내부 생성, 외부 주입, 가드 클로즈, 안전한 종료)
-2.  **응답 정규화 (Response Normalization):** 4건 (Fast Path, 표준 매핑, 빈 값 보정, 실패 유지)
-3.  **단건 수집 및 에러 (Single Job & Error):** 4건 (정책 누락, 파라미터 병합, 도메인/시스템 에러 분기)
-4.  **배치 및 동시성 (Batch & Concurrency):** 4건 (입력 혼합, 잘못된 입력, 부분 성공, 빈 요청)
-5.  **팩토리 협력 (Factory Interaction):** 1건 (올바른 위임 검증)
+1. **자원 생명주기 (Lifecycle Management):** 4건 (내부/외부 자원 소유권 분기, Guard Clause, 예외 시 안전 종료)
+2. **응답 정규화 (Response Normalization):** 4건 (Fast Path, 표준 매핑, 결측치 보정, 에러 코드 방어)
+3. **단건 수집 및 에러 (Single Job & Error):** 4건 (설정 누락 예외, 파라미터 오버라이드 병합, Known/Unknown 에러 계층 래핑)
+4. **배치 및 동시성 (Batch & Concurrency):** 4건 (혼합 타입 파싱, 방어적 타입 검사, 부분 성공 격리 보장, 빈 요청 처리)
 
-|  테스트 ID   | 분류 |    기법    | 전제 조건 (Given)                  | 수행 (When)                    | 검증 (Then)                                                                         | 입력 데이터 / 상황           |
-| :----------: | :--: | :--------: | :--------------------------------- | :----------------------------- | :---------------------------------------------------------------------------------- | :--------------------------- |
-| **LIFE-01**  | 통합 |    상태    | `http_client=None`으로 초기화      | `async with Service` 블록 진입 | 1. 내부 `AsyncHttpAdapter` 생성<br>2. 종료 시 `close()` 호출됨                      | `client=None`                |
-| **LIFE-02**  | 통합 |    상태    | 외부 `client` 주입하여 초기화      | `async with Service` 블록 종료 | 종료 시 주입된 클라이언트의 `close()`가 **호출되지 않음**                           | `client=MockObj`             |
-| **LIFE-03**  | 단위 |   방어적   | `async with` 없이 인스턴스만 생성  | `extract_job()` 직접 호출      | `RuntimeError` 발생 ("HTTP Client is not initialized")                              | Context Entry 누락           |
-| **LIFE-04**  | 단위 |    구조    | 내부 Client 생성 후 예외 발생      | `__aexit__` 강제 호출          | 예외 발생 여부와 관계없이 `client.close()`가 안전하게 수행됨                        | `exc_type=ValueError`        |
-| **NORM-01**  | 단위 |     -      | 이미 `status="success"`인 응답     | `_normalize_response` 호출     | 로직 수행 없이 원본 객체 즉시 반환 (Fast Path)                                      | `meta={"status": "success"}` |
-| **NORM-02**  | 단위 | 결정(BVA)  | 다양한 성공 코드 (대소문자/공백)   | `_normalize_response` 호출     | 모두 `status="success"`로 변환됨 (200, 0, OK, SUCCESS)                              | `code="200"`, `"Ok "`, `"0"` |
-| **NORM-03**  | 단위 |   견고성   | `status_code`가 없거나 빈 값       | `_normalize_response` 호출     | 1. `status="success"` 설정<br>2. `status_code=200` 기본값 보정                      | `code=None` or `""`          |
-| **NORM-04**  | 단위 |     -      | 실패 코드 (404, 500 등)            | `_normalize_response` 호출     | `status`가 변경되지 않음 (성공으로 오인 방지)                                       | `code="404"`, `"ERROR"`      |
-|  **JOB-01**  | 예외 |    로직    | Config에 없는 Job ID               | `extract_job` 호출             | `ExtractorError` 발생 ("Job ID not found")                                          | `job_id="GHOST_JOB"`         |
-|  **JOB-02**  | 단위 | 데이터흐름 | Override 파라미터 제공             | `extract_job` 호출             | Factory 생성 시 Config 파라미터 위에 Override 값이 덮어씌워짐                       | `params={"p": "new"}`        |
-|  **JOB-03**  | 예외 |    계층    | Extractor가 `ExtractorError` 발생  | `extract_job` 호출             | 경고(Warning) 로그만 남기고, 에러를 그대로(Raise) 상위 전파                         | `Raise ExtractorError`       |
-|  **JOB-04**  | 예외 |    계층    | Extractor가 `Exception` 발생       | `extract_job` 호출             | 에러(Error) 로그 기록 후, `ExtractorError`로 래핑하여 던짐                          | `Raise KeyError`             |
-| **BATCH-01** | 통합 |    구조    | `str`과 `tuple`이 섞인 리스트 요청 | `extract_batch` 호출           | 두 가지 타입 모두 파싱되어 정상적으로 작업 큐에 추가됨                              | `["id1", ("id2", param)]`    |
-| **BATCH-02** | 단위 |   방어적   | 리스트에 잘못된 타입(int) 포함     | `extract_batch` 호출           | 해당 항목은 무시(Skip)하고 경고 로그 기록 후, 나머지 작업만 수행                    | `requests=["id1", 123]`      |
-| **BATCH-03** | 통합 |  **격리**  | 3건 중 1건에서 에러 발생           | `extract_batch` 호출           | 1. 전체 프로세스 중단 없음<br>2. 결과 리스트에 `ResponseDTO`와 `Exception`이 혼합됨 | Mock: `[OK, Error, OK]`      |
-| **BATCH-04** | 단위 |    BVA     | 빈 리스트 요청                     | `extract_batch` 호출           | 에러 없이 빈 리스트 `[]` 즉시 반환                                                  | `requests=[]`                |
-| **FACT-01**  | 단위 |    협력    | 정상적인 Job ID 요청               | `extract_job` 호출             | `ExtractorFactory.create_extractor`가 올바른 인자로 호출됨                          | Spy on `Factory.create`      |
+|  테스트 ID   | 분류 |   기법   | 전제 조건 (Given)                                    | 수행 (When)                     | 검증 (Then)                                                                           | 입력 데이터 / 상황      |
+| :----------: | :--: | :------: | :--------------------------------------------------- | :------------------------------ | :------------------------------------------------------------------------------------ | :---------------------- |
+| **LIFE-01**  | 통합 |   상태   | `http_client=None`으로 서비스 초기화                 | `async with` 진입 후 종료       | 1. 진입 시 내부 `AsyncHttpAdapter` 생성<br>2. 종료 시 `close()` 정상 호출 확인        | `client=None`           |
+| **LIFE-02**  | 통합 |   상태   | 외부에서 생성된 `http_client` 주입                   | `async with` 진입 후 종료       | 종료 시 주입된 외부 클라이언트의 `close()`가 **호출되지 않음** (자원 보존)            | `client=MockAdapter`    |
+| **LIFE-03**  | 단위 |   방어   | `async with`를 통한 초기화 없이 생성                 | `extract_job()` 직접 호출       | `RuntimeError` 발생 ("HTTP Client is not initialized")                                | Context Entry 누락      |
+| **LIFE-04**  | 단위 |   예외   | 내부 자원 할당 상태에서 작업 중 강제 예외 발생       | `__aexit__` 호출 (Context 이탈) | 로직 실패와 무관하게 `client.close()`가 안전하게 수행되어 누수 방지                   | `Raise Exception`       |
+| **NORM-01**  | 단위 |   경로   | 이미 `status="success"`인 정규화 완료 응답           | `_normalize_response()` 호출    | 추가 연산 없이 원본 DTO를 즉시 반환 (Fast Path)                                       | `status="success"`      |
+| **NORM-02**  | 단위 |   BVA    | 다양한 이질적 성공 코드 (200, 0, OK, SUCCESS)        | `_normalize_response()` 호출    | 모든 케이스가 `status="success"`로 일관되게 정규화됨                                  | `code="200", "0", "OK"` |
+| **NORM-03**  | 단위 |   견고   | `status_code`가 None 이거나 빈 문자열인 응답         | `_normalize_response()` 호출    | 암묵적 성공으로 간주하여 `success` 및 `200`으로 자가 보정                             | `code=None` or `""`     |
+| **NORM-04**  | 단위 |   방어   | 외부 API 실패 코드 (404, 500, ERROR) 응답            | `_normalize_response()` 호출    | 상태가 `success`로 덮어씌워지지 않고 원본 상태 유지                                   | `code="404", "FAIL"`    |
+|  **JOB-01**  | 예외 |   로직   | Config에 정의되지 않은 잘못된 Job ID                 | `extract_job()` 호출            | `ConfigurationError` 발생 ("Job ID를 찾을 수 없습니다")                               | `job_id="INVALID"`      |
+|  **JOB-02**  | 통합 |  데이터  | Policy 기본 파라미터 + Override 파라미터 동시 존재   | `extract_job()` 호출            | Factory에 전달된 최종 파라미터에 Override 값이 병합(우선 적용)됨                      | `override={"k":"v"}`    |
+|  **JOB-03**  | 예외 |   계층   | Extractor가 `ETLError` (도메인 에러) 발생            | `extract_job()` 호출            | 예외를 중복 래핑하지 않고 그대로 `ETLError`로 상위 전파                               | `Raise ETLError`        |
+|  **JOB-04**  | 예외 |   계층   | Extractor가 `KeyError` (시스템 에러) 발생            | `extract_job()` 호출            | 구조화된 로깅 후 `ExtractorError`로 강제 래핑하여 전파                                | `Raise KeyError`        |
+| **BATCH-01** | 통합 |   구조   | `str` ID와 `tuple` (ID, Params)이 혼합된 배치 리스트 | `extract_batch()` 호출          | 두 가지 타입이 모두 올바르게 파싱되어 병렬 작업 큐에 추가 및 수행됨                   | `["id1", ("id2", {})]`  |
+| **BATCH-02** | 단위 |   방어   | 배치 리스트 내에 잘못된 타입(int)이 섞여 있음        | `extract_batch()` 호출          | 잘못된 타입은 로깅 후 무시하고 유효한 작업만 정상 반환                                | `["id1", 1234]`         |
+| **BATCH-03** | 통합 | **격리** | 3건의 요청 중 2번째 작업에서 네트워크 예외 발생      | `extract_batch()` 호출          | 1. 파이프라인 크래시 없음<br>2. 결과 리스트에 성공 DTO 2개, Exception 객체 1개가 담김 | `[OK, Error, OK]`       |
+| **BATCH-04** | 단위 |   BVA    | 빈 리스트(`[]`)로 배치 수집 요청                     | `extract_batch()` 호출          | 에러 없이 즉시 빈 리스트 `[]` 반환                                                    | `requests=[]`           |

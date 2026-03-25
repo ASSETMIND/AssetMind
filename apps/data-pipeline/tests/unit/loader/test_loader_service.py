@@ -21,31 +21,32 @@ def mock_logger_isolation():
         yield mock_get_logger
 
 @pytest.fixture
-def mock_config():
-    """ConfigManager 격리 객체"""
-    config = MagicMock()
-    # 기본적으로 "s3" 타겟을 반환하도록 설정
-    config.get.return_value = "s3"
-    return config
+def mock_config_manager():
+    """ConfigManager 싱글톤 로드를 격리하고 Policy 반환값을 제어하는 픽스처"""
+    with patch("src.loader.loader_service.ConfigManager") as mock_cm_cls:
+        mock_config_instance = MagicMock()
+        mock_policy = MagicMock()
+        
+        # S3Loader 초기화에 필요한 설정값 Mocking
+        mock_policy.s3 = {"bucket_name": "test-s3-bucket"}
+        mock_policy.region = "ap-northeast-2"
+        mock_config_instance.get_loader.return_value = mock_policy
+        
+        mock_cm_cls.load.return_value = mock_config_instance
+        yield mock_config_instance
 
 @pytest.fixture
-def loader_service(mock_config):
-    """기본 설정이 주입된 LoaderService 인스턴스"""
-    return LoaderService(mock_config)
-
-@pytest.fixture
-def mock_s3_module():
+def mock_s3_loader_cls():
     """동적 임포트(Lazy Loading)되는 S3Loader 모듈을 격리하기 위한 픽스처"""
     mock_s3_instance = MagicMock()
     mock_s3_instance.load.return_value = True
     
     mock_s3_cls = MagicMock(return_value=mock_s3_instance)
     
-    # 가상의 모듈 객체 생성
+    # 가상의 S3 모듈 환경 구성 (sys.modules 패치)
     mock_module = MagicMock()
     mock_module.S3Loader = mock_s3_cls
     
-    # sys.modules를 패치하여 실제 파일이 없어도 Import가 성공하도록 조작
     with patch.dict("sys.modules", {"src.loader.providers.s3_loader": mock_module}):
         yield mock_s3_cls
 
@@ -57,131 +58,103 @@ def valid_dto():
     return dto
 
 # ========================================================================================
-# 1. 객체 초기화 테스트 (Initialization)
+# 1. 데이터 무결성 검증 (Validation)
 # ========================================================================================
 
-def test_init_01_successful_initialization(mock_config):
-    """[INIT-01] [Standard] 정상적인 Config 객체 주입 시 성공적으로 초기화됨"""
-    # Given: 유효한 config 객체 (Fixture)
-    
-    # When: 서비스 인스턴스 생성
-    service = LoaderService(mock_config)
-    
-    # Then: 캐시 공간이 정상적으로 빈 딕셔너리로 준비됨
-    assert isinstance(service._loader_cache, dict)
-    assert len(service._loader_cache) == 0
-
-def test_init_e_01_missing_config_defense():
-    """[INIT-E-01] [BVA] ConfigManager가 None일 경우 ConfigurationError 발생 (조기 차단)"""
-    # Given: None 값의 config
-    invalid_config = None
-    
-    # When & Then: 인스턴스화 시도 시 에러 발생
-    with pytest.raises(ConfigurationError, match="ConfigManager가 누락되었습니다"):
-        LoaderService(invalid_config)
-
-# ========================================================================================
-# 2. 데이터 무결성 테스트 (Validation)
-# ========================================================================================
-
-def test_dto_e_01_invalid_dto_type(loader_service):
-    """[DTO-E-01] [Type] 잘못된 DTO 타입 전달 시 LoaderError 발생 및 조기 종료"""
-    # Given: DTO가 아닌 일반 딕셔너리
+def test_dto_e_01_invalid_dto_type(mock_config_manager):
+    """[DTO-E-01] [Type] 잘못된 DTO 타입 전달 시 LoaderError 발생 및 조기 차단"""
+    # GIVEN: 유효한 타겟(aws)으로 서비스 생성, 입력값은 잘못된 Dict 타입
+    service = LoaderService(target_loader="aws")
     invalid_payload = {"data": "dummy"}
     
-    # When & Then: execute_load 호출 시 방어 로직 작동
+    # WHEN & THEN: execute_load 호출 시 타입 검증에 실패하여 LoaderError 발생
     with pytest.raises(LoaderError) as exc_info:
-        loader_service.execute_load(invalid_payload)
+        service.execute_load(invalid_payload)
         
     assert "잘못된 DTO 타입 전달" in exc_info.value.message
-    assert exc_info.value.should_retry is False
 
 # ========================================================================================
-# 3. 지연 초기화 및 캐싱 성능 테스트 (Lazy Loading & Caching)
+# 2. 지연 초기화 및 캐싱 (Lazy Loading & Caching)
 # ========================================================================================
 
-def test_load_01_cold_start_lazy_loading(loader_service, mock_s3_module, valid_dto):
-    """[LOAD-01] [State] 최초 호출 시 동적 임포트를 통해 객체를 생성하고 캐시에 등록함 (Cold-Start)"""
-    # Given: 캐시가 비어있는 상태
-    assert "s3" not in loader_service._loader_cache
+def test_load_01_aws_cold_start(mock_config_manager, mock_s3_loader_cls, valid_dto):
+    """[LOAD-01] [State] 최초 호출 시 동적 임포트를 통해 S3Loader를 생성하고 캐싱함"""
+    # GIVEN: 캐시가 비어있는 초기 상태의 서비스
+    service = LoaderService(target_loader="aws")
+    assert "aws" not in service._loader_cache
     
-    # When: execute_load 최초 호출
-    result = loader_service.execute_load(valid_dto)
+    # WHEN: 최초 적재 위임 수행
+    result = service.execute_load(valid_dto)
     
-    # Then: 
-    # 1. S3Loader 클래스가 1회 초기화됨
-    mock_s3_module.assert_called_once_with(config=loader_service._config)
-    # 2. 캐시에 인스턴스가 저장됨
-    assert "s3" in loader_service._loader_cache
-    # 3. load 메서드가 정상 반환됨
+    # THEN: 
+    # 1. S3Loader가 올바른 설정값으로 1회 초기화됨
+    mock_s3_loader_cls.assert_called_once_with(
+        bucket_name="test-s3-bucket", 
+        region="ap-northeast-2"
+    )
+    # 2. 인스턴스가 캐시에 정상 등록됨
+    assert "aws" in service._loader_cache
     assert result is True
 
-def test_load_02_fast_path_caching(loader_service, mock_s3_module, valid_dto):
-    """[LOAD-02] [State] 두 번째 호출부터는 객체 생성 없이 캐시된 인스턴스를 재사용함 (Fast-Path)"""
-    # Given: 최초 호출을 통해 캐시에 로더를 등록시킴
-    loader_service.execute_load(valid_dto)
-    mock_s3_module.reset_mock() # 호출 횟수 초기화
+def test_load_02_aws_fast_path(mock_config_manager, mock_s3_loader_cls, valid_dto):
+    """[LOAD-02] [State] 두 번째 호출부터는 객체 생성 없이 캐시된 인스턴스를 재사용함"""
+    # GIVEN: 1회 실행을 통해 캐시에 로더를 활성화시킨 상태
+    service = LoaderService(target_loader="aws")
+    service.execute_load(valid_dto)
+    mock_s3_loader_cls.reset_mock() # 첫 번째 호출 카운트 초기화
     
-    # When: 두 번째로 연속 호출 (수만 건의 데이터가 들어오는 상황 가정)
-    result = loader_service.execute_load(valid_dto)
+    # WHEN: 연달아 두 번째로 적재 호출 수행
+    result = service.execute_load(valid_dto)
     
-    # Then:
-    # 1. S3Loader 클래스의 인스턴스화(생성자 호출)가 발생하지 않아야 함!
-    mock_s3_module.assert_not_called()
-    # 2. 캐시 히트로 인해 바로 결과가 반환됨
+    # THEN:
+    # 생성자가 다시 호출되지 않아야 함 (Fast-Path 캐시 히트)
+    mock_s3_loader_cls.assert_not_called()
     assert result is True
 
 # ========================================================================================
-# 4. 설정값 검증 및 폴백 테스트 (Fallback & Configuration)
+# 3. 설정 및 타겟 검증 (Configuration & Exception Bypass)
 # ========================================================================================
 
-def test_conf_01_default_fallback(loader_service, mock_config, mock_s3_module, valid_dto):
-    """[CONF-01] [BVA] 설정값 누락 시 기본값(s3)으로 Fallback 처리되어 정상 동작함"""
-    # Given: config.get() 호출 시 키워드 인자로 전달된 기본값을 반환하도록 Mocking
-    mock_config.get.side_effect = lambda key, default: default
+def test_conf_e_01_unsupported_target(mock_config_manager, valid_dto):
+    """[CONF-E-01] [BVA] 미지원 타겟 명시 시 예외 래핑을 우회(Bypass)하여 ConfigurationError 발생"""
+    # GIVEN: 지원하지 않는 플랫폼('gcp')으로 초기화
+    service = LoaderService(target_loader="gcp")
     
-    # When: 적재 실행
-    loader_service.execute_load(valid_dto)
-    
-    # Then: 기본 타겟인 "s3"가 캐시에 저장되고 사용됨
-    assert "s3" in loader_service._loader_cache
-
-def test_conf_e_01_unsupported_target(loader_service, mock_config, valid_dto):
-    """[CONF-E-01] [MC/DC] 지원하지 않는 타겟 명시 시 ConfigurationError 발생"""
-    # Given: 타겟이 "mysql"로 설정됨
-    mock_config.get.return_value = "mysql"
-    
-    # When & Then
+    # WHEN & THEN: LoaderError로 감싸지지 않고 순수 ConfigurationError가 상위로 전파됨
     with pytest.raises(ConfigurationError, match="지원하지 않는 로더 타겟입니다"):
-        loader_service.execute_load(valid_dto)
+        service.execute_load(valid_dto)
 
 # ========================================================================================
-# 5. 예외 격리 및 래핑 테스트 (Exception Handling)
+# 4. 예외 격리 및 래핑 (Exception Handling)
 # ========================================================================================
 
-def test_err_01_lazy_init_exception_wrapping(loader_service, mock_s3_module, valid_dto):
-    """[ERR-01] [Exception Wrapping] 지연 로딩 중 발생하는 예상치 못한 에러를 LoaderError로 래핑함"""
-    # Given: S3Loader 초기화 시점에 ImportError 발생을 강제함
-    mock_s3_module.side_effect = ImportError("No module named 'boto3'")
+def test_err_01_unexpected_error_wrapping(mock_config_manager, valid_dto):
+    """[ERR-01] [Exception] 지연 초기화 중 발생하는 알 수 없는 에러를 LoaderError로 강제 래핑"""
+    # GIVEN: 설정 로드 중 예측 불가능한 시스템 에러(KeyError) 발생 가정
+    service = LoaderService(target_loader="aws")
+    mock_config_manager.get_loader.side_effect = KeyError("Invalid Config Key")
     
-    # When & Then: Raw Exception(ImportError)이 상위로 유출되지 않고 LoaderError로 래핑되어야 함
+    # WHEN & THEN: 발생한 에러가 LoaderError로 래핑되어 추적성이 확보되어야 함
     with pytest.raises(LoaderError) as exc_info:
-        loader_service.execute_load(valid_dto)
+        service.execute_load(valid_dto)
         
-    assert "로더 지연 초기화 중 치명적 오류 발생" in exc_info.value.message
-    assert "boto3" in str(exc_info.value.details["error"])
+    assert "로더 지연 초기화 중 오류 발생" in exc_info.value.message
+    assert isinstance(exc_info.value.original_exception, KeyError)
     assert exc_info.value.should_retry is False
-    assert isinstance(exc_info.value.original_exception, ImportError)
 
-def test_exec_01_full_successful_execution(loader_service, mock_s3_module, valid_dto):
-    """[EXEC-01] [Standard] 정상 워크플로우를 타며 내부 로더의 반환값을 올바르게 리턴함"""
-    # Given: 내부 로더 객체의 load() 메서드가 True를 반환하도록 Mocking 완료 (Fixture 내부)
+# ========================================================================================
+# 5. 정상 실행 (Execution)
+# ========================================================================================
+
+def test_exec_01_delegation_success(mock_config_manager, mock_s3_loader_cls, valid_dto):
+    """[EXEC-01] [Standard] 타겟 로더의 반환값을 올바르게 리턴하며 성공적으로 위임함"""
+    # GIVEN: 내부 S3Loader의 load() 메서드가 True를 반환하도록 준비됨 (Fixture)
+    service = LoaderService(target_loader="aws")
     
-    # When: 실행
-    result = loader_service.execute_load(valid_dto)
+    # WHEN: 실행
+    result = service.execute_load(valid_dto)
     
-    # Then:
+    # THEN: 최종 반환값이 True이며 하위 객체의 load가 정확히 1회 호출됨
     assert result is True
-    # 내부 로더의 load() 메서드에 DTO가 올바르게 전달되었는지 확인
-    cached_instance = loader_service._loader_cache["s3"]
+    cached_instance = service._loader_cache["aws"]
     cached_instance.load.assert_called_once_with(valid_dto)

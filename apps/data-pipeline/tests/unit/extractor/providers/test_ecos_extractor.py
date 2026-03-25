@@ -1,185 +1,192 @@
 import pytest
-import asyncio
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, Any
+from datetime import datetime, timedelta
 
-# [Target Modules] - Imports are kept for structure, but patched in fixtures
-from src.common.dtos import RequestDTO, ExtractedDTO
-from src.common.exceptions import ETLError, ExtractorError
-from src.common.interfaces import IHttpClient
-from src.common.config import ConfigManager
+# 대상 모듈
+from src.extractor.providers.ecos_extractor import ECOSExtractor
+from src.common.exceptions import ExtractorError
 
 # ========================================================================================
-# [Mocks & Stubs] DTO Replacement (Isolation)
+# [Mocks & Stubs] 의존성 격리를 위한 테스트 전용 객체
 # ========================================================================================
 
 class MockRequestDTO:
-    """테스트용 Request DTO"""
-    def __init__(self, job_id: str = "unknown", params: Dict = None):
+    """RequestDTO 의존성을 격리하기 위한 Mock 클래스"""
+    def __init__(self, job_id: str = "job_ecos", params: dict = None):
         self.job_id = job_id
         self.params = params or {}
 
 class MockExtractedDTO:
-    """테스트용 Extracted DTO"""
-    def __init__(self, data: Any = None, meta: Dict = None):
+    """ExtractedDTO 의존성을 격리하기 위한 Mock 클래스"""
+    def __init__(self, data: any = None, meta: dict = None):
         self.data = data
         self.meta = meta or {}
 
-class MockSecretStr:
-    """Pydantic SecretStr 동작 모방"""
-    def __init__(self, value: str):
-        self._value = value
-    
-    def get_secret_value(self) -> str:
-        return self._value
-
-class MockJobPolicy:
-    """Config 내 JobPolicy 객체 모방"""
-    def __init__(self, provider: str = "ECOS", path: str = "StatisticSearch", params: Dict = None):
+class MockPolicy:
+    """Config 추출 정책 반환용 Mock 클래스"""
+    def __init__(self, provider="ECOS", path="StatisticSearch", params=None):
         self.provider = provider
         self.path = path
-        self.params = params or {
-            "stat_code": "100Y",
-            "cycle": "D",
-            "item_code1": "0001"
-        }
+        self.params = params or {"stat_code": "100Y", "cycle": "D", "item_code1": "0001"}
 
 # ========================================================================================
-# [Fixtures] 테스트 환경 설정
+# [Fixtures] 단위 테스트 환경 통제
 # ========================================================================================
 
 @pytest.fixture(autouse=True)
 def mock_environment():
-    """
-    [Critical Fix]
-    1. LogManager 및 Decorator 패치 (Pass-through)
-    2. DTO 패치 (TypeError 방지) - src.common.dtos 레벨에서 적용하여 재임포트 시에도 적용됨
-    """
+    """데코레이터 및 공통 모듈에 의한 사이드 이펙트(Delay, 예외 등)를 차단합니다."""
     passthrough = lambda *args, **kwargs: lambda func: func
-    
-    with patch("src.common.log.LogManager.get_logger") as mock_get_logger, \
-         patch("src.common.decorators.log_decorator.log_decorator", side_effect=passthrough), \
-         patch("src.common.decorators.retry_decorator.retry", side_effect=passthrough), \
-         patch("src.common.decorators.rate_limit_decorator.rate_limit", side_effect=passthrough), \
-         patch("src.common.dtos.RequestDTO", side_effect=MockRequestDTO), \
-         patch("src.common.dtos.ExtractedDTO", side_effect=MockExtractedDTO):
-        
-        mock_get_logger.return_value = MagicMock()
+    with patch("src.common.decorators.log_decorator.log_decorator", passthrough), \
+         patch("src.common.decorators.retry_decorator.retry", passthrough), \
+         patch("src.common.decorators.rate_limit_decorator.rate_limit", passthrough), \
+         patch("src.extractor.providers.ecos_extractor.ExtractedDTO", MockExtractedDTO):
         yield
 
 @pytest.fixture
 def mock_http_client():
-    client = MagicMock(spec=IHttpClient)
+    """네트워크 I/O를 통제하는 Mock HTTP 클라이언트"""
+    client = MagicMock()
     client.get = AsyncMock()
     return client
 
 @pytest.fixture
 def mock_config():
-    config = MagicMock(spec=ConfigManager)
-    config.ecos = MagicMock()
+    """ConfigManager와 ECOS 전용 설정을 흉내내는 Mock 객체"""
+    config = MagicMock()
     config.ecos.base_url = "https://ecos.bok.or.kr/api"
-    config.ecos.api_key = MockSecretStr("test_api_key")
-    config.extraction_policy = {
-        "job_valid": MockJobPolicy(),
-        "job_kis": MockJobPolicy(provider="KIS"),
-    }
+    
+    # 평문 API Key 반환 모방 (SecretStr 호환)
+    mock_secret = MagicMock()
+    mock_secret.get_secret_value.return_value = "test_api_key"
+    config.ecos.api_key = mock_secret
+    
+    # 기본 정책 셋업
+    config.get_extractor.return_value = MockPolicy()
     return config
 
 @pytest.fixture
-def extractor(mock_http_client, mock_config):
+def mock_abstract_init(mock_config):
     """
-    모듈 임포트 시점 제어 및 클린 룸 테스트 환경 제공
+    ECOSExtractor는 AbstractExtractor를 상속받습니다.
+    super().__init__ 내부에서 self.config가 세팅된다고 가정하고 이를 강제 주입합니다.
+    (TypeError 방지 및 의존성 주입 해결)
     """
-    module_name = "src.extractor.providers.ecos_extractor"
-    # 기존에 로드된 모듈이 있다면 삭제하여, mock_environment의 패치가 적용된 상태로 재임포트
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-    
-    from src.extractor.providers.ecos_extractor import ECOSExtractor
-    return ECOSExtractor(mock_http_client, mock_config)
+    def fake_init(self, http_client):
+        self.http_client = http_client
+        self.config = mock_config
+        
+    with patch("src.extractor.providers.ecos_extractor.AbstractExtractor.__init__", new=fake_init):
+        yield
+
+@pytest.fixture
+def extractor(mock_http_client, mock_abstract_init):
+    """테스트 대상 ECOSExtractor 인스턴스"""
+    return ECOSExtractor(mock_http_client)
 
 # ========================================================================================
-# [INIT] 초기화 테스트 (Initialization)
+# [INIT] 인스턴스 초기화 테스트
 # ========================================================================================
 
-def test_init_01_base_url_empty(mock_http_client, mock_config):
-    """[INIT-01] ecos.base_url이 비어있는 설정 객체 -> ExtractorError"""
-    from src.extractor.providers.ecos_extractor import ECOSExtractor
-    
+def test_init_01_base_url_empty(mock_http_client, mock_config, mock_abstract_init):
+    """[INIT-01] GIVEN: base_url이 비어있는 상태 WHEN: 초기화 THEN: ExtractorError 발생"""
+    # GIVEN
     mock_config.ecos.base_url = ""
-    with pytest.raises(ExtractorError, match="'ecos.base_url' is empty"):
-        ECOSExtractor(mock_http_client, mock_config)
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="'base_url' is empty"):
+        ECOSExtractor(mock_http_client)
 
-def test_init_02_api_key_missing(mock_http_client, mock_config):
-    """[INIT-02] ecos.api_key가 없는 설정 객체 -> ExtractorError"""
-    from src.extractor.providers.ecos_extractor import ECOSExtractor
-    
-    mock_config.ecos.api_key = None
-    with pytest.raises(ExtractorError, match="'ecos.api_key' is missing"):
-        ECOSExtractor(mock_http_client, mock_config)
+def test_init_02_api_key_missing(mock_http_client, mock_config, mock_abstract_init):
+    """[INIT-02] GIVEN: api_key 평문이 누락된 상태 WHEN: 초기화 THEN: ExtractorError 발생"""
+    # GIVEN
+    mock_config.ecos.api_key.get_secret_value.return_value = ""
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="'api_key' is missing"):
+        ECOSExtractor(mock_http_client)
 
 def test_init_03_valid_init(extractor):
-    """[INIT-03] 유효한 설정(URL, Key 포함) 객체 -> 인스턴스 정상 생성"""
-    assert extractor.config.ecos.base_url == "https://ecos.bok.or.kr/api"
+    """[INIT-03] GIVEN: 정상적인 설정 객체 WHEN: 초기화 THEN: URL 및 평문 키 적재 완료"""
+    # GIVEN & WHEN (Fixture에서 처리됨)
+    # THEN
+    assert extractor.base_url == "https://ecos.bok.or.kr/api"
+    assert extractor.api_key == "test_api_key"
 
 # ========================================================================================
-# [REQ] 요청 검증 테스트 (Validation - MC/DC)
+# [REQ] 파라미터 및 정책 검증 테스트
 # ========================================================================================
 
 def test_req_01_missing_job_id(extractor):
-    """[REQ-01] job_id가 없는 요청 객체 -> ExtractorError"""
-    # Fix: MockRequestDTO 사용
-    request = MockRequestDTO(job_id=None) # type: ignore
-    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+    """[REQ-01] GIVEN: job_id가 누락된 요청 WHEN: 검증 로직 실행 THEN: ExtractorError 발생"""
+    # GIVEN
+    request = MockRequestDTO(job_id=None)
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="'job_id'는 필수 항목입니다"):
         extractor._validate_request(request)
 
-def test_req_02_policy_not_found(extractor):
-    """[REQ-02] 설정 파일에 정의되지 않은 job_id 요청 -> ExtractorError"""
+def test_req_02_policy_exception(extractor, mock_config):
+    """[REQ-02] GIVEN: 정책 조회 중 알 수 없는 예외 발생 WHEN: 검증 로직 실행 THEN: ExtractorError 래핑"""
+    # GIVEN
     request = MockRequestDTO(job_id="job_unknown")
-    with pytest.raises(ExtractorError, match="Policy not found"):
+    mock_config.get_extractor.side_effect = Exception("Policy Not Found")
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="설정 오류: Policy Not Found"):
         extractor._validate_request(request)
 
-def test_req_03_provider_mismatch(extractor):
-    """[REQ-03] Provider가 'KIS'로 설정된 정책 요청 -> ExtractorError"""
+def test_req_03_provider_mismatch(extractor, mock_config):
+    """[REQ-03] GIVEN: ECOS가 아닌 타 제공자(KIS) 정책 WHEN: 검증 로직 실행 THEN: ExtractorError 발생"""
+    # GIVEN
     request = MockRequestDTO(job_id="job_kis")
-    with pytest.raises(ExtractorError, match="Provider Mismatch"):
+    mock_config.get_extractor.return_value = MockPolicy(provider="KIS")
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="API 제공자 불일치"):
         extractor._validate_request(request)
 
-def test_req_04_missing_date_params(extractor):
-    """[REQ-04] start_date 파라미터가 누락됨 -> ExtractorError"""
-    request = MockRequestDTO(job_id="job_valid", params={"end_date": "20230101"})
-    with pytest.raises(ExtractorError, match="'start_date' and 'end_date' are mandatory"):
-        extractor._validate_request(request)
+def test_req_04_default_date_injection(extractor, mock_config):
+    """[REQ-04] GIVEN: 요청과 정책 모두 날짜가 누락됨 WHEN: 검증 로직 실행 THEN: 최근 30일 기본값 주입"""
+    # GIVEN
+    request = MockRequestDTO(job_id="job_ecos", params={})
+    mock_config.get_extractor.return_value = MockPolicy(params={})
+    
+    # WHEN
+    extractor._validate_request(request)
+    
+    # THEN
+    assert "start_date" in request.params
+    assert "end_date" in request.params
+    assert len(request.params["start_date"]) == 8 # YYYYMMDD 검증
+
+def test_req_05_dates_already_present(extractor, mock_config):
+    """[REQ-05] GIVEN: 날짜 파라미터가 이미 존재 WHEN: 검증 로직 실행 THEN: 기본값 주입 분기 스킵 (Missing Branch 97, 101 커버)"""
+    # GIVEN
+    request = MockRequestDTO(job_id="job_ecos", params={"start_date": "20230101", "end_date": "20231231"})
+    mock_config.get_extractor.return_value = MockPolicy(params={})
+    
+    # WHEN
+    extractor._validate_request(request)
+    
+    # THEN
+    assert request.params["start_date"] == "20230101"
+    assert request.params["end_date"] == "20231231"
 
 # ========================================================================================
-# [FLOW] 정상 흐름 테스트 (Functional)
+# [FETCH] URL 조립 및 통신 테스트
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_flow_01_happy_path(extractor, mock_http_client):
-    """[FLOW-01] 정상 정책, 서비스 내 INFO-000 응답 -> ResponseDTO 반환 및 URL 검증"""
-    # Given
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230131"})
-    mock_response = {
-        "StatisticSearch": {
-            "list_total_count": 1,
-            "row": [{"TIME": "2023", "DATA_VALUE": "100"}],
-            "RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}
-        }
-    }
-    mock_http_client.get.return_value = mock_response
+async def test_fetch_01_url_construction(extractor, mock_http_client, mock_config):
+    """[FETCH-01] GIVEN: 필수 파라미터 제공 WHEN: 데이터 패치 요청 THEN: ECOS 고유의 순차적 Path URL 호출"""
+    # GIVEN
+    request = MockRequestDTO(job_id="job_ecos", params={"start_date": "20230101", "end_date": "20230131"})
+    mock_config.get_extractor.return_value = MockPolicy(path="/StatisticSearch/")
+    mock_http_client.get.return_value = {"mock": "response"}
     
-    # When
-    response = await extractor.extract(request)
+    # WHEN
+    result = await extractor._fetch_raw_data(request)
     
-    # Then
-    # Fix: MockExtractedDTO 검증
-    assert isinstance(response, MockExtractedDTO)
-    assert response.data == mock_response
-    assert response.meta["job_id"] == "job_valid"
+    # THEN
+    assert result == {"mock": "response"}
     
-    # URL Verification
+    # URL 조립 순서: /base_path/api_key/json/kr/1/100000/stat_code/cycle/start_date/end_date/item_code
     expected_url = (
         "https://ecos.bok.or.kr/api/StatisticSearch/"
         "test_api_key/json/kr/1/100000/"
@@ -188,92 +195,91 @@ async def test_flow_01_happy_path(extractor, mock_http_client):
     mock_http_client.get.assert_called_once_with(expected_url)
 
 # ========================================================================================
-# [DATA] 데이터 안정성 및 응답 구조 테스트 (Data Parsing)
+# [RESP] 응답 데이터 파싱 및 표준화 테스트
 # ========================================================================================
 
-@pytest.mark.asyncio
-async def test_data_01_root_level_failure(extractor, mock_http_client):
-    """[DATA-01] Root 레벨에 RESULT.CODE='INFO-200' -> ExtractorError"""
-    mock_response = {"RESULT": {"CODE": "INFO-200", "MESSAGE": "Limit Exceeded"}}
-    mock_http_client.get.return_value = mock_response
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
-    
-    with pytest.raises(ExtractorError, match="ECOS API Failed"):
-        await extractor.extract(request)
+def test_resp_01_root_error(extractor, mock_config):
+    """[RESP-01] GIVEN: Root 객체에 RESULT 에러 코드 존재 WHEN: 응답 생성 THEN: ExtractorError 발생"""
+    # GIVEN
+    raw_data = {"RESULT": {"CODE": "ERR-100", "MESSAGE": "Auth Failed"}}
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="ECOS API 실패: Auth Failed"):
+        extractor._create_response(raw_data, "job_ecos")
 
-@pytest.mark.asyncio
-async def test_data_02_service_key_missing(extractor, mock_http_client):
-    """[DATA-02] Root에 정책 경로(StatisticSearch) 없음 -> ExtractorError"""
-    mock_response = {"WrongServiceKey": {"row": []}}
-    mock_http_client.get.return_value = mock_response
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
-    
-    with pytest.raises(ExtractorError, match="Invalid ECOS Response"):
-        await extractor.extract(request)
+def test_resp_02_missing_service_key(extractor, mock_config):
+    """[RESP-02] GIVEN: 정책상의 서비스 경로(Key)가 Root에 없음 WHEN: 응답 생성 THEN: ExtractorError 발생"""
+    # GIVEN
+    raw_data = {"WrongServiceKey": {"row": []}}
+    mock_config.get_extractor.return_value = MockPolicy(path="StatisticSearch")
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="잘못된 ECOS 응답: Root key 'StatisticSearch'를 찾을 수 없습니다."):
+        extractor._create_response(raw_data, "job_ecos")
 
-@pytest.mark.asyncio
-async def test_data_03_inner_level_failure(extractor, mock_http_client):
-    """[DATA-03] 서비스 내 RESULT.CODE='INFO-200' -> ExtractorError"""
-    mock_response = {"StatisticSearch": {"RESULT": {"CODE": "INFO-200", "MESSAGE": "No Data"}}}
-    mock_http_client.get.return_value = mock_response
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
-    
-    with pytest.raises(ExtractorError, match="ECOS API Failed"):
-        await extractor.extract(request)
+def test_resp_03_inner_error(extractor, mock_config):
+    """[RESP-03] GIVEN: 서비스 객체 내부에 RESULT 에러 코드 존재 WHEN: 응답 생성 THEN: ExtractorError 발생"""
+    # GIVEN
+    raw_data = {
+        "StatisticSearch": {
+            "RESULT": {"CODE": "ERR-200", "MESSAGE": "No Data Found"}
+        }
+    }
+    mock_config.get_extractor.return_value = MockPolicy(path="StatisticSearch")
+    # WHEN & THEN
+    with pytest.raises(ExtractorError, match="ECOS API 실패: No Data Found"):
+        extractor._create_response(raw_data, "job_ecos")
 
-@pytest.mark.asyncio
-async def test_data_04_root_result_success_ignored(extractor, mock_http_client):
-    """[DATA-04] Root RESULT 존재하나 성공(INFO-000) -> 정상 반환 (방어 로직)"""
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230131"})
-    mock_response = {
+def test_resp_04_inner_success(extractor, mock_config):
+    """[RESP-04] GIVEN: 서비스 내부에 정상 상태코드(INFO-000) 존재 WHEN: 응답 생성 THEN: 성공 DTO 반환"""
+    # GIVEN
+    raw_data = {
+        "StatisticSearch": {
+            "RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"},
+            "row": [{"data": 100}]
+        }
+    }
+    mock_config.get_extractor.return_value = MockPolicy(path="StatisticSearch")
+    
+    # WHEN
+    result = extractor._create_response(raw_data, "job_ecos")
+    
+    # THEN
+    assert result.data == raw_data
+    assert result.meta["status"] == "success"
+    assert result.meta["source"] == "ECOS"
+    assert result.meta["job_id"] == "job_ecos"
+
+def test_resp_05_implicit_success(extractor, mock_config):
+    """[RESP-05] GIVEN: 서비스 내부에 RESULT 객체가 아예 없음 WHEN: 응답 생성 THEN: 암시적 성공 간주 및 반환"""
+    # GIVEN
+    raw_data = {
+        "StatisticSearch": {
+            "row": [{"data": 100}]
+        }
+    }
+    mock_config.get_extractor.return_value = MockPolicy(path="StatisticSearch")
+    
+    # WHEN
+    result = extractor._create_response(raw_data, "job_ecos")
+    
+    # THEN
+    assert result.data == raw_data
+    assert result.meta["status"] == "success"
+
+def test_resp_06_root_success_ignored(extractor, mock_config):
+    """[RESP-06] GIVEN: Root에 성공 코드(INFO-000) 포함 WHEN: 응답 생성 THEN: 에러 없이 파싱 진행 (Missing Branch 171 커버)"""
+    # GIVEN
+    raw_data = {
         "RESULT": {"CODE": "INFO-000", "MESSAGE": "Root Success"},
         "StatisticSearch": {
-            "list_total_count": 1,
-            "row": [{"TIME": "2023", "DATA_VALUE": "100"}],
-            "RESULT": {"CODE": "INFO-000", "MESSAGE": "Success"}
+            "RESULT": {"CODE": "INFO-000", "MESSAGE": "Inner Success"},
+            "row": [{"data": 100}]
         }
     }
-    mock_http_client.get.return_value = mock_response
-
-    response = await extractor.extract(request)
-    assert response.data == mock_response
-    assert response.meta["status"] == "success"
-
-@pytest.mark.asyncio
-async def test_data_05_inner_result_missing(extractor, mock_http_client):
-    """[DATA-05] 서비스 내 RESULT 키 자체가 누락됨 -> 정상 반환 (암시적 성공)"""
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230131"})
-    mock_response = {
-        "StatisticSearch": {
-            "list_total_count": 1,
-            "row": [{"TIME": "2023", "DATA_VALUE": "100"}]
-        }
-    }
-    mock_http_client.get.return_value = mock_response
-
-    response = await extractor.extract(request)
-    assert response.data == mock_response
-
-# ========================================================================================
-# [ERR] 예외 처리 테스트 (Exceptions)
-# ========================================================================================
-
-@pytest.mark.asyncio
-async def test_err_01_system_error_wrapping(extractor, mock_http_client):
-    """[ERR-01] HTTP 클라이언트가 ValueError 발생 -> ExtractorError 래핑"""
-    # Given: Decorator 패치가 정상 작동하면 Raw Exception(ValueError)이 발생해야 함
-    mock_http_client.get.side_effect = ValueError("Network Timeout")
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
+    mock_config.get_extractor.return_value = MockPolicy(path="StatisticSearch")
     
-    # When & Then: AbstractExtractor(부모)가 Catch하여 ExtractorError로 감싸는지 검증
-    with pytest.raises(ExtractorError, match="작업 중 알 수 없는 시스템 오류 발생"):
-        await extractor.extract(request)
-
-@pytest.mark.asyncio
-async def test_err_02_reraise_extractor_error(extractor, mock_http_client):
-    """[ERR-02] 내부 로직에서 ETLError 발생 -> 그대로 전파"""
-    mock_http_client.get.side_effect = ETLError("Parsing Failed")
-    request = MockRequestDTO(job_id="job_valid", params={"start_date": "20230101", "end_date": "20230102"})
+    # WHEN
+    result = extractor._create_response(raw_data, "job_ecos")
     
-    with pytest.raises(ETLError, match="Parsing Failed"):
-        await extractor.extract(request)
+    # THEN
+    assert result.data == raw_data
+    assert result.meta["status"] == "success"

@@ -39,28 +39,33 @@ stateDiagram-v2
 
 ## 3. BDD 테스트 시나리오
 
-**시나리오 요약 (총 15건)**
+**시나리오 요약 (총 18건)**
 
-- **초기화 (Initialization):** 3건 (환경변수 필수값, SecretStr 처리, 기본값)
-- **팩토리/캐싱 (Factory & Caching):** 4건 (최초 로딩, 캐시 적중, 컨텍스트 전환, 활성 설정 조회)
-- **파일 로딩 (File Loading):** 3건 (파일 부재, 빈 파일, 깨진 YAML)
-- **정책 검증 (Policy Validation):** 3건 (정상 파싱, 스키마 불일치 건너뛰기, Provider 타입 오류)
-- **예외/상태 (Exception & State):** 2건 (초기화 전 접근, 상태 격리)
+- **초기화 및 보안 (Init & Security):** 3건 (필수 환경변수, 검증 실패, SecretStr 마스킹)
+- **파일 로드 및 캐싱 (Load & Cache):** 4건 (정상 로드 및 로그 오버라이드, 캐시 적중, 파일 없음, 문법 오류)
+- **유틸리티 (Utility):** 1건 (Get 메서드 기본값 처리)
+- **수집 정책 (Extractor):** 3건 (격리 검증, 누락 방어, 정상 파싱)
+- **적재 정책 (Loader):** 5건 (격리 검증, 누락 방어, AWS 분기, Postgres 분기, 미지원 타겟 에러)
+- **파이프라인 정책 (Pipeline):** 2건 (격리 검증, 누락 방어, 정상 파싱)
 
-|  테스트 ID   | 분류 |  기법  | 전제 조건 (Given)                 | 수행 (When)                          | 검증 (Then)                                                        | 입력 데이터 / 상황     |
-| :----------: | :--: | :----: | :-------------------------------- | :----------------------------------- | :----------------------------------------------------------------- | :--------------------- |
-| **INIT-01**  | 단위 |  표준  | `.env`에 필수 키(KIS 등) 존재     | `ConfigManager()` 직접 초기화        | 인스턴스 생성 성공 및 환경변수 매핑 확인                           | Env: Valid Keys        |
-| **INIT-02**  | 단위 |  BVA   | `.env`에 `KIS_APP_KEY` 누락       | `ConfigManager()` 직접 초기화        | `ValidationError` 발생 (Fail-Fast)                                 | Env: Key Missing       |
-| **INIT-03**  | 단위 |  보안  | `KIS_APP_KEY` 값 설정             | 인스턴스 생성 후 `app_key` 조회      | `SecretStr`로 래핑되어 평문 노출 방지 확인                         | Env: Key="Secret"      |
-| **FACT-01**  | 통합 |  상태  | 캐시 비어있음, YAML 파일 존재     | `get_config("task_A")` 최초 호출     | 1. 파일 로딩 발생<br>2. 캐시에 저장<br>3. `active_task` 설정       | Task: "task_A"         |
-| **FACT-02**  | 통합 |  상태  | `task_A` 이미 로드됨              | `get_config("task_A")` 재호출        | **동일한 객체 ID** 반환 (File I/O 없음)                            | Task: "task_A"         |
-| **FACT-03**  | 통합 |  상태  | `task_A` 활성 상태                | `get_config("task_B")` 호출          | 1. 새로운 객체 로드<br>2. `active_task`가 B로 변경됨               | Task: "task_B"         |
-| **FACT-04**  | 통합 |  상태  | `task_A` 활성 상태                | `get_config()` (인자 없음) 호출      | `task_A`의 설정 객체 반환                                          | Args: None             |
-| **FILE-01**  | 통합 | 견고성 | YAML 파일이 없는 경로             | `get_config("no_file")` 호출         | 에러 없이 기본 설정(Env only) 반환 (로그 출력)                     | File: Missing          |
-| **FILE-02**  | 통합 |  BVA   | 내용은 없으나 존재하는 YAML       | `get_config("empty")` 호출           | 에러 없이 기본 설정 반환                                           | File: Empty            |
-| **FILE-03**  | 통합 | 견고성 | 문법이 깨진(Broken) YAML          | `get_config("broken")` 호출          | 1. `yaml.YAMLError` 내부 처리<br>2. 기본 설정 반환<br>3. 경고 로그 | Content: `key: value:` |
-|  **POL-01**  | 단위 |  표준  | 올바른 `JobPolicy` 정의           | `get_config("valid")` 호출           | `extraction_policy` 딕셔너리에 Job ID 매핑됨                       | Policy: Valid          |
-|  **POL-02**  | 단위 |  부분  | Job A(정상), Job B(필수값 누락)   | `get_config("partial")` 호출         | 1. Job A는 로드 성공<br>2. Job B는 스킵 (Warning Log)              | Policy: 1 Valid, 1 Bad |
-|  **POL-03**  | 단위 |  BVA   | 지원하지 않는 `Provider` ("TEST") | `get_config("invalid_type")` 호출    | 해당 Job 스킵 (Pydantic Enum 검증)                                 | Provider: "UNKNOWN"    |
-|  **ERR-01**  | 예외 |  로직  | 캐시 비어있음 (초기화 전)         | `get_config()` (인자 없음) 호출      | `RuntimeError` 발생 ("Not initialized" 메시지)                     | State: None            |
-| **STATE-01** | 단위 |  상태  | 캐시에 데이터 존재                | 테스트 종료 후 `fixture`에 의한 정리 | `ConfigManager._cache`가 비어있는 상태로 복구됨                    | Teardown Logic         |
+|  테스트 ID  | 분류 | 기법 | 전제 조건 (Given)                        | 수행 (When)                              | 검증 (Then)                                              | 입력 데이터 / 상황              |
+| :---------: | :--: | :--: | :--------------------------------------- | :--------------------------------------- | :------------------------------------------------------- | :------------------------------ |
+| **INIT-01** | 단위 | 표준 | `.env`에 필수 API 키가 모두 존재함       | `ConfigManager()` 인스턴스 생성          | 인스턴스 생성 성공 및 Provider URL 정상 매핑             | `KIS_BASE_URL` 등 유효 값       |
+| **INIT-02** | 단위 | BVA  | `.env`에 `KIS_APP_KEY` 등 필수값 누락    | `ConfigManager()` 인스턴스 생성          | `ValidationError` 발생 (Fail-Fast)                       | 필수 환경변수 제거              |
+| **INIT-03** | 단위 | 보안 | `UPBIT_SECRET_KEY`가 메모리에 로드됨     | 설정 객체 출력 및 속성 접근              | `SecretStr`로 래핑되어 평문 노출이 방지됨                | `secret_key` 접근               |
+| **LOAD-01** | 통합 | 상태 | `extractor.yml` 정상 파일 존재           | `ConfigManager.load("extractor")`        | 1. 파싱 성공 2. 글로벌 로그 설정 오버라이드 3. 캐시 저장 | 파일 내 `log_level: DEBUG` 포함 |
+| **LOAD-02** | 통합 | 상태 | `extractor` 설정이 이미 캐시에 존재함    | `ConfigManager.load("extractor")` 재호출 | 파일 I/O 없이 메모리의 동일한 객체 반환                  | Cache Hit 검증                  |
+| **LOAD-03** | 통합 | 예외 | 문법이 깨진(Broken) YAML 파일 존재       | `ConfigManager.load("broken")`           | `ConfigurationError` 예외 발생 및 Fail-Fast              | 내용: `key: value: :`           |
+| **LOAD-04** | 통합 | BVA  | 요청한 이름의 YAML 파일이 존재하지 않음  | `ConfigManager.load("no_file")`          | 에러 없이 빈 `yaml_data`({})를 가진 객체 반환            | 파일 없음                       |
+| **UTIL-01** | 단위 | BVA  | YAML 데이터에 존재하지 않는 키 조회      | `config.get("invalid_key", "default")`   | 지정한 `default` 값이 반환됨                             | `key="none", default="def"`     |
+| **EXT-01**  | 단위 | 상태 | `file_name`이 'pipeline'인 설정 객체     | `get_extractor("job_1")` 호출            | `ConfigurationError` 발생 (도메인 격리 위반)             | `file_name="pipeline"`          |
+| **EXT-02**  | 단위 | BVA  | `extractor` 설정 내 존재하지 않는 Job ID | `get_extractor("unknown_job")` 호출      | `ConfigurationError` 발생                                | `job_id="unknown"`              |
+| **EXT-03**  | 단위 | 표준 | 정상적인 Job 정책이 정의된 `extractor`   | `get_extractor("job_1")` 호출            | `JobPolicy` Pydantic 모델로 변환 및 반환                 | 정상 `JobPolicy` 스키마         |
+| **LDR-01**  | 단위 | 상태 | `file_name`이 'extractor'인 설정 객체    | `get_loader("aws")` 호출                 | `ConfigurationError` 발생 (도메인 격리 위반)             | `file_name="extractor"`         |
+| **LDR-02**  | 단위 | BVA  | `loader` 설정 내 존재하지 않는 타겟      | `get_loader("unknown_db")` 호출          | `ConfigurationError` 발생                                | `loader_name="unknown"`         |
+| **LDR-03**  | 단위 | 표준 | AWS 타겟 정보가 정의된 `loader` 설정     | `get_loader("aws")` 호출                 | `AWSLoaderPolicy` 타입으로 객체 반환                     | 타겟: `aws`                     |
+| **LDR-04**  | 단위 | 표준 | Postgres 타겟 정보가 정의된 `loader`     | `get_loader("postgres")` 호출            | `PostgresLoaderPolicy` 타입으로 객체 반환                | 타겟: `postgres`                |
+| **LDR-05**  | 단위 | BVA  | 지원하지 않는 로더 타겟(예: 'gcp') 요청  | `get_loader("gcp")` 호출                 | `ConfigurationError` 발생                                | 타겟: `gcp`                     |
+| **PIPE-01** | 단위 | 상태 | `file_name`이 'loader'인 설정 객체       | `get_pipeline("task_1")` 호출            | `ConfigurationError` 발생 (도메인 격리 위반)             | `file_name="loader"`            |
+| **PIPE-02** | 단위 | BVA  | `pipeline` 설정 내 존재하지 않는 Task ID | `get_pipeline("unknown_task")` 호출      | `ConfigurationError` 발생                                | `task_id="unknown"`             |
+| **PIPE-03** | 단위 | 표준 | 정상적인 Task 정책이 정의된 `pipeline`   | `get_pipeline("task_1")` 호출            | `PipelineTask` Pydantic 모델로 변환 및 반환              | 정상 `PipelineTask` 스키마      |
