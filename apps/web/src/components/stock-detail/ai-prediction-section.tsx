@@ -1,3 +1,6 @@
+/*
+	AI 가격 예측 패널  
+*/
 export default function AIPredictionSection() {
 	return (
 		<div className='bg-gray-600 p-4 h-166.5 flex flex-col'>

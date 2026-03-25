@@ -1,3 +1,6 @@
+/*
+	기업 상세정보 네브창
+*/
 export default function CompanyNavSection() {
 	const navItems = [
 		'주요 정보',

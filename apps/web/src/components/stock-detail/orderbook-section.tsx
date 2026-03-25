@@ -1,3 +1,6 @@
+/*
+	호가창 리스트 
+*/
 export default function OrderbookSection() {
 	return (
 		<div className='bg-gray-600 p-4 h-166.5 flex flex-col'>

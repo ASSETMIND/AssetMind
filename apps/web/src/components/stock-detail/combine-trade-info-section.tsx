@@ -1,3 +1,6 @@
+/*
+	매매동향
+ */
 export default function CombinedTradeInfoSection() {
 	return (
 		<div className='bg-gray-600 p-6 flex flex-col gap-16 h-166.5 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]'>

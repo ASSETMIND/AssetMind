@@ -1,3 +1,6 @@
+/*
+	각종 차트들 
+*/
 export default function ChartSection() {
 	return (
 		<>

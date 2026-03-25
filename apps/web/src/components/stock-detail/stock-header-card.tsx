@@ -1,3 +1,6 @@
+/*
+  상단 종목 표시 카드
+*/
 export default function StockHeaderCard() {
 	return (
 		<div className='flex items-center gap-3 pr-8'>

@@ -1,7 +1,10 @@
+/*
+	기업 상세정보 표시란
+*/
 export default function CompanyInfoSection() {
 	return (
 		<div className='bg-gray-600 p-8 flex flex-col gap-12 h-166.5 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]'>
-			{/* 1. 상단: 타이틀 및 기업 설명 */}
+			{/* 상단: 타이틀 및 기업 설명 */}
 			<div>
 				<div className='flex justify-between items-center mb-6'>
 					<div className='flex items-baseline gap-4'>
@@ -22,7 +25,7 @@ export default function CompanyInfoSection() {
 				</div>
 			</div>
 
-			{/* 2. 중앙: 기업 정보 요약 표 */}
+			{/* 중앙: 기업 정보 요약 표 */}
 			<div className='grid grid-cols-2 gap-x-12 gap-y-6 text-sm'>
 				<div className='flex justify-between pb-2 shadow-[0_1px_0_0_rgba(107,114,128,0.5)]'>
 					<span className='font-bold text-white'>시가총액</span>
@@ -56,7 +59,7 @@ export default function CompanyInfoSection() {
 				</div>
 			</div>
 
-			{/* 3. 하단: 매출/산업 구성 (도넛 차트 영역) */}
+			{/* 하단: 매출/산업 구성 (도넛 차트 영역) */}
 			<div>
 				<h3 className='text-xl font-bold text-white mb-2'>매출·산업 구성</h3>
 				<p className='text-xs text-gray-400 mb-6'>
@@ -96,7 +99,7 @@ export default function CompanyInfoSection() {
 				</div>
 			</div>
 
-			{/* 4. 최하단: 주요 사업 */}
+			{/* 최하단: 주요 사업 */}
 			<div>
 				<h3 className='text-xl font-bold text-white mb-6'>주요 사업</h3>
 				<div className='grid grid-cols-2 gap-8'>

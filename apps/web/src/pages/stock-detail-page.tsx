@@ -58,17 +58,12 @@ export default function StockDetailPage() {
 					)}
 					{activeTab === '종목정보' && (
 						<div className='grid grid-cols-12 gap-4'>
-							{/* 왼쪽: 네비게이션 (2칸) */}
 							<div className='col-span-12 md:col-span-3 xl:col-span-2'>
 								<CompanyNavSection />
 							</div>
-
-							{/* 중앙: 기업 정보 상세 (7칸) */}
 							<div className='col-span-12 md:col-span-9 xl:col-span-7 flex flex-col gap-4'>
 								<CompanyInfoSection />
 							</div>
-
-							{/* 오른쪽: AI 예측 패널 (3칸) */}
 							<div className='col-span-12 xl:col-span-3'>
 								<AIPredictionSection />
 							</div>
@@ -76,11 +71,9 @@ export default function StockDetailPage() {
 					)}
 					{activeTab === '거래현황' && (
 						<div className='grid grid-cols-12 gap-4'>
-							{/* 좌측: 거래원 매매 상위 + 투자자별 매매 동향 */}
 							<div className='col-span-12 xl:col-span-9 flex flex-col gap-4'>
 								<CombinedTradeInfoSection />
 							</div>
-							{/* 우측: AI 가격 예측 패널 (이전 탭과 동일) */}
 							<div className='col-span-12 xl:col-span-3'>
 								<AIPredictionSection />
 							</div>
