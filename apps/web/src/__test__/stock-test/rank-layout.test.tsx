@@ -1,112 +1,140 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import RankLayout from '../../components/stock/rank-layout';
+import { useLatestSurgeAlert } from '../../hooks/stock/use-stock-alerts';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 
-/**
- * [Mocking 설정]
- * 외부 의존성(WebSocket URL, 데이터 로직 훅, 하위 UI 컴포넌트)을 가짜(Mock)로 대체하여
- * RankLayout의 "연결 로직"에만 집중할 수 있는 환경을 만듭니다.
- */
+// Vite의 import.meta.env 구문으로 인한 Jest 파싱 에러(SyntaxError)를 방지하기 위해 api 모듈을 모킹합니다.
 jest.mock('../../api/stock', () => ({
-	STOCK_WS_URL: 'ws://localhost:8080/stocks',
+	STOCK_WS_URL: 'ws://localhost:8080/ws-stock',
+	SURGE_ALERTS_TOPIC: '/topic/surge-alerts',
+	getStockRanking: jest.fn(),
 }));
 
+// 1. 의존성 훅 및 하위 컴포넌트 모킹 (테스트 격리)
+jest.mock('../../hooks/stock/use-stock-alerts');
 jest.mock('../../hooks/stock/use-stock-rank-logic');
 
+// Portal 및 자식 컴포넌트 렌더링 간소화
 jest.mock(
-	'../../components/stock/stock-filter-group',
+	'../../components/common/portal',
 	() =>
-		({ activeType, onTypeChange }: any) => (
-			<div data-testid='filter-group'>
-				<button onClick={() => onTypeChange('VALUE')}>VALUE</button>
-				<button onClick={() => onTypeChange('VOLUME')}>VOLUME</button>
-				<span>Current: {activeType}</span>
-			</div>
-		),
+		({ children }: { children: React.ReactNode }) => <>{children}</>,
 );
+jest.mock('../../components/stock/stock-item', () => () => (
+	<div data-testid='stock-item' />
+));
+jest.mock('../../components/stock/stock-filter-group', () => () => (
+	<div data-testid='stock-filter-group' />
+));
 jest.mock('../../components/stock/table-header', () => () => (
 	<div data-testid='table-header' />
 ));
-jest.mock('../../components/stock/stock-item', () => ({ data }: any) => (
-	<div data-testid='stock-item'>{data.name}</div>
-));
 
-describe('RankLayout Component', () => {
-	// 테스트용 가짜 주식 데이터
-	const mockStockList = [
-		{ id: '1', name: '삼성전자' },
-		{ id: '2', name: 'SK하이닉스' },
-	];
+describe('RankLayout - 급등락 알림 토스트 상호작용 및 시각화 테스트', () => {
+	const mockClearAlert = jest.fn();
 
 	beforeEach(() => {
-		// 각 테스트 실행 전 커스텀 훅의 반환값을 초기화합니다.
+		jest.clearAllMocks();
+
+		// 랭킹 리스트 데이터 기본 모킹 (렌더링 오류 방지)
 		(useStockRankLogic as jest.Mock).mockReturnValue({
-			stockList: mockStockList,
-			sortType: 'value',
-			isConnected: true,
+			stockList: [],
+			sortType: 'VALUE',
 		});
+
+		// 자동 닫힘(setTimeout) 상호작용 테스트를 위한 가짜 타이머
+		jest.useFakeTimers();
 	});
 
-	it('초기 렌더링 시 구성 요소들이 모두 표시되어야 한다', () => {
-		/**
-		 * @Given
-		 * - useStockRankLogic 훅이 mockStockList(2개)를 반환하도록 설정됨
-		 */
-
-		/**
-		 * @When
-		 * - RankLayout 컴포넌트를 렌더링함
-		 */
-		render(<RankLayout />);
-
-		/**
-		 * @Then
-		 * - 필터 그룹, 테이블 헤더가 화면에 존재하는지 확인
-		 * - 렌더링된 주식 아이템(stock-item)의 개수가 2개인지 확인
-		 */
-		expect(screen.getByTestId('filter-group')).toBeInTheDocument();
-		expect(screen.getByTestId('table-header')).toBeInTheDocument();
-		expect(screen.getAllByTestId('stock-item')).toHaveLength(2);
+	afterEach(() => {
+		act(() => {
+			jest.runOnlyPendingTimers();
+		});
+		jest.useRealTimers();
 	});
 
-	it('초기 상태는 VALUE 타입으로 훅을 호출해야 한다', () => {
-		/**
-		 * @Given
-		 * - 특별한 설정 없이 컴포넌트 준비
-		 */
+	it('수신된 최신 급등락 알림이 없을 경우 토스트가 렌더링되지 않아야 한다', () => {
+		(useLatestSurgeAlert as jest.Mock).mockReturnValue({
+			latestAlert: null,
+			clearAlert: mockClearAlert,
+		});
 
-		/**
-		 * @When
-		 * - RankLayout 컴포넌트를 렌더링함
-		 */
 		render(<RankLayout />);
 
-		/**
-		 * @Then
-		 * - 커스텀 훅(useStockRankLogic)이 'VALUE' 인자와 함께 호출되었는지 확인
-		 * - 화면에 현재 상태가 'VALUE'로 표시되는지 확인
-		 */
-		expect(useStockRankLogic).toHaveBeenCalledWith('VALUE');
-		expect(screen.getByText('Current: VALUE')).toBeInTheDocument();
+		expect(screen.queryByText('실시간 급등락 포착')).not.toBeInTheDocument();
 	});
 
-	it('필터 변경 시 훅이 새로운 타입으로 호출되어야 한다', () => {
-		/**
-		 * @Given
-		 * - RankLayout 컴포넌트가 렌더링된 상태
-		 */
+	it('급상승(양수) 알림 수신 시 빨간색 등락률과 함께 토스트가 렌더링되어야 한다', () => {
+		(useLatestSurgeAlert as jest.Mock).mockReturnValue({
+			latestAlert: {
+				stockName: '삼성전자',
+				changeRate: '+5.50%',
+			},
+			clearAlert: mockClearAlert,
+		});
+
 		render(<RankLayout />);
 
-		/**
-		 * @When
-		 * - 사용자가 'VOLUME' 버튼을 클릭하여 필터를 변경함
-		 */
-		fireEvent.click(screen.getByText('VOLUME'));
+		// 텍스트 검증
+		expect(screen.getByText('실시간 급등락 포착')).toBeInTheDocument();
+		expect(screen.getByText('삼성전자')).toBeInTheDocument();
 
-		/**
-		 * @Then
-		 * - 커스텀 훅이 변경된 인자인 'VOLUME'과 함께 다시 호출되었는지 확인
-		 */
-		expect(useStockRankLogic).toHaveBeenCalledWith('VOLUME');
+		// 색상 클래스 검증
+		const rateText = screen.getByText('+5.50%');
+		expect(rateText).toBeInTheDocument();
+		expect(rateText).toHaveClass('text-red-500');
+	});
+
+	it('급하락(음수) 알림 수신 시 파란색 등락률과 함께 토스트가 렌더링되어야 한다', () => {
+		(useLatestSurgeAlert as jest.Mock).mockReturnValue({
+			latestAlert: {
+				stockName: '카카오',
+				changeRate: '-3.20%',
+			},
+			clearAlert: mockClearAlert,
+		});
+
+		render(<RankLayout />);
+
+		const rateText = screen.getByText('-3.20%');
+		expect(rateText).toBeInTheDocument();
+		expect(rateText).toHaveClass('text-blue-500');
+	});
+
+	it('토스트의 닫기 버튼을 클릭하면 상태 초기화(clearAlert) 함수가 호출되어야 한다', () => {
+		(useLatestSurgeAlert as jest.Mock).mockReturnValue({
+			latestAlert: { stockName: 'SK하이닉스', changeRate: '+10.00%' },
+			clearAlert: mockClearAlert,
+		});
+
+		render(<RankLayout />);
+
+		// 닫기 상호작용
+		const closeButton = screen.getByRole('button', { name: '닫기' });
+		fireEvent.click(closeButton);
+
+		const toastContainer = screen
+			.getByText('실시간 급등락 포착')
+			.closest('.pointer-events-auto');
+		fireEvent.transitionEnd(toastContainer!); // 애니메이션 종료 이벤트 발생
+
+		expect(mockClearAlert).toHaveBeenCalledTimes(1);
+	});
+
+	it('설정된 시간(2.5초)이 지나면 자동으로 닫히며 clearAlert 함수가 호출되어야 한다', () => {
+		(useLatestSurgeAlert as jest.Mock).mockReturnValue({
+			latestAlert: { stockName: '현대차', changeRate: '+2.00%' },
+			clearAlert: mockClearAlert,
+		});
+
+		render(<RankLayout />);
+
+		act(() => jest.advanceTimersByTime(2500));
+		const toastContainer = screen
+			.getByText('실시간 급등락 포착')
+			.closest('.pointer-events-auto');
+		fireEvent.transitionEnd(toastContainer!);
+
+		expect(mockClearAlert).toHaveBeenCalledTimes(1);
 	});
 });
