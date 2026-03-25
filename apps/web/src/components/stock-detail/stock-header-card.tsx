@@ -1,8 +1,6 @@
 export default function StockHeaderCard() {
 	return (
-		// 🌟 gap-5 -> gap-3으로 줄이고, 끝에 있던 오타 'w' 제거
 		<div className='flex items-center gap-3 pr-8'>
-			{/* 로고: w-8 h-8 크기에 맞게 둥글기(rounded)를 lg로 살짝 조절 */}
 			<div className='w-12 h-12 bg-gray-300 rounded-lg shrink-0' />
 
 			{/* 텍스트 정보 영역 */}
