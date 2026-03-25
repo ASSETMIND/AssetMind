@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import RankLayout from '../../components/stock/rank-layout';
+import RankLayout from '../../components/stock-main/rank-layout';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 
 /**

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useStockRanking, type RankingType } from './use-stock-value-ranking';
-import type { StockItemData } from '../../components/stock/stock-item';
+import type { StockItemData } from '../../components/stock-main/stock-item';
 
 export const useStockRankLogic = (type: RankingType, limit = 40) => {
 	const { rankingData, isConnected, isLoading } = useStockRanking(type, limit);

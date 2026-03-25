@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import RatioBar from '../../components/stock/ratio-bar';
+import RatioBar from '../../components/stock-main/ratio-bar';
 
 describe('RatioBar Component', () => {
 	it('매수(buy)와 매도(sell) 수치가 텍스트로 표시되어야 한다', () => {

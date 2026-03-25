@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import StockFilterGroup from '../../components/stock/stock-filter-group';
+import StockFilterGroup from '../../components/stock-main/stock-filter-group';
 
 describe('StockFilterGroup Component', () => {
 	// Mock 함수 생성: 버튼 클릭 시 호출될 함수를 가짜로 만듭니다.
