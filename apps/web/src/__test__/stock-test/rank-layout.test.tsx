@@ -1,9 +1,8 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import RankLayout from '../../components/stock/rank-layout';
+import RankLayout from '../../components/stock-main/rank-layout';
 import { useLatestSurgeAlert } from '../../hooks/stock/use-stock-alerts';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 
-// Vite의 import.meta.env 구문으로 인한 Jest 파싱 에러(SyntaxError)를 방지하기 위해 api 모듈을 모킹합니다.
 jest.mock('../../api/stock', () => ({
 	STOCK_WS_URL: 'ws://localhost:8080/ws-stock',
 	SURGE_ALERTS_TOPIC: '/topic/surge-alerts',

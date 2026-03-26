@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import StockItem, {
 	type StockItemData,
-} from '../../components/stock/stock-item';
+} from '../../components/stock-main/stock-item';
 import { useStockItemLogic } from '../../hooks/stock/use-stock-item-logic';
 
 /**

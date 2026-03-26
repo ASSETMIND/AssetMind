@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStockItemLogic } from '../../hooks/stock/use-stock-item-logic';
 import RatioBar from './ratio-bar';
 
@@ -26,6 +27,7 @@ interface Props {
 function StockItem({ data }: Props) {
 	const {
 		rank,
+		stockCode,
 		stockName,
 		price,
 		changeRate,
@@ -40,14 +42,24 @@ function StockItem({ data }: Props) {
 		changeRate,
 	});
 
+	const navigate = useNavigate();
+
+	const handleItemClick = () => {
+		navigate(`/stock/${stockCode}`);
+	};
+
 	return (
-		<div className='grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr] gap-4 items-center py-2 text-sm hover:bg-neutral-800 hover:rounded-md transition-colors '>
+		<div
+			onClick={handleItemClick}
+			className='grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr] gap-4 items-center py-2 text-sm hover:bg-neutral-800 hover:rounded-md transition-colors cursor-pointer'
+		>
 			{/* 하트 + 순위 + 로고 + 이름 */}
 			<div className='flex items-center gap-3 pl-2'>
 				<button
 					type='button'
 					className='text-gray-300 hover:text-red-500 transition-colors'
 					aria-label={`${name} 관심종목 추가`}
+					onClick={(e) => e.stopPropagation()}
 				>
 					♥
 				</button>
