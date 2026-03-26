@@ -22,6 +22,6 @@ public interface CandleRepository {
      * @param targetTime 타겟 분 (yyyyMMddHHmm)
      * @return 완성된 OHLCV DTO 배열
      */
-    List<OhlcvDto> flushCandlesByMinutes(String targetTime, CandleType type);
+    List<OhlcvDto> flushCandles(String targetTime, CandleType type);
 
 }
