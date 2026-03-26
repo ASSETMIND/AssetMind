@@ -1,0 +1,47 @@
+package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
+
+import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
+import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
+import java.time.LocalDate;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+/**
+ * {@link Ohlcv1mRepository} 인터페이스를 JPA 기술로 구현한 어탭터 구현체
+ *
+ * 도메인 계층에서 전달받은 순수 DTO {@link OhlcvDto}를
+ * 영속성 객체 {@link com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity}로 변환하여 DB에 저장
+ *
+ * 현재는 JPA의 saveAll()을 사용하고 있으나 향후 성능 최적화가 필요할 시에는 JdbcTemplate으로 변경할 예정
+ */
+@Repository
+@RequiredArgsConstructor
+public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
+
+    private final Ohlcv1mJpaRepository ohlcv1mJpaRepository;
+
+    @Override
+    public void saveAll(List<OhlcvDto> dtoList) {
+        List<Ohlcv1mJpaEntity> entities = dtoList.stream()
+                .map(dto -> Ohlcv1mJpaEntity.builder()
+                        .stockCode(dto.stockCode())
+                        .candleTimestamp(dto.candleTimestamp())
+                        .openPrice(dto.openPrice())
+                        .highPrice(dto.highPrice())
+                        .lowPrice(dto.lowPrice())
+                        .closePrice(dto.closePrice())
+                        .volume(dto.volume())
+                        .build()
+                ).toList();
+
+        ohlcv1mJpaRepository.saveAll(entities);
+    }
+
+    @Override
+    public List<OhlcvDto> findCandlesByDate(String stockCode, LocalDate date) {
+        // TODO: 1일봉 롤업 스케줄러 개발 시 구현 예정
+        return List.of();
+    }
+}
