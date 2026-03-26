@@ -6,8 +6,7 @@ import lombok.Getter;
 
 @Getter
 public enum CandleType {
-    MIN_1("1m"),
-    DAY_1("1d");
+    MIN_1("1m");
 
     private final String value;
 

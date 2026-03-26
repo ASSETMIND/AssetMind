@@ -6,6 +6,8 @@ import com.assetmind.server_stock.stock.application.event.StockRankingUpdatedEve
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
+import com.assetmind.server_stock.stock.domain.enums.CandleType;
+import com.assetmind.server_stock.stock.domain.repository.CandleRepository;
 import com.assetmind.server_stock.stock.domain.repository.RawTickRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
 import com.assetmind.server_stock.stock.exception.StockNotFoundException;
@@ -29,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true) // 기본적으로 조회 전용으로 설정 (성능 향상)
 public class StockService {
 
+    private final CandleRepository candleRepository;
     private final RawTickRepository rawTickRepository;
     private final StockSnapshotRepository stockSnapshotRepository;
     private final StockMetadataProvider stockMetadataProvider;
@@ -60,6 +63,9 @@ public class StockService {
         // 실시간 주식 시계열 데이터 저장
         RawTickJpaEntity jpaEntity = stockMapper.toJpaEntity(event);
         rawTickRepository.save(jpaEntity);
+
+        // 실시간 주식 데이터 1분봉 캐싱
+        candleRepository.save(event, CandleType.MIN_1);
 
         // 상세 페이지용 이벤트 발행
         StockHistoryResponse historyResponse = StockHistoryResponse.from(event);
