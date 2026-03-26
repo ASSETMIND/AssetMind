@@ -1,367 +1,314 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock, call
-from typing import Dict, Any, List, Union
+from unittest.mock import MagicMock, patch, AsyncMock
+from typing import Dict, Any
 
 # [Target Modules]
 from src.extractor.extractor_service import ExtractorService
-# DTO는 테스트 내부 Mock 객체로 대체하므로 실제 Import는 제거하거나 Type Hint용으로만 남깁니다.
-from src.common.exceptions import ConfigurationError, ExtractorError
-# from src.common.config import ConfigManager (Mocking 처리되므로 제거 가능)
+from src.common.exceptions import ConfigurationError, ExtractorError, ETLError
 
 # ========================================================================================
-# [Mocks & Stubs] DTO 및 설정 객체 격리 (Isolation)
+# [Mocks & Stubs] 격리된 환경을 위한 경량화 모의 객체
 # ========================================================================================
 
-class MockRequestDTO:
-    """Service가 내부적으로 생성하는 RequestDTO를 대체할 Mock Class"""
-    def __init__(self, job_id: str, params: Dict = None):
-        self.job_id = job_id
+class DummyPolicy:
+    def __init__(self, params: Dict[str, Any] = None):
         self.params = params or {}
 
-class MockExtractedDTO:
-    """Service 및 Extractor가 반환하는 ExtractedDTO를 대체할 Mock Class"""
+class DummyConfig:
+    def __init__(self, policies: Dict[str, DummyPolicy]):
+        self.policies = policies
+    
+    def get_extractor(self, job_id: str):
+        return self.policies.get(job_id)
+
+class DummyDTO:
     def __init__(self, data: Any = None, meta: Dict = None):
         self.data = data or []
         self.meta = meta or {}
 
-class MockPolicy:
-    """ConfigManager.extraction_policy의 Value 객체 모방"""
-    def __init__(self, params: Dict[str, Any] = None):
-        self.params = params or {}
-
-class MockConfig:
-    """ConfigManager 객체 모방"""
-    def __init__(self, policies: Dict[str, MockPolicy] = None):
-        self.extraction_policy = policies or {}
-
 # ========================================================================================
-# [Fixtures] 테스트 환경 설정 및 격리
+# [Fixtures]
 # ========================================================================================
 
 @pytest.fixture(autouse=True)
-def mock_logger_isolation():
-    """Service Class의 로거 격리 픽스처."""
-    with patch("src.common.log.LogManager.get_logger") as mock_get_logger:
-        mock_get_logger.return_value = MagicMock()
-        yield mock_get_logger
+def mock_logger():
+    """로그 출력을 차단하여 테스트 결과를 깔끔하게 유지합니다."""
+    with patch("src.common.log.LogManager.get_logger") as mock:
+        yield mock.return_value
 
-@pytest.fixture(autouse=True)
-def mock_dtos_injection():
-    """
-    [Core Fix] Service가 사용하는 DTO를 Mock Class로 교체(Patch)하여 TypeError 방지.
-    src.extractor.extractor_service 모듈 내의 RequestDTO 이름을 가로챕니다.
-    """
-    with patch("src.extractor.extractor_service.RequestDTO", side_effect=MockRequestDTO):
-        yield
+@pytest.fixture
+def mock_config():
+    """ConfigManager가 반환할 가짜 정책 설정 객체"""
+    policies = {
+        "job_normal": DummyPolicy({"base_param": "default"}),
+        "job_override": DummyPolicy({"target": "A"}),
+        "job_domain_err": DummyPolicy({}),
+        "job_sys_err": DummyPolicy({}),
+        "job_batch_1": DummyPolicy({}),
+        "job_batch_2": DummyPolicy({}),
+        "job_batch_fail": DummyPolicy({})
+    }
+    with patch("src.extractor.extractor_service.ConfigManager.load") as mock_load:
+        mock_load.return_value = DummyConfig(policies)
+        yield mock_load.return_value
 
 @pytest.fixture
 def mock_http_adapter_cls():
-    """내부에서 생성되는 AsyncHttpAdapter 클래스를 Mocking"""
+    """내부 생명주기 제어 테스트를 위한 AsyncHttpAdapter Mock"""
     with patch("src.extractor.extractor_service.AsyncHttpAdapter") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.close = AsyncMock()
-        mock_cls.return_value = mock_instance
+        instance = MagicMock()
+        instance.close = AsyncMock()
+        mock_cls.return_value = instance
         yield mock_cls
 
 @pytest.fixture
 def mock_factory():
-    """ExtractorFactory.create_extractor 메서드 Mocking"""
-    with patch("src.extractor.extractor_service.ExtractorFactory") as mock_factory:
-        yield mock_factory
+    """실제 수집 로직(Network I/O) 방어를 위한 Factory Mock"""
+    with patch("src.extractor.extractor_service.ExtractorFactory") as mock_fac:
+        yield mock_fac
 
 @pytest.fixture
-def config_with_jobs():
-    """표준적인 Job 정책이 포함된 설정 객체"""
-    policies = {
-        "job_normal": MockPolicy({"p1": "default"}),
-        "job_error_domain": MockPolicy({}),
-        "job_error_system": MockPolicy({}),
-    }
-    return MockConfig(policies)
+def mock_request_dto():
+    """RequestDTO 생성 방어"""
+    with patch("src.extractor.extractor_service.RequestDTO") as mock_req:
+        yield mock_req
 
 # ========================================================================================
-# 1. 자원 생명주기 테스트 (Lifecycle Management)
+# 1. 자원 생명주기 관리 (Lifecycle Management)
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_life_01_internal_lifecycle(mock_http_adapter_cls, config_with_jobs):
-    """[LIFE-01] 내부 생성 시: 진입 시 생성, 종료 시 close() 호출 확인"""
-    # Given
-    service = ExtractorService(config_with_jobs, http_client=None)
+async def test_life_01_internal_lifecycle(mock_http_adapter_cls, mock_config):
+    """[LIFE-01] 외부 주입 없이 생성 시 내부에서 HTTP 클라이언트를 관리 및 소멸시킵니다."""
+    # Given: 의존성 주입 없이 생성
+    service = ExtractorService(http_client=None)
     
-    # When
+    # When: Context 진입 및 이탈
     async with service as srv:
-        # Then 1: Adapter 생성 확인
+        # Then 1: 어댑터 인스턴스화 수행
         mock_http_adapter_cls.assert_called_once()
+        assert srv._owns_client is True
     
-    # Then 2: Context Exit 시 close() 호출 확인
-    internal_client = mock_http_adapter_cls.return_value
-    internal_client.close.assert_awaited_once()
+    # Then 2: 이탈 시 반드시 close() 대기
+    mock_http_adapter_cls.return_value.close.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_life_02_external_lifecycle(config_with_jobs):
-    """[LIFE-02] 외부 주입 시: 종료 시 close() 호출되지 않음 (자원 보존)"""
-    # Given
-    external_client = MagicMock()
-    external_client.close = AsyncMock()
-    service = ExtractorService(config_with_jobs, http_client=external_client)
+async def test_life_02_external_lifecycle(mock_config):
+    """[LIFE-02] 외부에서 주입된 클라이언트의 소유권은 서비스가 함부로 종료하지 않습니다."""
+    # Given: 외부 생성 클라이언트
+    mock_external_client = MagicMock()
+    mock_external_client.close = AsyncMock()
     
-    # When
+    service = ExtractorService(http_client=mock_external_client)
+    
+    # When: Context 진입 및 이탈
     async with service as srv:
-        pass
-    
-    # Then
-    external_client.close.assert_not_called()
+        assert srv._owns_client is False
+        assert srv._http_client == mock_external_client
+        
+    # Then: 외부 자원이므로 close 호출 안 됨
+    mock_external_client.close.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_life_03_guard_clause_no_init(config_with_jobs):
-    """[LIFE-03] async with 없이 직접 호출 시 RuntimeError 발생"""
-    # Given
-    service = ExtractorService(config_with_jobs)
+async def test_life_03_guard_clause(mock_config):
+    """[LIFE-03] async with 블록 없이 메서드를 호출하면 즉시 차단합니다."""
+    # Given: 초기화되지 않은 서비스
+    service = ExtractorService()
     
-    # When & Then
+    # When & Then: RuntimeError 발생
     with pytest.raises(RuntimeError, match="HTTP Client is not initialized"):
         await service.extract_job("job_normal")
 
 @pytest.mark.asyncio
-async def test_life_04_safe_close_on_exception(mock_http_adapter_cls, config_with_jobs):
-    """[LIFE-04] 내부 로직 예외 발생 시에도 자원 해제(close) 보장"""
+async def test_life_04_safe_close_on_exception(mock_http_adapter_cls, mock_config):
+    """[LIFE-04] 파이프라인 중단 등 치명적 예외 시에도 자원은 안전하게 릴리즈됩니다."""
     # Given
-    service = ExtractorService(config_with_jobs)
-    internal_client = mock_http_adapter_cls.return_value
+    service = ExtractorService()
     
-    # When: Context 진입 후 강제 예외 발생 상황 시뮬레이션
-    try:
+    # When: Context 안에서 예외 강제 발생
+    with pytest.raises(ValueError):
         async with service:
             raise ValueError("Unexpected Crash")
-    except ValueError:
-        pass
-    
-    # Then: 예외에도 불구하고 close()가 호출되어야 함
-    internal_client.close.assert_awaited_once()
+            
+    # Then: 오류와 무관하게 자원 해제 보장
+    mock_http_adapter_cls.return_value.close.assert_awaited_once()
 
 # ========================================================================================
-# 2. 응답 정규화 테스트 (Response Normalization)
+# 2. 응답 정규화 (Response Normalization)
 # ========================================================================================
 
-def test_norm_01_fast_path_optimization(config_with_jobs):
-    """[NORM-01] [Optimization] 이미 status='success'인 경우 로직 건너뜀"""
-    # Given: MockExtractedDTO 사용
-    service = ExtractorService(config_with_jobs)
-    response = MockExtractedDTO(data=[], meta={"status": "success", "status_code": "000"})
+def test_norm_01_fast_path(mock_config):
+    """[NORM-01] 이미 성공 처리된 상태라면 추가 연산을 건너뜁니다."""
+    # Given
+    service = ExtractorService()
+    dto = DummyDTO(meta={"status": "success"})
     
     # When
-    result = service._normalize_response(response)
+    res = service._normalize_response(dto)
     
     # Then
-    assert result.meta["status"] == "success"
-    assert result.meta["status_code"] == "000"
+    assert res.meta["status"] == "success"
 
-def test_norm_02_standard_code_mapping(config_with_jobs):
-    """[NORM-02] [BVA] 다양한 성공 코드(200, OK, 0)가 success로 변환됨"""
+@pytest.mark.parametrize("status_code", ["200", "0", "OK", "SUCCESS", " ok "])
+def test_norm_02_standard_codes(mock_config, status_code):
+    """[NORM-02] 다양한 API 제공자의 성공 코드를 시스템 표준으로 매핑합니다."""
     # Given
-    service = ExtractorService(config_with_jobs)
-    cases = ["200", "OK", "ok", "Success", "0", " 200 "]
-    
-    for code in cases:
-        response = MockExtractedDTO(data=[], meta={"status_code": code})
-        
-        # When
-        result = service._normalize_response(response)
-        
-        # Then
-        assert result.meta["status"] == "success", f"Failed for code: {code}"
-
-def test_norm_03_robustness_empty_code(config_with_jobs):
-    """[NORM-03] [Robustness] status_code 결측 시 성공 및 200으로 보정"""
-    # Given
-    service = ExtractorService(config_with_jobs)
-    cases = [None, ""]
-    
-    for code in cases:
-        response = MockExtractedDTO(data=[], meta={"status_code": code})
-        
-        # When
-        result = service._normalize_response(response)
-        
-        # Then
-        assert result.meta["status"] == "success"
-        assert result.meta["status_code"] == 200
-
-def test_norm_04_safety_failure_preservation(config_with_jobs):
-    """[NORM-04] [Safety] 실패 코드(404, Error)는 status를 변경하지 않음"""
-    # Given
-    service = ExtractorService(config_with_jobs)
-    cases = ["404", "500", "ERROR", "fail"]
-    
-    for code in cases:
-        response = MockExtractedDTO(data=[], meta={"status_code": code})
-        
-        # When
-        result = service._normalize_response(response)
-        
-        # Then: status 키가 생성되지 않거나 success가 아니어야 함
-        assert result.meta.get("status") != "success"
-
-# ========================================================================================
-# 3. 단건 수집 및 에러 핸들링 테스트 (Single Job & Error)
-# ========================================================================================
-
-@pytest.mark.asyncio
-async def test_job_01_policy_not_found(config_with_jobs):
-    """[JOB-01] 설정에 없는 Job ID 요청 시 ConfigurationError 발생"""
-    # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
-    
-    # When & Then
-    with pytest.raises(ConfigurationError, match="Job ID 'GHOST_JOB'를 찾을 수 없습니다."):
-        await service.extract_job("GHOST_JOB")
-
-@pytest.mark.asyncio
-async def test_job_02_param_merging_priority(mock_factory, config_with_jobs):
-    """[JOB-02] [DataFlow] Override 파라미터가 Config 파라미터보다 우선 적용"""
-    # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
-    mock_extractor = AsyncMock()
-    mock_extractor.extract.return_value = MockExtractedDTO(data=[], meta={"status": "success"})
-    mock_factory.create_extractor.return_value = mock_extractor
-    
-    override = {"p1": "overridden", "p2": "new"}
+    service = ExtractorService()
+    dto = DummyDTO(meta={"status_code": status_code})
     
     # When
-    await service.extract_job("job_normal", override_params=override)
+    res = service._normalize_response(dto)
     
-    # Then: Factory 생성 후 호출된 extract의 인자 확인 (MockRequestDTO)
-    call_args = mock_extractor.extract.call_args[0][0] # RequestDTO
-    # MockRequestDTO의 params 속성 확인
-    assert call_args.params["p1"] == "overridden"
-    assert call_args.params["p2"] == "new"
+    # Then
+    assert res.meta["status"] == "success"
+
+@pytest.mark.parametrize("empty_val", [None, ""])
+def test_norm_03_robustness_empty_code(mock_config, empty_val):
+    """[NORM-03] 상태 코드가 비어있는 결측치 응답도 성공으로 자가 보정합니다."""
+    # Given
+    service = ExtractorService()
+    dto = DummyDTO(meta={"status_code": empty_val})
+    
+    # When
+    res = service._normalize_response(dto)
+    
+    # Then
+    assert res.meta["status"] == "success"
+    assert res.meta["status_code"] == 200
+
+@pytest.mark.parametrize("error_code", ["404", "500", "ERROR"])
+def test_norm_04_safety_failure(mock_config, error_code):
+    """[NORM-04] 실패 코드는 상태를 success로 변환하지 않고 유지합니다."""
+    # Given
+    service = ExtractorService()
+    dto = DummyDTO(meta={"status_code": error_code})
+    
+    # When
+    res = service._normalize_response(dto)
+    
+    # Then
+    assert res.meta.get("status") != "success"
+
+# ========================================================================================
+# 3. 단건 수집 및 에러 래핑 (Single Job Execution)
+# ========================================================================================
 
 @pytest.mark.asyncio
-async def test_job_03_domain_exception_propagation(mock_factory, config_with_jobs):
-    """[JOB-03] [Hierarchy] 도메인 에러(ExtractorError)는 그대로 전파"""
+async def test_job_01_policy_not_found(mock_config):
+    """[JOB-01] YAML에 등록되지 않은 식별자 요청 시 정적 오류로 간주합니다."""
     # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
+    service = ExtractorService(http_client=MagicMock())
+    
+    # When & Then
+    with pytest.raises(ConfigurationError, match="Job ID 'INVALID_JOB'를 찾을 수 없습니다."):
+        await service.extract_job("INVALID_JOB")
+
+@pytest.mark.asyncio
+async def test_job_02_param_override(mock_config, mock_factory, mock_request_dto):
+    """[JOB-02] 런타임에 유입된 파라미터가 정적 정책 파라미터를 덮어씁니다."""
+    # Given
+    service = ExtractorService(http_client=MagicMock())
     mock_extractor = AsyncMock()
-    mock_extractor.extract.side_effect = ExtractorError("Domain Logic Fail")
+    mock_extractor.extract.return_value = DummyDTO(meta={"status": "success"})
     mock_factory.create_extractor.return_value = mock_extractor
     
-    # When & Then: Regex 패턴 완화 (.* 포함)
-    with pytest.raises(ExtractorError, match=r".*Domain Logic Fail.*"):
-        await service.extract_job("job_error_domain")
+    # When
+    await service.extract_job("job_override", override_params={"target": "B", "new_key": 1})
+    
+    # Then
+    mock_request_dto.assert_called_once()
+    passed_params = mock_request_dto.call_args.kwargs["params"]
+    assert passed_params["target"] == "B"  # Overridden
+    assert passed_params["new_key"] == 1   # Appended
 
 @pytest.mark.asyncio
-async def test_job_04_system_exception_wrapping(mock_factory, config_with_jobs):
-    """[JOB-04] [Hierarchy] 시스템 에러(KeyError)는 ExtractorError로 래핑"""
+async def test_job_03_domain_error_bypass(mock_config, mock_factory):
+    """[JOB-03] 하위 수집기에서 이미 규격화된 도메인 에러(ETLError)는 그대로 상위로 전파합니다."""
     # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
+    service = ExtractorService(http_client=MagicMock())
     mock_extractor = AsyncMock()
-    mock_extractor.extract.side_effect = KeyError("Unexpected Key")
+    mock_extractor.extract.side_effect = ETLError("Domain Known Error")
     mock_factory.create_extractor.return_value = mock_extractor
     
     # When & Then
-    with pytest.raises(ExtractorError, match=r".*job_error_system.*"):
-        await service.extract_job("job_error_system")
+    with pytest.raises(ETLError, match="Domain Known Error"):
+        await service.extract_job("job_domain_err")
+
+@pytest.mark.asyncio
+async def test_job_04_system_error_wrapping(mock_config, mock_factory):
+    """[JOB-04] 파싱 에러(KeyError) 등 예기치 못한 시스템 에러는 ExtractorError로 안전하게 래핑합니다."""
+    # Given
+    service = ExtractorService(http_client=MagicMock())
+    mock_extractor = AsyncMock()
+    mock_extractor.extract.side_effect = KeyError("Missing Data Key")
+    mock_factory.create_extractor.return_value = mock_extractor
+    
+    # When & Then
+    with pytest.raises(ExtractorError, match="Job 'job_sys_err' 작업 중 예상치 못한 오류가 발생."):
+        await service.extract_job("job_sys_err")
 
 # ========================================================================================
-# 4. 배치 및 동시성 테스트 (Batch & Concurrency)
+# 4. 배치 및 동시성 제어 (Batch Processing)
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_batch_01_mixed_input_structure(config_with_jobs):
-    """[BATCH-01] [Structure] str과 tuple이 혼합된 입력 처리"""
+async def test_batch_01_mixed_inputs_and_isolation(mock_config, mock_factory):
+    """[BATCH-01, 03] 다양한 입력 포맷을 처리하며, 특정 작업의 실패가 타 작업에 영향을 주지 않음을 검증합니다."""
     # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
+    service = ExtractorService(http_client=MagicMock())
     
-    # Mock extract_job using patch.object to avoid real logic
-    with patch.object(service, 'extract_job', new=AsyncMock()) as mock_extract:
-        mock_extract.return_value = MockExtractedDTO(data=[], meta={"status": "success"})
+    # Factory Mocking: job_batch_fail만 에러 발생, 나머지는 정상 응답
+    def mock_create(job_id, **kwargs):
+        ext = AsyncMock()
+        if job_id == "job_batch_fail":
+            ext.extract.side_effect = ValueError("Network Crash")
+        else:
+            ext.extract.return_value = DummyDTO(data=f"{job_id}_data", meta={"status": "success"})
+        return ext
         
-        requests = ["job_normal", ("job_normal", {"p": "v"})]
-        
-        # When
-        await service.extract_batch(requests)
-        
-        # Then: 총 2번 호출되어야 함
-        assert mock_extract.call_count == 2
-        # 첫 번째 호출 확인 (str -> extract_job(id))
-        mock_extract.assert_any_call("job_normal")
-        # 두 번째 호출 확인 (tuple -> extract_job(id, params))
-        mock_extract.assert_any_call("job_normal", {"p": "v"})
+    mock_factory.create_extractor.side_effect = mock_create
+    
+    # 혼합된 입력: string 단일, tuple 형태 파라미터 주입, 예외 발생 타겟
+    requests = ["job_batch_1", ("job_batch_2", {"dyn": 1}), "job_batch_fail"]
+    
+    # When
+    results = await service.extract_batch(requests)
+    
+    # Then: 시스템 셧다운 없이 전체 리스트 3건이 모두 반환됨
+    assert len(results) == 3
+    assert results[0].data == "job_batch_1_data"
+    assert results[1].data == "job_batch_2_data"
+    
+    # 실패한 건은 Exception 객체(래핑된 ExtractorError)로 리스트에 담겨 있음
+    assert isinstance(results[2], ExtractorError)
 
 @pytest.mark.asyncio
-async def test_batch_02_defensive_invalid_type(config_with_jobs, mock_logger_isolation):
-    """[BATCH-02] [Defensive] 잘못된 타입(int)은 무시하고 로깅 후 진행"""
+async def test_batch_02_invalid_type_defense(mock_config, mock_factory, mock_logger):
+    """[BATCH-02] 타입이 잘못된 파라미터가 유입되어도 로깅 후 스킵하여 견고함을 유지합니다."""
     # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
+    service = ExtractorService(http_client=MagicMock())
+    mock_extractor = AsyncMock()
+    mock_extractor.extract.return_value = DummyDTO(meta={"status": "success"})
+    mock_factory.create_extractor.return_value = mock_extractor
     
-    with patch.object(service, 'extract_job', new=AsyncMock()) as mock_extract:
-        requests = ["job_normal", 12345]  # Invalid int included
-        
-        # When
-        await service.extract_batch(requests)
-        
-        # Then
-        assert mock_extract.call_count == 1  # 유효한 문자열 1개만 실행
-        # 로거에 경고 메시지 기록 확인
-        mock_logger_isolation.return_value.warning.assert_called()
+    requests = ["job_batch_1", 12345]  # Invalid int
+    
+    # When
+    results = await service.extract_batch(requests)
+    
+    # Then
+    assert len(results) == 1
+    mock_logger.warning.assert_called()
 
 @pytest.mark.asyncio
-async def test_batch_03_isolation_partial_success(config_with_jobs):
-    """[BATCH-03] [Isolation] 부분 성공 검증 (예외가 전체를 중단시키지 않음)"""
+async def test_batch_04_empty_list(mock_config):
+    """[BATCH-04] 빈 작업 목록이 들어오면 무의미한 I/O 사이클을 방지하고 즉시 반환합니다."""
     # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
-    
-    # Mock extract_job to return [Success, Error, Success]
-    success_dto = MockExtractedDTO(data="ok", meta={"status": "success"})
-    fail_exc = ExtractorError("Fail")
-    
-    with patch.object(service, 'extract_job', side_effect=[success_dto, fail_exc, success_dto]):
-        requests = ["job_1", "job_fail", "job_2"]
-        
-        # When
-        results = await service.extract_batch(requests)
-        
-        # Then
-        assert len(results) == 3
-        assert isinstance(results[0], MockExtractedDTO)
-        assert isinstance(results[1], ExtractorError) # Exception 객체 존재 확인
-        assert isinstance(results[2], MockExtractedDTO)
-
-@pytest.mark.asyncio
-async def test_batch_04_bva_empty_list(config_with_jobs):
-    """[BATCH-04] [BVA] 빈 리스트 요청 시 즉시 빈 리스트 반환"""
-    # Given
-    service = ExtractorService(config_with_jobs, http_client=MagicMock())
+    service = ExtractorService(http_client=MagicMock())
     
     # When
     results = await service.extract_batch([])
     
     # Then
     assert results == []
-
-# ========================================================================================
-# 5. 팩토리 협력 테스트 (Factory Interaction)
-# ========================================================================================
-
-@pytest.mark.asyncio
-async def test_fact_01_factory_delegation(mock_factory, config_with_jobs):
-    """[FACT-01] [Interaction] Factory.create_extractor 올바른 위임 검증"""
-    # Given
-    mock_client = MagicMock()
-    service = ExtractorService(config_with_jobs, http_client=mock_client)
-    
-    mock_extractor = AsyncMock()
-    mock_extractor.extract.return_value = MockExtractedDTO(data=[], meta={"status": "success"})
-    mock_factory.create_extractor.return_value = mock_extractor
-    
-    # When
-    await service.extract_job("job_normal")
-    
-    # Then
-    mock_factory.create_extractor.assert_called_once_with(
-        job_id="job_normal",
-        http_client=mock_client,
-        config=config_with_jobs
-    )

@@ -42,25 +42,24 @@ graph TD
 
 ## 3. BDD 테스트 시나리오
 
-**시나리오 요약:**
+**시나리오 요약 (총 12건)**
 
-- **초기화 (Initialization):** 3건 (필수 설정값 방어 로직)
-- **유효성 검증 (Validation - MC/DC):** 5건 (정책, 제공자, 파라미터 조합)
-- **실행 및 병합 (Execution & Merging):** 2건 (파라미터 우선순위, 메타데이터 주입)
-- **에러 처리 (Error Handling):** 3건 (논리적 에러, 예상치 못한 예외 래핑)
+- **초기화 (Initialization):** 3건 (필수 설정값 누락 Fail-Fast 방어)
+- **유효성 검증 (Validation - MC/DC):** 6건 (필수 파라미터 조합, 제공자 불일치 및 예외 상태)
+- **실행 및 병합 (Execution & Merging):** 1건 (파라미터 우선순위 병합, 시스템 통제값 주입 검증)
+- **응답 처리 (Response Parsing):** 2건 (논리적 비즈니스 에러 식별 및 정상 표준 객체 래핑)
 
-|  테스트 ID  | 분류 |    기법    | 전제 조건 (Given)                        | 수행 (When)                          | 검증 (Then)                                                                      | 입력 데이터 / 상황            |
-| :---------: | :--: | :--------: | :--------------------------------------- | :----------------------------------- | :------------------------------------------------------------------------------- | :---------------------------- |
-| **INIT-01** | 단위 | fail-fast  | `base_url`이 설정되지 않음               | `FREDExtractor(http, config)` 초기화 | `ExtractorError` 발생 ("base_url is empty")                                      | `base_url=""`                 |
-| **INIT-02** | 단위 | fail-fast  | `api_key`가 설정되지 않음                | `FREDExtractor(http, config)` 초기화 | `ExtractorError` 발생 ("api_key is missing")                                     | `api_key=None`                |
-| **INIT-03** | 단위 |    표준    | 유효한 설정(`SecretStr` 키 포함)         | `FREDExtractor(http, config)` 초기화 | 인스턴스 정상 생성됨                                                             | `base_url="http://..."`       |
-| **VAL-01**  | 단위 |    표준    | Config에 해당 `job_id` 정책 없음         | `extract(request)` 호출              | `ExtractorError` 발생 ("Policy not found")                                       | `job_id="UNKNOWN_JOB"`        |
-| **VAL-02**  | 단위 |    표준    | Policy의 Provider가 "KIS"임              | `extract(request)` 호출              | `ExtractorError` 발생 ("Provider Mismatch")                                      | `provider="KIS"`              |
-| **VAL-03**  | 단위 | **MC/DC**  | `series_id`가 **Policy에만** 존재        | `extract(request)` 호출              | 정상 수행 (API 호출 발생)                                                        | Policy:`{series_id: A}`       |
-| **VAL-04**  | 단위 | **MC/DC**  | `series_id`가 **Request에만** 존재       | `extract(request)` 호출              | 정상 수행 (API 호출 발생)                                                        | Request:`{series_id: B}`      |
-| **VAL-05**  | 단위 | **MC/DC**  | `series_id`가 **어디에도 없음**          | `extract(request)` 호출              | `ExtractorError` 발생 ("series_id is required")                                  | Policy:`{}`, Request:`{}`     |
-| **EXEC-01** | 단위 |   데이터   | Request 파라미터가 Policy와 중복됨       | `extract(request)` 호출              | 1. Request 값이 Policy 덮어씀<br>2. `file_type=json` 및 `api_key` 강제 주입 확인 | Request:`{period: "M"}`       |
-| **EXEC-02** | 단위 |    구조    | 부모 `extract` 호출 흐름                 | `extract(request)` 호출              | 반환된 `ResponseDTO`의 `meta` 필드에 `job_id`가 올바르게 주입됨                  | `meta['job_id'] == "JOB_01"`  |
-| **ERR-01**  | 단위 |    논리    | HTTP 200이나 Body에 `error_message` 있음 | `extract(request)` 호출              | `ExtractorError` 발생 (메시지 및 코드 포함)                                      | Body:`{"error_message": "X"}` |
-| **ERR-02**  | 단위 |    래핑    | 내부 로직 중 `KeyError` 등 예상 외 에러  | `extract(request)` 호출              | `ExtractorError`로 래핑되어 전파됨 ("System Error")                              | Mock: `raise KeyError`        |
-| **ERR-03**  | 통합 | 데코레이터 | 네트워크 에러 발생 (Mocking)             | `_fetch_raw_data(request)` 호출      | `retry` 데코레이터 작동 확인 (call_count > 1)                                    | Mock: `raise NetworkError`    |
+|  테스트 ID  | 분류 |   기법    | 전제 조건 (Given)                        | 수행 (When)                   | 검증 (Then)                                               | 입력 데이터 / 상황       |
+| :---------: | :--: | :-------: | :--------------------------------------- | :---------------------------- | :-------------------------------------------------------- | :----------------------- |
+| **INIT-01** | 단위 | Fail-fast | 설정(Config) 내 `base_url`이 비어있음    | `FREDExtractor` 인스턴스화    | `ExtractorError` 발생 ("base_url가 누락되었습니다.")      | `base_url=""`            |
+| **INIT-02** | 단위 | Fail-fast | 설정(Config) 내 `api_key`가 비어있음     | `FREDExtractor` 인스턴스화    | `ExtractorError` 발생 ("api_key가 누락되었습니다.")       | `api_key=""`             |
+| **INIT-03** | 단위 |   표준    | 유효한 설정(`base_url`, `api_key` 존재)  | `FREDExtractor` 인스턴스화    | 인스턴스 정상 생성 완료                                   | 정상 Config 객체         |
+| **VAL-01**  | 단위 |  경계값   | Request 파라미터에 `job_id`가 누락됨     | `_validate_request(req)` 호출 | `ExtractorError` 발생 ("'job_id'는 필수 항목입니다.")     | `job_id=None`            |
+| **VAL-02**  | 단위 |   예외    | 정책 조회 시 예외 발생 (설정 오류)       | `_validate_request(req)` 호출 | `ExtractorError`로 래핑되어 발생 ("설정 오류")            | DB/Network 예외          |
+| **VAL-03**  | 단위 |   상태    | 조회된 정책의 `provider`가 FRED가 아님   | `_validate_request(req)` 호출 | `ExtractorError` 발생 ("API 제공자 불일치")               | `provider="ECOS"`        |
+| **VAL-04**  | 단위 |   MC/DC   | `series_id`가 Policy와 Request 모두 없음 | `_validate_request(req)` 호출 | `ExtractorError` 발생 ("'series_id'가 필요합니다.")       | Policy:{}, Request:{}    |
+| **VAL-05**  | 단위 |   MC/DC   | `series_id`가 **Policy에만** 존재함      | `_validate_request(req)` 호출 | 정상 통과 (예외 미발생)                                   | Policy:`{series_id: A}`  |
+| **VAL-06**  | 단위 |   MC/DC   | `series_id`가 **Request에만** 존재함     | `_validate_request(req)` 호출 | 정상 통과 (예외 미발생)                                   | Request:`{series_id: B}` |
+| **EXEC-01** | 단위 |   통합    | Policy와 Request에 파라미터가 분산됨     | `_fetch_raw_data(req)` 호출   | Request가 Policy를 덮어쓰고 시스템 파라미터가 강제 병합됨 | Request+Policy 조합      |
+| **RES-01**  | 단위 |   논리    | API 응답은 200이나 JSON 내에 에러 포함   | `_create_response(...)` 호출  | `ExtractorError` 발생 ("FRED API 실패")                   | `{"error_message": "X"}` |
+| **RES-02**  | 단위 |   표준    | 순수 데이터만 포함된 정상 JSON 응답      | `_create_response(...)` 호출  | `ExtractedDTO` 객체 정상 반환 및 메타데이터 주입          | `{"observations": []}`   |

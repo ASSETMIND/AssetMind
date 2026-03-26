@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
@@ -50,4 +50,22 @@ export function useSurgeAlerts() {
 	}, [queryClient]);
 
 	return { alerts };
+}
+
+// 가장 최근에 수신된 급등락 알림 하나만 관리하는 커스텀 훅
+export function useLatestSurgeAlert() {
+	const { alerts } = useSurgeAlerts();
+	const [latestAlert, setLatestAlert] = useState<SurgeAlertPayload | null>(
+		null,
+	);
+
+	useEffect(() => {
+		if (alerts && alerts.length > 0) {
+			setLatestAlert(alerts[0]);
+		}
+	}, [alerts]);
+
+	const clearAlert = () => setLatestAlert(null);
+
+	return { latestAlert, clearAlert };
 }

@@ -48,32 +48,22 @@ stateDiagram-v2
 
 ## 3. BDD 테스트 시나리오 (전체 목록)
 
-**시나리오 요약:**
+**시나리오 요약 (총 10건)**
 
-- **초기화 (Initialization):** 1건 (설정 검증)
-- **요청 검증 (Validation):** 4건 (MC/DC 적용 - JobID, Policy, Provider, TR_ID)
-- **정상 흐름 (Functional):** 3건 (E2E, 파라미터 병합, URL 구성)
-- **보안 (Security):** 2건 (헤더 내 평문 키/토큰 주입 확인)
-- **데이터 안정성 (Robustness):** 2건 (비즈니스 응답 코드 검증)
-- **예외 및 데코레이터 (Exception):** 2건 (래핑 로직, 재시도/제한 적용)
+- **초기화 (Initialization):** 2건 (정상, 설정 누락 조기 실패)
+- **요청 검증 (Validation):** 5건 (MC/DC 적용 - JobID, 설정 부재, Provider, TR_ID, 정상)
+- **실행 (Execution):** 1건 (토큰 확보, 파라미터 병합, 헤더 주입 및 API 호출)
+- **응답 검증 (Response):** 2건 (정상, 비즈니스 에러 래핑)
 
-|  테스트 ID  | 분류 |  기법  | 전제 조건 (Given)                       | 수행 (When)                          | 검증 (Then)                                                        | 입력 데이터 / 상황                |
-| :---------: | :--: | :----: | :-------------------------------------- | :----------------------------------- | :----------------------------------------------------------------- | :-------------------------------- |
-| **INIT-01** | 단위 |  BVA   | `kis.base_url`이 비어있는 설정 객체     | `KISExtractor(config)` 초기화        | `ExtractorError` 발생 (Critical Config Error)                      | `base_url=""`                     |
-| **REQ-01**  | 단위 | MC/DC  | `job_id`가 없는 요청 객체               | `extract(request)` 호출              | `ExtractorError` 발생 (Invalid Request)                            | `job_id=None`                     |
-| **REQ-02**  | 단위 | MC/DC  | 설정 파일에 정의되지 않은 `job_id` 요청 | `extract(request)` 호출              | `ExtractorError` 발생 (Policy not found)                           | `job_id="UNKNOWN"`                |
-| **REQ-03**  | 단위 | MC/DC  | Provider가 'FRED'로 설정된 정책 요청    | `extract(request)` 호출              | `ExtractorError` 발생 (Provider Mismatch)                          | `provider="FRED"`                 |
-| **REQ-04**  | 단위 | MC/DC  | 정책에 필수 필드 `tr_id`가 누락됨       | `extract(request)` 호출              | `ExtractorError` 발생 (Missing tr_id)                              | `tr_id=None`                      |
-| **FLOW-01** | 단위 |  표준  | 유효한 설정, 정책, 토큰, 정상 응답      | `extract(request)` 호출              | 1. API 호출 성공<br>2. `ResponseDTO` 반환<br>3. `job_id` 일치 확인 | `params={"a": 1}`                 |
-| **FLOW-02** | 단위 |  BVA   | 정책 파라미터와 요청 파라미터 중복      | `extract(request)` 호출              | **요청 파라미터가 우선순위**를 가져 정책값을 덮어씀                | Policy:`{p:1}`, Req:`{p:2}`       |
-| **FLOW-03** | 단위 |  표준  | `base_url`과 `path`가 설정됨            | `_fetch_raw_data` 내부 호출 URL 확인 | 두 문자열이 결합된 **완전한 URL**로 호출됨                         | `url="host/path"`                 |
-| **SEC-01**  | 단위 |  보안  | `SecretStr` 타입의 앱 키/시크릿         | `_fetch_raw_data` 헤더 검사          | 헤더에는 `get_secret_value()`로 복호화된 **평문**이 주입됨         | `headers["appkey"]`               |
-| **SEC-02**  | 단위 |  보안  | `AuthStrategy`가 유효 토큰 반환         | `_fetch_raw_data` 헤더 검사          | `authorization` 헤더에 토큰 값이 포함됨                            | `headers["authorization"]`        |
-| **DATA-01** | 단위 |  BVA   | API 응답 `rt_cd`가 "1" (실패)           | `extract(request)` 호출              | `ExtractorError` 발생 (메시지: msg1 내용 포함)                     | `{"rt_cd": "1", "msg1": "Error"}` |
-| **DATA-02** | 단위 | 견고성 | API 응답에 `rt_cd` 필드 없음            | `extract(request)` 호출              | `ExtractorError` 발생 (Unknown Error)                              | `{"data": []}`                    |
-| **ERR-01**  | 예외 |  래핑  | 수집 중 예상치 못한 `ValueError` 발생   | `extract(request)` 호출              | `ExtractorError`로 래핑되어 던져짐 (System Error)                  | Raise `ValueError`                |
-| **DEC-01**  | 단위 |  메타  | `@retry`, `@rate_limit` 데코레이터 적용 | `_fetch_raw_data` 속성 검사          | 데코레이터 래퍼가 적용되어 있음 (실제 동작은 Stub으로 검증)        | `__wrapped__` 속성 확인           |
-
-```
-
-```
+|  테스트 ID   | 분류 | 기법  | 전제 조건 (Given)                      | 수행 (When)                   | 검증 (Then)                                                   | 입력 데이터 / 상황               |
+| :----------: | :--: | :---: | :------------------------------------- | :---------------------------- | :------------------------------------------------------------ | :------------------------------- |
+| **INIT-01**  | 단위 |  BVA  | `kis.base_url`이 비어있는 설정 객체    | `KISExtractor` 초기화         | `ExtractorError` 발생 (Critical Config Error)                 | `base_url=""`                    |
+| **INIT-02**  | 단위 | 표준  | 유효한 API 설정 정보 및 시크릿 키      | `KISExtractor` 초기화         | 인스턴스 정상 생성, 시크릿 평문 복호화 완료                   | 유효 `ConfigManager`             |
+|  **REQ-01**  | 단위 | MC/DC | `job_id`가 없는 요청 객체              | `_validate_request` 호출      | `ExtractorError` 발생 ('job_id' 필수)                         | `job_id=None`                    |
+|  **REQ-02**  | 단위 | MC/DC | 설정에 정의되지 않은 `job_id` 요청     | `_validate_request` 호출      | `ExtractorError` 발생 (설정 오류)                             | `job_id="UNKNOWN"`               |
+|  **REQ-03**  | 단위 | MC/DC | Provider가 'KIS'가 아닌 정책           | `_validate_request` 호출      | `ExtractorError` 발생 (API 제공자 불일치)                     | `provider="FRED"`                |
+|  **REQ-04**  | 단위 | MC/DC | 정책에 필수 필드 `tr_id`가 누락됨      | `_validate_request` 호출      | `ExtractorError` 발생 ('tr_id' 누락)                          | `tr_id=None`                     |
+|  **REQ-05**  | 단위 | 표준  | 유효한 KIS 정책이 설정된 요청          | `_validate_request` 호출      | 예외 발생 없이 유효성 검증 통과                               | 유효 `RequestDTO`                |
+| **FETCH-01** | 단위 | 통합  | 유효한 요청과 발급된 인증 토큰         | `_fetch_raw_data` 비동기 호출 | 1. 토큰 발급 호출<br>2. 병합된 URL, Header, Params로 API 호출 | `RequestDTO`, Mock Token         |
+|  **RES-01**  | 단위 |  BVA  | API 응답 `rt_cd`가 "1" (비즈니스 실패) | `_create_response` 호출       | `ExtractorError` 발생 (KIS API 실패 래핑)                     | `{"rt_cd": "1", "msg": "Error"}` |
+|  **RES-02**  | 단위 | 표준  | API 응답 `rt_cd`가 "0" (성공)          | `_create_response` 호출       | 원본 데이터 및 메타데이터가 포함된 `ExtractedDTO` 반환        | `{"rt_cd": "0", "data": "A"}`    |
