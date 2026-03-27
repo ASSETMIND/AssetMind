@@ -233,3 +233,214 @@ policy:
     params:
       <<: *kis_domestic_params
       FID_INPUT_ISCD: "00503"
+
+  # ========== [KOSDAQ 지수 일별 데이터 : 30개] ==========
+  kis_kosdaq_composite_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 종합 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11001"
+
+  kis_kosdaq_large_cap_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 대형주 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11002"
+
+  kis_kosdaq_mid_cap_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 중형주 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11003"
+
+  kis_kosdaq_small_cap_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 소형주 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11004"
+
+  kis_kosdaq_general_service_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 일반서비스 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11006"
+
+  kis_kosdaq_manufacturing_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 제조 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11009"
+
+  kis_kosdaq_construction_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 건설 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11010"
+
+  kis_kosdaq_distribution_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 유통 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11011"
+
+  kis_kosdaq_transport_storage_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 운송·창고 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11013"
+
+  kis_kosdaq_finance_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 금융 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11014"
+
+  kis_kosdaq_entertainment_culture_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 오락·문화 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11015"
+
+  kis_kosdaq_food_beverage_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 음식료·담배 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11019"
+
+  kis_kosdaq_textile_apparel_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 섬유·의류 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11020"
+
+  kis_kosdaq_paper_wood_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 종이·목재 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11021"
+
+  kis_kosdaq_publishing_media_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 출판·매체복제 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11022"
+
+  kis_kosdaq_chemical_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 화학 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11023"
+
+  kis_kosdaq_pharmaceutical_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 제약 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11024"
+
+  kis_kosdaq_non_metallic_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 비금속 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11025"
+
+  kis_kosdaq_metal_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 금속 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11026"
+
+  kis_kosdaq_machinery_equipment_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 기계·장비 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11027"
+
+  kis_kosdaq_electric_electronics_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 전기·전자 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11028"
+
+  kis_kosdaq_medical_precision_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 의료·정밀기기 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11029"
+
+  kis_kosdaq_transport_equipment_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 운송장비·부품 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11030"
+
+  kis_kosdaq_other_manufacturing_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 기타제조 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11031"
+
+  kis_kosdaq_communication_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 통신 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11032"
+
+  kis_kosdaq_it_service_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 IT 서비스 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11033"
+
+  kis_kosdaq_blue_chip_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 우량기업 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11042"
+
+  kis_kosdaq_venture_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 벤처기업 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11043"
+
+  kis_kosdaq_mid_size_business_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 중견기업 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11044"
+
+  kis_kosdaq_tech_growth_daily:
+    <<: *kis_domestic_base
+    description: "코스닥 기술성장기업 지수 일봉"
+    params:
+      <<: *kis_domestic_params
+      FID_INPUT_ISCD: "11045"
