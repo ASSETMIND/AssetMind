@@ -58,8 +58,8 @@ public class CandleRedisAdapter implements CandleRepository {
         redisTemplate.execute(
                 candleUpdateScript,
                 List.of(key), // KEYS[1]
-                event.currentPrice(), // ARGV[1]
-                event.executionVolume() // ARGV[2]
+                String.valueOf(event.currentPrice()), // ARGV[1]
+                String.valueOf(event.executionVolume()) // ARGV[2]
         );
     }
 
