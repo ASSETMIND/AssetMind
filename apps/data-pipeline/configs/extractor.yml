@@ -548,3 +548,187 @@ policy:
     params:
       <<: *kis_overseas_params
       FID_INPUT_ISCD: "PTRAN"
+
+  # ========== [Dow Jones 일별 데이터 : 26개] ==========
+
+  kis_dow_jones_industrial_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 산업지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "P.DJI"
+
+  kis_dow_jones_internet_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 인터넷 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "P.DJINET"
+
+  kis_dow_jones_transportation_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 운송지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "P.DJT"
+
+  kis_dow_jones_utilities_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 유틸리티 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "P.DJU"
+
+  kis_dow_jones_commodity_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 UBS 상품지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJC"
+
+  kis_dow_jones_reit_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 부동산신탁 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJR"
+
+  kis_dow_jones_automobiles_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 자동차제조 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSAP"
+
+  kis_dow_jones_auto_parts_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 자동차부품 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSAT"
+
+  kis_dow_jones_advertising_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 광고미디어 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSAV"
+
+  kis_dow_jones_broadcasting_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 방송 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSBC"
+
+  kis_dow_jones_casinos_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 카지노 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSCA"
+
+  kis_dow_jones_chemicals_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 화학 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSCH"
+
+  kis_dow_jones_construction_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 건설 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSCN"
+
+  kis_dow_jones_distiller_brewer_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 주류 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSDB"
+
+  kis_dow_jones_elect_cmpts_equip_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 전자부품 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSEC"
+
+  kis_dow_jones_food_beverage_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 음식료 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSFB"
+
+  kis_dow_jones_fixed_line_comm_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 유선통신 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSFC"
+
+  kis_dow_jones_hvy_machinery_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 중장비 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSHR"
+
+  kis_dow_jones_lodging_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 호텔숙박 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSLG"
+
+  kis_dow_jones_marine_transport_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 해상운송 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSMT"
+
+  kis_dow_jones_non_ferrous_metals_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 비철금속 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSNF"
+
+  kis_dow_jones_publishing_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 출판 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSPB"
+
+  kis_dow_jones_steel_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 철강 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSST"
+
+  kis_dow_jones_trucking_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 육상운송 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSTK"
+
+  kis_dow_jones_tires_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 타이어 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSTR"
+
+  kis_dow_jones_wireless_comm_daily:
+    <<: *kis_overseas_base
+    description: "다우존스 무선통신 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PDJUSWC"
