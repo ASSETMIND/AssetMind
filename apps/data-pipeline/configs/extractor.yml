@@ -25,6 +25,18 @@
     FID_INPUT_DATE_2: "20240131"
     FID_PERIOD_DIV_CODE: "D"
 
+  # 2. KIS 해외 원자재 ETF 공통 템플릿
+  kis_overseas_base: &kis_overseas_base
+    provider: "KIS"
+    domain: "overseas-price"
+    path: "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+  kis_overseas_params: &kis_overseas_params
+    FID_COND_MRKT_DIV_CODE: "N"
+    FID_INPUT_DATE_1: "20240101"
+    FID_INPUT_DATE_2: "20240131"
+    FID_PERIOD_DIV_CODE: "D"
+
 policy:
   # ----------------------------------------------------------------------------
   # 한국투자증권 (KIS) : https://apiportal.koreainvestment.com/intro
@@ -444,3 +456,95 @@ policy:
     params:
       <<: *kis_domestic_params
       FID_INPUT_ISCD: "11045"
+
+  # ========== [NASDAQ 지수 일별 데이터 : 13개] ==========
+  kis_nasdaq_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 (Nasdaq) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "QNDAQ"
+
+  kis_nasdaq_bank_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 은행 (NASDAQ Bank) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PBANK"
+
+  kis_nasdaq_composite_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 종합 (NASDAQ Composite) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PCOMP"
+
+  kis_nasdaq_industrial_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 공업지수 (NASDAQ INDUSTRIAL INDEX) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PINDS"
+
+  kis_nasdaq_insurance_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 보험 (NASDAQ OTC Index - Insurance) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PINSR"
+
+  kis_nasdaq_computer_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 컴퓨터 (NASDAQ Computer Index) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PIXCO"
+
+  kis_nasdaq_financial_100_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 금융100지수 (NASDAQ Financial 100 Index) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PIXF"
+
+  kis_nasdaq_healthcare_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 헬스케어 (NASDAQ HealthCare) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PIXHC"
+
+  kis_nasdaq_telecom_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 정보통신 (NASDAQ Information Telecom) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PIXTC"
+
+  kis_nasdaq_bio_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 생명공학 (NASDAQ Bio) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PNBI"
+
+  kis_nasdaq_100_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 100 (NASDAQ-100) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PNDX"
+
+  kis_nasdaq_other_financial_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 기타금융 (NASDAQ OTC Index - Other Financial) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "POFIN"
+
+  kis_nasdaq_transportation_daily:
+    <<: *kis_overseas_base
+    description: "나스닥 운송 (NASDAQ Transportation) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PTRAN"
