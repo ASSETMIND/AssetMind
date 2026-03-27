@@ -147,7 +147,7 @@ const AIPredictionPanelError: React.FC<{ onRetry?: () => void }> = ({
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      minHeight: "600px",
+      minHeight: "820px",
     }}
   >
     {/* 아이콘 + 텍스트 묶음 */}
