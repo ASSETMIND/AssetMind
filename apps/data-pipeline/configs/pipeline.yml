@@ -1,0 +1,45 @@
+# ==============================================================================
+# 파이프라인 오케스트레이션 정책 (Pipeline Orchestration Policy)
+#
+# 목적: pipeline_service.py에서 실행할 단위 작업(Task)을 정의합니다.
+# 역할: extractor.yml의 수집 대상(Job)과 loader.yml의 적재 방식을 조립(Mapping)합니다.
+# 사용법: PipelineService("bronze_daily_batch") 와 같이 Task Key를 주입하여 실행합니다.
+# ==============================================================================
+
+tasks:
+  # ----------------------------------------------------------------------------
+  # Task 1. 거시경제 및 주요 지수 배치 (매일 장 마감 후 실행 목적)
+  # ----------------------------------------------------------------------------
+  bronze_daily_batch:
+    description: "국내외 주요 증시 지수, 환율, 핵심 국채 금리 일일 수집"
+    target_loader: "aws" # loader.yml의 최상위 노드 참조 (S3 적재)
+    extract_jobs:
+      - "kis_kospi_composite_daily"
+      - "kis_kospi_large_cap_daily"
+      - "kis_kospi_mid_cap_daily"
+      - "kis_kospi_small_cap_daily"
+      - "kis_kospi_food_beverage_daily"
+      - "kis_kospi_textile_apparel_daily"
+      - "kis_kospi_paper_wood_daily"
+      - "kis_kospi_chemical_daily"
+      - "kis_kospi_pharmaceutical_daily"
+      - "kis_kospi_non_metallic_daily"
+      - "kis_kospi_metal_daily"
+      - "kis_kospi_machinery_daily"
+      - "kis_kospi_electric_electronics_daily"
+      - "kis_kospi_medical_precision_daily"
+      - "kis_kospi_transport_equipment_daily"
+      - "kis_kospi_distribution_daily"
+      - "kis_kospi_electricity_gas_daily"
+      - "kis_kospi_construction_daily"
+      - "kis_kospi_transport_storage_daily"
+      - "kis_kospi_communication_daily"
+      - "kis_kospi_finance_daily"
+      - "kis_kospi_securities_daily"
+      - "kis_kospi_insurance_daily"
+      - "kis_kospi_service_daily"
+      - "kis_kospi_manufacturing_daily"
+      - "kis_kospi_real_estate_daily"
+      - "kis_kospi_it_service_daily"
+      - "kis_kospi_entertainment_culture_daily"
+      - "kis_vkospi_daily"
