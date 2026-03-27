@@ -3,7 +3,6 @@ import { OrderbookTable } from "./OrderbookTable";
 import type { OrderbookRow, MarketInfo } from "./OrderbookTable";
 import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 
-
 // ─── Mock Data ────────────────────────────────────────────────
 
 const MOCK_ASKS: OrderbookRow[] = [
@@ -36,15 +35,15 @@ const MOCK_BIDS: OrderbookRow[] = [
 ];
 
 const MOCK_TRADES: TradeTickRow[] = [
-  { id: "t1", price: 94800, quantity: 1, isBuy: true  },
-  { id: "t2", price: 94750, quantity: 1, isBuy: false },
-  { id: "t3", price: 94800, quantity: 1, isBuy: true  },
-  { id: "t4", price: 94700, quantity: 1, isBuy: false },
-  { id: "t5", price: 94750, quantity: 1, isBuy: true  },
-  { id: "t6", price: 94800, quantity: 1, isBuy: false },
-  { id: "t7", price: 94750, quantity: 1, isBuy: true  },
-  { id: "t8", price: 94700, quantity: 1, isBuy: false },
-  { id: "t9", price: 94800, quantity: 1, isBuy: true  },
+  { id: "t1",  price: 94800, quantity: 1, isBuy: true  },
+  { id: "t2",  price: 94750, quantity: 1, isBuy: false },
+  { id: "t3",  price: 94800, quantity: 1, isBuy: true  },
+  { id: "t4",  price: 94700, quantity: 1, isBuy: false },
+  { id: "t5",  price: 94750, quantity: 1, isBuy: true  },
+  { id: "t6",  price: 94800, quantity: 1, isBuy: false },
+  { id: "t7",  price: 94750, quantity: 1, isBuy: true  },
+  { id: "t8",  price: 94700, quantity: 1, isBuy: false },
+  { id: "t9",  price: 94800, quantity: 1, isBuy: true  },
   { id: "t10", price: 94750, quantity: 1, isBuy: false },
   { id: "t11", price: 94700, quantity: 1, isBuy: true  },
   { id: "t12", price: 94750, quantity: 1, isBuy: false },
@@ -68,6 +67,14 @@ const MOCK_MARKET_INFO: MarketInfo = {
   midPrice: 96750,
 };
 
+const decorator = (Story: React.ComponentType) => (
+  <div style={{ backgroundColor: "#131316", padding: "16px" }}>
+    <Story />
+  </div>
+);
+
+// ─── Meta ─────────────────────────────────────────────────────
+
 const meta: Meta<typeof OrderbookTable> = {
   title: "Components/Stock/OrderbookTable",
   component: OrderbookTable,
@@ -80,8 +87,16 @@ const meta: Meta<typeof OrderbookTable> = {
     layout: "fullscreen",
     docs: {
       description: {
-        component: "매도/매수 호가, 시세 정보 패널, 체결 내역을 포함한 호가창 컴포넌트. 잔량 바는 상대적 비율로 렌더링되며 방사형 그라데이션 배경 적용.",
+        component:
+          "매도/매수 호가, 시세 정보 패널, 체결 내역을 포함한 호가창 컴포넌트. 잔량 바는 상대적 비율로 렌더링되며 방사형 그라데이션 배경 적용. `status` prop으로 skeleton·error·empty(휴장) variant 전환 가능.",
       },
+    },
+  },
+  argTypes: {
+    status: {
+      control: "radio",
+      options: ["default", "skeleton", "error", "empty"],
+      description: "컴포넌트 표시 상태",
     },
   },
 };
@@ -89,11 +104,12 @@ const meta: Meta<typeof OrderbookTable> = {
 export default meta;
 type Story = StoryObj<typeof OrderbookTable>;
 
-// ─── Default ──────────────────────────────────────────────────
+// ─── Stories ──────────────────────────────────────────────────
 
 export const Default: Story = {
   name: "Default",
   args: {
+    status: "default",
     currentPrice: 100000,
     currentChangeRate: 10.00,
     asks: MOCK_ASKS,
@@ -103,20 +119,30 @@ export const Default: Story = {
     marketInfo: MOCK_MARKET_INFO,
     onQuickOrder: () => alert("빠른 주문"),
   },
-  decorators: [
-    (Story) => (
-      <div style={{ backgroundColor: "#131316", padding: "16px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [decorator],
 };
 
-// ─── Market Closed ────────────────────────────────────────────
-
-export const MarketClosed: Story = {
-  name: "Market Closed — Badge",
+export const Skeleton: Story = {
+  name: "Skeleton",
   args: {
+    status: "skeleton",
+  },
+  decorators: [decorator],
+};
+
+export const Error: Story = {
+  name: "Error",
+  args: {
+    status: "error",
+    onRetry: () => alert("Retry"),
+  },
+  decorators: [decorator],
+};
+
+export const Empty: Story = {
+  name: "Empty (Market Closed)",
+  args: {
+    status: "empty",
     currentPrice: 100000,
     currentChangeRate: 10.00,
     asks: MOCK_ASKS,
@@ -124,23 +150,14 @@ export const MarketClosed: Story = {
     trades: MOCK_TRADES,
     tradeStrength: 85,
     marketInfo: MOCK_MARKET_INFO,
-    isMarketClosed: true,
-    onQuickOrder: () => alert("빠른 주문"),
   },
-  decorators: [
-    (Story) => (
-      <div style={{ backgroundColor: "#131316", padding: "16px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [decorator],
 };
-
-// ─── Playground ───────────────────────────────────────────────
 
 export const Playground: Story = {
   name: "Playground",
   args: {
+    status: "default",
     currentPrice: 100000,
     currentChangeRate: 10.00,
     asks: MOCK_ASKS,
@@ -149,11 +166,5 @@ export const Playground: Story = {
     tradeStrength: 85,
     marketInfo: MOCK_MARKET_INFO,
   },
-  decorators: [
-    (Story) => (
-      <div style={{ backgroundColor: "#131316", padding: "16px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [decorator],
 };

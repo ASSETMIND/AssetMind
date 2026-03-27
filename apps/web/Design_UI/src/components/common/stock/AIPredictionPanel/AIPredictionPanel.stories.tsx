@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { AIPredictionPanel } from "./AIPredictionPanel";
+import type { AnalysisData } from "./PredictionAnalysisWidget";
 
+/* ══════════════════════════════════════
+   Mock 데이터
+══════════════════════════════════════ */
 const mockHistorical = [
   { time: "2025-03-17", value: 68000 },
   { time: "2025-03-18", value: 71000 },
@@ -13,7 +17,7 @@ const mockHistorical = [
   { time: "2025-03-25", value: 63000 },
 ];
 
-const mockForecast = [
+const mockForecastUp = [
   { time: "2025-03-25", value: 63000 },
   { time: "2025-03-26", value: 66000 },
   { time: "2025-03-27", value: 70000 },
@@ -29,7 +33,42 @@ const mockForecastDown = [
   { time: "2025-03-29", value: 51000 },
 ];
 
-/* ── Meta ── */
+const mockAnalysis: AnalysisData = {
+  "기술적 지표": [
+    { type: "warning", text: "경고 또는 위험 신호가 있는 내용" },
+    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
+    { type: "positive", text: "긍정적 신호가 있는 내용" },
+    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
+    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
+  ],
+  "시장 심리": [
+    { type: "positive", text: "투자자 심리 지수 낙관 구간 진입" },
+    { type: "neutral", text: "외국인 순매수 흐름 지속 중" },
+    { type: "warning", text: "공매도 비율 단기 급등 감지" },
+  ],
+  "수급 동향": [
+    { type: "neutral", text: "기관 순매수 전환 신호 감지" },
+    { type: "positive", text: "외국인 대규모 매수 유입" },
+    { type: "warning", text: "개인 투자자 과매도 구간 진입" },
+    { type: "neutral", text: "프로그램 매매 비중 중립" },
+  ],
+};
+
+const defaultArgs = {
+  historicalData: mockHistorical,
+  forecastData: mockForecastUp,
+  predictedPrice: 100000,
+  priceDiff: 0,
+  changeRate: 0.0,
+  baseDate: "0000년 00월 00일",
+  upProbability: 60,
+  downProbability: 40,
+  analysisData: mockAnalysis,
+};
+
+/* ══════════════════════════════════════
+   Meta
+══════════════════════════════════════ */
 const meta: Meta<typeof AIPredictionPanel> = {
   title: "Components/Stock/AIPredictionPanel",
   component: AIPredictionPanel,
@@ -43,11 +82,16 @@ const meta: Meta<typeof AIPredictionPanel> = {
     docs: {
       description: {
         component:
-          "AI 가격 예측 패널 컴포넌트. 기간 탭(1주·1개월·3개월) 전환, SVG 기반 스파크라인 차트, AI 예측가 및 방향성 확률 바를 포함한 통합 패널. 매수하기 버튼으로 외부 주문 액션 연결 가능.",
+          "AI 가격 예측 패널 컴포넌트. 기간 탭(1주·1개월·3개월) 전환, SVG 기반 스파크라인 차트(과거 파란 실선 + 예측 초록 점선 + 그라데이션), AI 예측가, 방향성 확률 바, 분석 근거 탭 위젯을 포함한 통합 패널. `status` prop으로 로딩·에러·휴장시간 variant 전환 가능.",
       },
     },
   },
   argTypes: {
+    status: {
+      control: "radio",
+      options: ["default", "skeleton", "error", "empty"],
+      description: "Panel display status",
+    },
     period: {
       control: "radio",
       options: ["1주", "1개월", "3개월"],
@@ -63,12 +107,16 @@ const meta: Meta<typeof AIPredictionPanel> = {
 export default meta;
 type Story = StoryObj<typeof AIPredictionPanel>;
 
-/* ── Stories ── */
-export const UpTrend: Story = {
-  name: "Rising Predictions",
+/* ══════════════════════════════════════
+   Stories
+══════════════════════════════════════ */
+
+/** Default — Up Trend */
+export const Default: Story = {
+  name: "Default / Up Trend",
   args: {
-    historicalData: mockHistorical,
-    forecastData: mockForecast,
+    ...defaultArgs,
+    status: "default",
     predictedPrice: 80000,
     priceDiff: 17000,
     changeRate: 26.98,
@@ -78,10 +126,12 @@ export const UpTrend: Story = {
   },
 };
 
+/** Down Trend */
 export const DownTrend: Story = {
-  name: "Falling Predictions",
+  name: "Down Trend",
   args: {
-    historicalData: mockHistorical,
+    ...defaultArgs,
+    status: "default",
     forecastData: mockForecastDown,
     predictedPrice: 51000,
     priceDiff: -12000,
@@ -92,11 +142,12 @@ export const DownTrend: Story = {
   },
 };
 
+/** Even Probability (50:50) */
 export const EvenProbability: Story = {
-  name: "Even Predictions",
+  name: "Even Probability (50:50)",
   args: {
-    historicalData: mockHistorical,
-    forecastData: mockForecast,
+    ...defaultArgs,
+    status: "default",
     predictedPrice: 65000,
     priceDiff: 2000,
     changeRate: 3.17,
@@ -106,11 +157,12 @@ export const EvenProbability: Story = {
   },
 };
 
+/** Extreme Probability (99:1) */
 export const ExtremeProbability: Story = {
-  name: "Extreme Predictions",
+  name: "Extreme Probability (99:1)",
   args: {
-    historicalData: mockHistorical,
-    forecastData: mockForecast,
+    ...defaultArgs,
+    status: "default",
     predictedPrice: 100000,
     priceDiff: 37000,
     changeRate: 58.73,
@@ -120,16 +172,44 @@ export const ExtremeProbability: Story = {
   },
 };
 
+/** Skeleton */
+export const Skeleton: Story = {
+  name: "Skeleton",
+  args: {
+    ...defaultArgs,
+    status: "skeleton",
+  },
+};
+
+/** Error */
+export const ErrorState: Story = {
+  name: "Error",
+  args: {
+    status: "error",
+    onRetry: () => alert("Retry"),
+  },
+};
+
+/** Empty (Market Closed) */
+export const Empty: Story = {
+  name: "Empty (Market Closed)",
+  args: {
+    ...defaultArgs,
+    status: "empty",
+    predictedPrice: 80000,
+    priceDiff: 17000,
+    changeRate: 26.98,
+    baseDate: "2025년 03월 26일",
+    upProbability: 72,
+    downProbability: 28,
+  },
+};
+
+/** Playground */
 export const Playground: Story = {
   name: "Playground",
   args: {
-    historicalData: mockHistorical,
-    forecastData: mockForecast,
-    predictedPrice: 100000,
-    priceDiff: 0,
-    changeRate: 0.0,
-    baseDate: "0000년 00월 00일",
-    upProbability: 60,
-    downProbability: 40,
+    ...defaultArgs,
+    status: "default",
   },
 };
