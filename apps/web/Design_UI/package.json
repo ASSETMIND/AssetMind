@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "lightweight-charts": "^5.1.0",
     "lucide-react": "^0.563.0",
     "prismjs": "^1.30.0",
     "react": "^18.3.1",
