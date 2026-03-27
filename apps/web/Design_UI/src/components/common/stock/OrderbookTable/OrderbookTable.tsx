@@ -32,7 +32,7 @@ export interface MarketInfo {
 
 interface OrderbookTableProps {
   status?: OrderbookStatus;
-  /** @deprecated status="empty" */
+  /** @deprecated status="empty" 사용 권장 */
   isMarketClosed?: boolean;
   onRetry?: () => void;
   currentPrice?: number;
@@ -112,45 +112,57 @@ const OrderbookError: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => (
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      gap: "16px",
-      minHeight: "480px",
+      minHeight: "820px",
     }}
   >
-    <svg width="40" height="38" viewBox="0 0 30 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M16.3261 0.724424C15.8071 -0.241475 14.1932 -0.241475 13.6742 0.724424L0.174404 25.8319C0.0533393 26.057 -0.0065451 26.3091 0.00056714 26.5637C0.00767938 26.8183 0.0815466 27.0668 0.214994 27.285C0.348442 27.5032 0.536934 27.6837 0.762161 27.809C0.987389 27.9343 1.2417 28.0001 1.50038 28H28.4999C28.7586 28.0005 29.013 27.935 29.2383 27.8099C29.4636 27.6848 29.6522 27.5044 29.7856 27.2862C29.919 27.0679 29.9927 26.8194 29.9995 26.5648C30.0063 26.3102 29.946 26.0582 29.8244 25.8334L16.3261 0.724424ZM16.5001 23.5693H13.5002V20.6154H16.5001V23.5693ZM13.5002 17.6616V10.2771H16.5001L16.5016 17.6616H13.5002Z"
-        fill="#6B7280"
-      />
-    </svg>
-    <p
-      style={{
-        fontSize: "14px",
-        fontWeight: 400,
-        color: "#9F9F9F",
-        textAlign: "center",
-        lineHeight: "1.6",
-        margin: 0,
-      }}
-    >
-      호가 데이터를 불러오지 못했습니다.
-      <br />
-      잠시 후 다시 시도해 주세요.
-    </p>
-    <button
-      onClick={onRetry}
-      style={{
-        padding: "12px 32px",
-        backgroundColor: "#6B4EFF",
-        border: "none",
-        borderRadius: "8px",
-        cursor: "pointer",
-        fontSize: "14px",
-        fontWeight: 500,
-        color: "#FFFFFF",
-      }}
-    >
-      다시 시도
-    </button>
+    {/* 아이콘 + 텍스트 묶음 */}
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "16px",
+    }}>
+      <svg width="30" height="28" viewBox="0 0 30 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M16.3261 0.724424C15.8071 -0.241475 14.1932 -0.241475 13.6742 0.724424L0.174404 25.8319C0.0533393 26.057 -0.0065451 26.3091 0.00056714 26.5637C0.00767938 26.8183 0.0815466 27.0668 0.214994 27.285C0.348442 27.5032 0.536934 27.6837 0.762161 27.809C0.987389 27.9343 1.2417 28.0001 1.50038 28H28.4999C28.7586 28.0005 29.013 27.935 29.2383 27.8099C29.4636 27.6848 29.6522 27.5044 29.7856 27.2862C29.919 27.0679 29.9927 26.8194 29.9995 26.5648C30.0063 26.3102 29.946 26.0582 29.8244 25.8334L16.3261 0.724424ZM16.5001 23.5693H13.5002V20.6154H16.5001V23.5693ZM13.5002 17.6616V10.2771H16.5001L16.5016 17.6616H13.5002Z"
+          fill="#6B7280"
+        />
+      </svg>
+      <p
+        style={{
+          fontSize: "14px",
+          fontWeight: 400,
+          color: "#9F9F9F",
+          textAlign: "center",
+          lineHeight: "1.6",
+          margin: 0,
+        }}
+      >
+        호가 데이터를 불러오지 못했습니다.
+        <br />
+        잠시 후 다시 시도해 주세요.
+      </p>
+    </div>
+
+    {/* 버튼 — 아이콘+텍스트와 간격 36 */}
+    <div style={{ marginTop: "36px" }}>
+      <button
+        onClick={onRetry}
+        style={{
+          width: "100px",
+          height: "38px",
+          backgroundColor: "#6B4EFF",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: 500,
+          color: "#FFFFFF",
+        }}
+      >
+        다시 시도
+      </button>
+    </div>
   </div>
 );
 
@@ -353,7 +365,6 @@ export const OrderbookTable = ({
   onQuickOrder,
   className,
 }: OrderbookTableProps) => {
-  // isMarketClosed 하위 호환 처리
   const status: OrderbookStatus = statusProp ?? (isMarketClosed ? "empty" : "default");
 
   const maxAskQty = Math.max(...asks.map((a) => a.quantity), 1);
