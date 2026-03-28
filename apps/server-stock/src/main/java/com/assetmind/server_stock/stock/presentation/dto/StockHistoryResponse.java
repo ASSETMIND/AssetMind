@@ -1,6 +1,8 @@
 package com.assetmind.server_stock.stock.presentation.dto;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
+import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
+import java.time.format.DateTimeFormatter;
 import lombok.Builder;
 
 /**
@@ -31,19 +33,41 @@ public record StockHistoryResponse(
         String cumulativeVolume,
         String time
 ) {
-    public static StockHistoryResponse from(StockDataEntity entity) {
+
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HHmmss");
+
+    // 실시간 웹소켓 브로드캐스트용
+    public static StockHistoryResponse from(RealTimeStockTradeEvent event) {
+        return StockHistoryResponse.builder()
+                .stockCode(event.stockCode())
+                .currentPrice(String.valueOf(event.currentPrice()))
+                .openPrice(String.valueOf(event.openPrice()))
+                .highPrice(String.valueOf(event.highPrice()))
+                .lowPrice(String.valueOf(event.lowPrice()))
+                .priceChange(String.valueOf(event.priceChange()))
+                .changeRate(String.valueOf(event.changeRate()))
+                .executionVolume(String.valueOf(event.executionVolume()))
+                .cumulativeAmount(String.valueOf(event.cumulativeAmount()))
+                .cumulativeVolume(String.valueOf(event.cumulativeVolume()))
+                .time(event.time())
+                .build();
+    }
+
+    // DB 과거 내역 페이징 조회용
+    public static StockHistoryResponse from(RawTickJpaEntity entity) {
         return StockHistoryResponse.builder()
                 .stockCode(entity.getStockCode())
                 .currentPrice(String.valueOf(entity.getCurrentPrice()))
-                .openPrice(String.valueOf(entity.getOpenPrice()))
-                .highPrice(String.valueOf(entity.getHighPrice()))
-                .lowPrice(String.valueOf(entity.getLowPrice()))
                 .priceChange(String.valueOf(entity.getPriceChange()))
-                .changeRate(String.valueOf(entity.getChangeRate()))
-                .executionVolume(String.valueOf(entity.getExecutionVolume()))
-                .cumulativeAmount(String.valueOf(entity.getTradingAmount()))
-                .cumulativeVolume(String.valueOf(entity.getTradingVolume()))
-                .time(entity.getTime())
+                .executionVolume(String.valueOf(entity.getVolume()))
+                .time(entity.getTradeTimestamp().format(TIME_FORMATTER))
+                // 나머지는 null로 설정
+                .openPrice(null)
+                .highPrice(null)
+                .lowPrice(null)
+                .changeRate(null)
+                .cumulativeAmount(null)
+                .cumulativeVolume(null)
                 .build();
     }
 }
