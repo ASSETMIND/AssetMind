@@ -5,6 +5,8 @@ import { LinearGauge } from "../../stock/LinearGauge/LinearGauge";
 
 // ─── Types ────────────────────────────────────────────────────
 
+export type Viewport = "desktop" | "tablet" | "mobile";
+
 export interface StockRow {
   id: string;
   rank: number;
@@ -20,10 +22,55 @@ export interface StockRow {
 
 interface StockTableProps {
   rows: StockRow[];
+  viewport?: Viewport;
   onFavoriteToggle?: (id: string) => void;
   onRowClick?: (id: string) => void;
   className?: string;
 }
+
+// ─── Layout config ────────────────────────────────────────────
+// 프레임 크기: desktop=1200, tablet=768, mobile=393 (절대 변경 금지)
+// 모든 뷰포트에서 폰트는 15px medium 통일
+// 공간 부족 시 letterSpacing으로 조정
+
+const LAYOUT = {
+  desktop: {
+    totalWidth: 1200,
+    rankWidth: 60,
+    nameWidth: 598,
+    priceWidth: 100,
+    changeRateWidth: 100,
+    tradeAmountWidth: 130,
+    buyRatioWidth: 180,
+    showTradeAmount: true,
+    showBuyRatio: true,
+    nameFlex: false,
+  },
+  tablet: {
+    totalWidth: 768,
+    rankWidth: 56,
+    nameWidth: 0,   // flex
+    priceWidth: 100,
+    changeRateWidth: 100,
+    tradeAmountWidth: 120,
+    buyRatioWidth: 0,
+    showTradeAmount: true,
+    showBuyRatio: false,
+    nameFlex: true,
+  },
+  mobile: {
+    totalWidth: 393,
+    rankWidth: 48,
+    nameWidth: 0,   // flex
+    priceWidth: 90,
+    changeRateWidth: 80,
+    tradeAmountWidth: 0,
+    buyRatioWidth: 0,
+    showTradeAmount: false,
+    showBuyRatio: false,
+    nameFlex: true,
+  },
+} as const;
 
 // ─── HeartIcon ────────────────────────────────────────────────
 
@@ -41,7 +88,13 @@ const HeartIcon = ({ active }: { active: boolean }) => (
 
 // ─── SlotPrice ────────────────────────────────────────────────
 
-const SlotPrice = ({ value }: { value: number }) => {
+const SlotPrice = ({
+  value,
+  letterSpacing = "normal",
+}: {
+  value: number;
+  letterSpacing?: string;
+}) => {
   const [display, setDisplay] = useState(value.toLocaleString("ko-KR") + "원");
   const [animating, setAnimating] = useState(false);
   const prevRef = useRef(value);
@@ -49,13 +102,11 @@ const SlotPrice = ({ value }: { value: number }) => {
   useEffect(() => {
     if (prevRef.current === value) return;
     prevRef.current = value;
-
     setAnimating(true);
     const t = setTimeout(() => {
       setDisplay(value.toLocaleString("ko-KR") + "원");
       setAnimating(false);
     }, 200);
-
     return () => clearTimeout(t);
   }, [value]);
 
@@ -71,6 +122,7 @@ const SlotPrice = ({ value }: { value: number }) => {
         whiteSpace: "nowrap",
         color: "#FFFFFF",
         position: "relative",
+        letterSpacing,
       }}
     >
       <span
@@ -95,13 +147,22 @@ const SlotPrice = ({ value }: { value: number }) => {
 
 export const StockTableRow = ({
   row,
+  viewport = "desktop",
   onFavoriteToggle,
   onRowClick,
 }: {
   row: StockRow;
+  viewport?: Viewport;
   onFavoriteToggle?: (id: string) => void;
   onRowClick?: (id: string) => void;
 }) => {
+  const L = LAYOUT[viewport];
+  const isMobile = viewport === "mobile";
+  const isTablet = viewport === "tablet";
+
+  // 공간 절약을 위한 letterSpacing: mobile/tablet에서 약간 좁힘
+  const numericLetterSpacing = isMobile ? "-0.3px" : isTablet ? "-0.2px" : "normal";
+
   const bgColor =
     row.tickerState === "rise"
       ? "rgba(234,88,12,0.1)"
@@ -113,7 +174,7 @@ export const StockTableRow = ({
     <div
       onClick={() => onRowClick?.(row.id)}
       style={{
-        width: "1200px",
+        width: `${L.totalWidth}px`,
         height: "60px",
         display: "flex",
         alignItems: "center",
@@ -127,15 +188,15 @@ export const StockTableRow = ({
         boxSizing: "border-box",
       }}
     >
-      {/* 하트 + 순위 — 60px */}
+      {/* 하트 + 순위 */}
       <div
         style={{
-          width: "60px",
+          width: `${L.rankWidth}px`,
           height: "21px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: "14px",
+          gap: isMobile ? "10px" : "14px",
           flexShrink: 0,
         }}
       >
@@ -155,22 +216,25 @@ export const StockTableRow = ({
             minWidth: "16px",
             textAlign: "center",
             flexShrink: 0,
+            letterSpacing: numericLetterSpacing,
           }}
         >
           {row.rank}
         </span>
       </div>
 
-      {/* 로고 + 종목명 — 598px */}
+      {/* 로고 + 종목명 */}
       <div
         style={{
-          width: "598px",
+          width: L.nameFlex ? undefined : `${L.nameWidth}px`,
+          flex: L.nameFlex ? 1 : undefined,
           height: "36px",
           display: "flex",
           alignItems: "center",
-          gap: "14px",
-          flexShrink: 0,
+          gap: isMobile ? "10px" : "14px",
+          flexShrink: L.nameFlex ? undefined : 0,
           overflow: "hidden",
+          minWidth: 0,
         }}
       >
         {row.logoUrl ? (
@@ -178,8 +242,8 @@ export const StockTableRow = ({
             src={row.logoUrl}
             alt={row.name}
             style={{
-              width: "36px",
-              height: "36px",
+              width: isMobile ? "28px" : "36px",
+              height: isMobile ? "28px" : "36px",
               borderRadius: "50%",
               objectFit: "cover",
               flexShrink: 0,
@@ -188,8 +252,8 @@ export const StockTableRow = ({
         ) : (
           <div
             style={{
-              width: "36px",
-              height: "36px",
+              width: isMobile ? "28px" : "36px",
+              height: isMobile ? "28px" : "36px",
               borderRadius: "50%",
               backgroundColor: "#21242C",
               display: "flex",
@@ -211,81 +275,86 @@ export const StockTableRow = ({
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            letterSpacing: isMobile ? "-0.2px" : "normal",
           }}
         >
           {row.name}
         </span>
       </div>
 
-      {/* 현재가 — 100px */}
+      {/* 현재가 */}
       <div
         style={{
-          width: "100px",
+          width: `${L.priceWidth}px`,
           height: "21px",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
           flexShrink: 0,
-          color: "#FFFFFF",
         }}
       >
-        <SlotPrice value={row.price} />
+        <SlotPrice value={row.price} letterSpacing={numericLetterSpacing} />
       </div>
 
-      {/* 등락률 — 100px, 좌우 패딩 11px */}
+      {/* 등락률 */}
       <div
         style={{
-          width: "100px",
+          width: `${L.changeRateWidth}px`,
           height: "21px",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
           flexShrink: 0,
-          paddingLeft: "11px",
-          paddingRight: "11px",
+          paddingLeft: isMobile ? "6px" : "11px",
+          paddingRight: isMobile ? "4px" : "11px",
           boxSizing: "border-box",
         }}
       >
         <PriceChangeToken value={row.changeRate} />
       </div>
 
-      {/* 거래대금 — 130px */}
-      <div
-        style={{
-          width: "130px",
-          height: "21px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          flexShrink: 0,
-        }}
-      >
-        <span
+      {/* 거래대금 — tablet/desktop */}
+      {L.showTradeAmount && (
+        <div
           style={{
-            fontSize: "15px",
-            fontWeight: 500,
-            color: "#FFFFFF",
-            fontVariantNumeric: "tabular-nums",
-            whiteSpace: "nowrap",
+            width: `${L.tradeAmountWidth}px`,
+            height: "21px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexShrink: 0,
           }}
         >
-          {row.tradeAmount.toLocaleString("ko-KR")}원
-        </span>
-      </div>
+          <span
+            style={{
+              fontSize: "15px",
+              fontWeight: 500,
+              color: "#FFFFFF",
+              fontVariantNumeric: "tabular-nums",
+              whiteSpace: "nowrap",
+              letterSpacing: isTablet ? "-0.2px" : "normal",
+            }}
+          >
+            {row.tradeAmount.toLocaleString("ko-KR")}원
+          </span>
+        </div>
+      )}
 
-      {/* 거래 비율 바 — 180px */}
-      <div
-        style={{
-          width: "180px",
-          height: "18px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <LinearGauge buyRatio={row.buyRatio} />
-      </div>
+      {/* 거래 비율 — desktop */}
+      {L.showBuyRatio && (
+        <div
+          style={{
+            width: `${L.buyRatioWidth}px`,
+            height: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <LinearGauge buyRatio={row.buyRatio} />
+        </div>
+      )}
     </div>
   );
 };
@@ -294,16 +363,21 @@ export const StockTableRow = ({
 
 export const StockTable = ({
   rows,
+  viewport = "desktop",
   onFavoriteToggle,
   onRowClick,
   className,
 }: StockTableProps) => {
+  const L = LAYOUT[viewport];
+  const isMobile = viewport === "mobile";
+  const isTablet = viewport === "tablet";
+
   return (
-    <div className={cn("", className)} style={{ width: "1200px" }}>
-      {/* 헤더 — 1200x26, px-16 py-3 */}
+    <div className={cn("", className)} style={{ width: `${L.totalWidth}px` }}>
+      {/* 헤더 */}
       <div
         style={{
-          width: "1200px",
+          width: `${L.totalWidth}px`,
           height: "26px",
           display: "flex",
           alignItems: "center",
@@ -314,23 +388,85 @@ export const StockTable = ({
           boxSizing: "border-box",
         }}
       >
-        <div style={{ width: "658px", height: "20px", display: "flex", alignItems: "center", flexShrink: 0 }}>
+        {/* 순위+종목명 묶음 */}
+        <div
+          style={{
+            width: L.nameFlex ? undefined : `${L.rankWidth + L.nameWidth}px`,
+            flex: L.nameFlex ? 1 : undefined,
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            flexShrink: L.nameFlex ? undefined : 0,
+          }}
+        >
           <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1", whiteSpace: "nowrap" }}>
             순위 · 오늘 00:00 기준
           </span>
         </div>
-        <div style={{ width: "100px", height: "20px", display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
+
+        {/* 현재가 */}
+        <div
+          style={{
+            width: `${L.priceWidth}px`,
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexShrink: 0,
+          }}
+        >
           <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1" }}>현재가</span>
         </div>
-        <div style={{ width: "100px", height: "20px", display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
+
+        {/* 등락률 */}
+        <div
+          style={{
+            width: `${L.changeRateWidth}px`,
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexShrink: 0,
+          }}
+        >
           <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1" }}>등락률</span>
         </div>
-        <div style={{ width: "130px", height: "20px", display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
-          <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1", whiteSpace: "nowrap" }}>거래대금 순</span>
-        </div>
-        <div style={{ width: "180px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1", whiteSpace: "nowrap" }}>거래 비율</span>
-        </div>
+
+        {/* 거래대금 */}
+        {L.showTradeAmount && (
+          <div
+            style={{
+              width: `${L.tradeAmountWidth}px`,
+              height: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1", whiteSpace: "nowrap" }}>
+              거래대금 순
+            </span>
+          </div>
+        )}
+
+        {/* 거래 비율 */}
+        {L.showBuyRatio && (
+          <div
+            style={{
+              width: `${L.buyRatioWidth}px`,
+              height: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: "14px", fontWeight: 400, color: "#9194A1", whiteSpace: "nowrap" }}>
+              거래 비율
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 행 */}
@@ -338,6 +474,7 @@ export const StockTable = ({
         <StockTableRow
           key={row.id}
           row={row}
+          viewport={viewport}
           onFavoriteToggle={onFavoriteToggle}
           onRowClick={onRowClick}
         />
