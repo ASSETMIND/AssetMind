@@ -973,3 +973,170 @@ policy:
     params:
       <<: *kis_fx_params
       FID_INPUT_ISCD: "XFX@THB"
+
+  # ========== [원자재/에너지/농산물 근월물 일별 데이터 : 23개] ==========
+
+  # --- [귀금속] ---
+  kis_commodity_gold_daily:
+    <<: *kis_overseas_base
+    description: "금 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0101"
+
+  kis_commodity_silver_daily:
+    <<: *kis_overseas_base
+    description: "은 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0102"
+
+  kis_commodity_platinum_daily:
+    <<: *kis_overseas_base
+    description: "백금 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0103"
+
+  kis_commodity_palladium_daily:
+    <<: *kis_overseas_base
+    description: "팔라듐 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0104"
+
+  # --- [비철금속] ---
+  kis_commodity_copper_daily:
+    <<: *kis_overseas_base
+    description: "동(구리) LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0202"
+
+  kis_commodity_aluminum_daily:
+    <<: *kis_overseas_base
+    description: "알루미늄 LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0205"
+
+  kis_commodity_zinc_daily:
+    <<: *kis_overseas_base
+    description: "아연 LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0207"
+
+  kis_commodity_nickel_daily:
+    <<: *kis_overseas_base
+    description: "니켈 LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0209"
+
+  kis_commodity_tin_daily:
+    <<: *kis_overseas_base
+    description: "주석 LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0211"
+
+  kis_commodity_lead_daily:
+    <<: *kis_overseas_base
+    description: "연(납) LME 3개월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0213"
+
+  # --- [농산물 (Agriculture)] ---
+  kis_commodity_corn_daily:
+    <<: *kis_overseas_base
+    description: "옥수수 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0301"
+
+  kis_commodity_wheat_daily:
+    <<: *kis_overseas_base
+    description: "소맥(밀) 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0302"
+
+  kis_commodity_soybean_daily:
+    <<: *kis_overseas_base
+    description: "대두 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0303"
+
+  kis_commodity_soybean_meal_daily:
+    <<: *kis_overseas_base
+    description: "대두박 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0304"
+
+  kis_commodity_soybean_oil_daily:
+    <<: *kis_overseas_base
+    description: "대두유 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0305"
+
+  kis_commodity_oats_daily:
+    <<: *kis_overseas_base
+    description: "귀리 시카고 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0306"
+
+  kis_commodity_coffee_daily:
+    <<: *kis_overseas_base
+    description: "커피 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0307"
+
+  kis_commodity_cocoa_daily:
+    <<: *kis_overseas_base
+    description: "코코아 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0308"
+
+  kis_commodity_sugar_daily:
+    <<: *kis_overseas_base
+    description: "설탕 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0309"
+
+  kis_commodity_cotton_daily:
+    <<: *kis_overseas_base
+    description: "원면(면화) 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0310"
+
+  # --- [에너지 (Energy)] ---
+  kis_commodity_wti_daily:
+    <<: *kis_overseas_base
+    description: "WTI 원유 뉴욕 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0402"
+
+  kis_commodity_dubai_daily:
+    <<: *kis_overseas_base
+    description: "두바이유 선물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0403"
+
+  kis_commodity_brent_daily:
+    <<: *kis_overseas_base
+    description: "Brent 원유 근월물 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "EM0405"
