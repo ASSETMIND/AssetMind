@@ -1,11 +1,16 @@
 package com.assetmind.server_stock.stock.application.scheduler;
 
+import com.assetmind.server_stock.stock.application.CandleRollupService;
+import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.enums.CandleType;
 import com.assetmind.server_stock.stock.domain.repository.CandleRepository;
+import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +27,15 @@ public class CandleFlushScheduler {
 
     // 1분봉 저장 어댑터
     private final Ohlcv1mRepository ohlcv1mRepository;
+
+    // 1일봉 저장 어댑터
+    private final Ohlcv1dRepository ohlcv1dRepository;
+
+    // 주식 종목 메타 데이터 Provider
+    private final StockMetadataProvider stockMetadataProvider;
+
+    // 1분봉, 1일봉을 롤업해주는 Service
+    private final CandleRollupService candleRollupService;
 
     private static final DateTimeFormatter MINUTE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
 
@@ -51,6 +65,24 @@ public class CandleFlushScheduler {
      */
     @Scheduled(cron = "30 00 16 * * MON-FRI")
     public void flushDailyCandles() {
-        // TODO: 1일봉 롤업 로직
+        LocalDate today = LocalDate.now();
+
+        // 서비스 중인 모든 종목 코드 조회
+        List<String> allStockCodes = stockMetadataProvider.getAllStockCodes();
+
+        List<OhlcvDto> allDailyCandles = new ArrayList<>();
+
+        // 종목 마다 돌면서 1분봉을 가져와 1일봉으로 롤업
+        for (String stockCode : allStockCodes) {
+            List<OhlcvDto> oneMinuteCandles = ohlcv1mRepository.findCandlesByDate(stockCode, today);
+
+            // 1분봉을 1일봉으로 압축
+            List<OhlcvDto> rolledUpDaily = candleRollupService.rollup(oneMinuteCandles, CandleType.DAY_1);
+
+            allDailyCandles.addAll(rolledUpDaily);
+        }
+
+        ohlcv1dRepository.saveAll(allDailyCandles);
+        log.info("[CandleFlushScheduler] 1일봉 캔들 {}개 DB(ohlcv_1d) 롤업 및 저장 완료", allDailyCandles.size());
     }
 }
