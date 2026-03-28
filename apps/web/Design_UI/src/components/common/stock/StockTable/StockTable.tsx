@@ -14,7 +14,7 @@ export interface StockRow {
   price: number;
   changeRate: number;
   tradeAmount: number;
-  buyRatio: number; // 0~100 매수 비율
+  buyRatio: number;
   tickerState?: "rise" | "fall" | "idle";
 }
 
@@ -50,7 +50,6 @@ const SlotPrice = ({ value }: { value: number }) => {
     if (prevRef.current === value) return;
     prevRef.current = value;
 
-    // 새 값이 아래에서 올라오는 것만 — 200ms
     setAnimating(true);
     const t = setTimeout(() => {
       setDisplay(value.toLocaleString("ko-KR") + "원");

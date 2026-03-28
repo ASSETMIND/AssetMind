@@ -6,17 +6,13 @@ import { GlobalEmptyState } from "../../../common/GlobalEmptyState/GlobalEmptySt
 
 // ─── Types ────────────────────────────────────────────────────
 
+export type OrderbookStatus = "default" | "skeleton" | "error" | "empty";
+
 export interface OrderbookRow {
   price: number;
   changeRate: number;
   quantity: number;
 }
-
-/*export interface TradeTickRow {
-  price: number;
-  quantity: number;
-  isBuy: boolean;
-}*/
 
 export interface MarketInfo {
   weekHigh: number;
@@ -35,14 +31,17 @@ export interface MarketInfo {
 }
 
 interface OrderbookTableProps {
-  currentPrice: number;
-  currentChangeRate: number;
-  asks: OrderbookRow[];
-  bids: OrderbookRow[];
-  trades: TradeTickRow[];
-  tradeStrength: number;
-  marketInfo: MarketInfo;
+  status?: OrderbookStatus;
+  /** @deprecated status="empty" 사용 권장 */
   isMarketClosed?: boolean;
+  onRetry?: () => void;
+  currentPrice?: number;
+  currentChangeRate?: number;
+  asks?: OrderbookRow[];
+  bids?: OrderbookRow[];
+  trades?: TradeTickRow[];
+  tradeStrength?: number;
+  marketInfo?: MarketInfo;
   onQuickOrder?: () => void;
   className?: string;
 }
@@ -51,6 +50,121 @@ interface OrderbookTableProps {
 
 const fmt = (v: number) => v.toLocaleString("ko-KR");
 const fmtRate = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+
+// ─── Skeleton ─────────────────────────────────────────────────
+
+const SkeletonBox: React.FC<{
+  width?: string | number;
+  height?: number;
+  borderRadius?: number;
+}> = ({ width = "100%", height = 16, borderRadius = 6 }) => (
+  <div
+    className="animate-[skeleton-pulse_700ms_ease-out_400ms_infinite]"
+    style={{
+      width,
+      height: `${height}px`,
+      borderRadius: `${borderRadius}px`,
+      backgroundColor: "#21242C",
+      flexShrink: 0,
+    }}
+  />
+);
+
+const OrderbookSkeleton: React.FC = () => (
+  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    {/* 헤더 */}
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span style={{ fontSize: "14px", fontWeight: 400, color: "#FFFFFF" }}>호가</span>
+      <SkeletonBox width={79} height={24} borderRadius={8} />
+    </div>
+
+    {/* 호가 테이블 스켈레톤 */}
+    <div style={{ display: "flex", gap: "4px" }}>
+      {/* 좌측 잔량 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100px" }}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <SkeletonBox key={i} width={100} height={28} borderRadius={4} />
+        ))}
+      </div>
+      {/* 중앙 가격 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
+        <SkeletonBox height={28} borderRadius={4} />
+        {Array.from({ length: 11 }).map((_, i) => (
+          <SkeletonBox key={i} height={28} borderRadius={4} />
+        ))}
+      </div>
+      {/* 우측 시세+잔량 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100px" }}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <SkeletonBox key={i} width={100} height={28} borderRadius={4} />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// ─── Error ────────────────────────────────────────────────────
+
+const OrderbookError: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "820px",
+    }}
+  >
+    {/* 아이콘 + 텍스트 묶음 */}
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "16px",
+    }}>
+      <svg width="30" height="28" viewBox="0 0 30 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M16.3261 0.724424C15.8071 -0.241475 14.1932 -0.241475 13.6742 0.724424L0.174404 25.8319C0.0533393 26.057 -0.0065451 26.3091 0.00056714 26.5637C0.00767938 26.8183 0.0815466 27.0668 0.214994 27.285C0.348442 27.5032 0.536934 27.6837 0.762161 27.809C0.987389 27.9343 1.2417 28.0001 1.50038 28H28.4999C28.7586 28.0005 29.013 27.935 29.2383 27.8099C29.4636 27.6848 29.6522 27.5044 29.7856 27.2862C29.919 27.0679 29.9927 26.8194 29.9995 26.5648C30.0063 26.3102 29.946 26.0582 29.8244 25.8334L16.3261 0.724424ZM16.5001 23.5693H13.5002V20.6154H16.5001V23.5693ZM13.5002 17.6616V10.2771H16.5001L16.5016 17.6616H13.5002Z"
+          fill="#6B7280"
+        />
+      </svg>
+      <p
+        style={{
+          fontSize: "14px",
+          fontWeight: 400,
+          color: "#9F9F9F",
+          textAlign: "center",
+          lineHeight: "1.6",
+          margin: 0,
+        }}
+      >
+        호가 데이터를 불러오지 못했습니다.
+        <br />
+        잠시 후 다시 시도해 주세요.
+      </p>
+    </div>
+
+    {/* 버튼 — 아이콘+텍스트와 간격 36 */}
+    <div style={{ marginTop: "36px" }}>
+      <button
+        onClick={onRetry}
+        style={{
+          width: "100px",
+          height: "38px",
+          backgroundColor: "#6B4EFF",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: 500,
+          color: "#FFFFFF",
+        }}
+      >
+        다시 시도
+      </button>
+    </div>
+  </div>
+);
 
 // ─── QuickOrderButton — 79x24 ─────────────────────────────────
 
@@ -77,7 +191,7 @@ const QuickOrderButton = ({ onClick }: { onClick?: () => void }) => (
   </button>
 );
 
-// ─── AskRow (매도 잔량 — 좌측상단) ───────────────────────────
+// ─── AskRow ───────────────────────────────────────────────────
 
 const AskRow = ({
   row,
@@ -89,7 +203,6 @@ const AskRow = ({
   isEmpty?: boolean;
 }) => {
   const barWidth = isEmpty || !row ? 0 : Math.round((row.quantity / maxQty) * 100);
-
   return (
     <div
       style={{
@@ -103,28 +216,18 @@ const AskRow = ({
         overflow: "hidden",
       }}
     >
-      {/* 구분선: 오른쪽 진하게 → 왼쪽 페이드 */}
       <div style={{
-        position: "absolute",
-        bottom: 0, left: 0, right: 0,
-        height: "1px",
+        position: "absolute", bottom: 0, left: 0, right: 0, height: "1px",
         background: "linear-gradient(to left, rgba(255,255,255,0.15), transparent)",
       }} />
-
       {!isEmpty && row && (
         <>
-          {/* 잔량 바: 오른쪽 기준 왼쪽으로 채워짐 */}
           <div style={{
-            position: "absolute",
-            top: "50%",
-            transform: "translateY(-50%)",
-            right: 0,
-            width: `${barWidth}%`,
-            height: "20px",
+            position: "absolute", top: "50%", transform: "translateY(-50%)",
+            right: 0, width: `${barWidth}%`, height: "20px",
             background: "linear-gradient(to left, rgba(37,106,244,0.3), rgba(37,106,244,0.05))",
             borderRadius: "2px 0 0 2px",
           }} />
-          {/* 잔량 숫자 */}
           <span style={{ position: "relative", fontSize: "13px", fontWeight: 400, color: "#256AF4" }}>
             {fmt(row.quantity)}
           </span>
@@ -134,11 +237,10 @@ const AskRow = ({
   );
 };
 
-// ─── BidRow (매수 잔량 — 우측하단) ───────────────────────────
+// ─── BidRow ───────────────────────────────────────────────────
 
 const BidRow = ({ row, maxQty }: { row: OrderbookRow; maxQty: number }) => {
   const barWidth = Math.round((row.quantity / maxQty) * 100);
-
   return (
     <div
       style={{
@@ -152,26 +254,16 @@ const BidRow = ({ row, maxQty }: { row: OrderbookRow; maxQty: number }) => {
         overflow: "hidden",
       }}
     >
-      {/* 구분선: 왼쪽 진하게 → 오른쪽 페이드 */}
       <div style={{
-        position: "absolute",
-        bottom: 0, left: 0, right: 0,
-        height: "1px",
+        position: "absolute", bottom: 0, left: 0, right: 0, height: "1px",
         background: "linear-gradient(to right, rgba(255,255,255,0.15), transparent)",
       }} />
-
-      {/* 잔량 바: 왼쪽 기준 오른쪽으로 채워짐 */}
       <div style={{
-        position: "absolute",
-        top: "50%",
-        transform: "translateY(-50%)",
-        left: 0,
-        width: `${barWidth}%`,
-        height: "20px",
+        position: "absolute", top: "50%", transform: "translateY(-50%)",
+        left: 0, width: `${barWidth}%`, height: "20px",
         background: "linear-gradient(to right, rgba(234,88,12,0.3), rgba(234,88,12,0.05))",
         borderRadius: "0 2px 2px 0",
       }} />
-
       <span style={{ position: "relative", fontSize: "13px", fontWeight: 400, color: "#EA580C" }}>
         {fmt(row.quantity)}
       </span>
@@ -179,7 +271,7 @@ const BidRow = ({ row, maxQty }: { row: OrderbookRow; maxQty: number }) => {
   );
 };
 
-// ─── PriceCell (중앙 가격+등락률) ────────────────────────────
+// ─── PriceCell ────────────────────────────────────────────────
 
 const PriceCell = ({
   price,
@@ -191,26 +283,15 @@ const PriceCell = ({
   isCurrentPrice?: boolean;
 }) => (
   <div style={{
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "0px",
-    width: "100%",
-    padding: "0 4px",
+    display: "flex", flexDirection: "column", alignItems: "center",
+    gap: "0px", width: "100%", padding: "0 4px",
   }}>
-    <span style={{
-      fontSize: "14px",
-      fontWeight: 400,
-      color: "#256AF4",
-      lineHeight: 1.2,
-    }}>
+    <span style={{ fontSize: "14px", fontWeight: 400, color: "#256AF4", lineHeight: 1.2 }}>
       {fmt(price)}
     </span>
     <span style={{
-      fontSize: "8px",
-      fontWeight: 500,
-      color: isCurrentPrice ? "#EA580C" : "#256AF4",
-      lineHeight: 1.2,
+      fontSize: "8px", fontWeight: 500,
+      color: isCurrentPrice ? "#EA580C" : "#256AF4", lineHeight: 1.2,
     }}>
       {fmtRate(changeRate)}
     </span>
@@ -229,7 +310,6 @@ const MarketInfoPanel = ({ info }: { info: MarketInfo }) => {
       <span style={{ fontSize: "11px", fontWeight: 400, color: color ?? "#9F9F9F", whiteSpace: "nowrap" }}>{value}</span>
     </div>
   );
-
   return (
     <div style={{ width: "110px", display: "flex", flexDirection: "column" }}>
       <Row label="52주 최고" value={fmt(info.weekHigh)} />
@@ -253,20 +333,40 @@ const MarketInfoPanel = ({ info }: { info: MarketInfo }) => {
   );
 };
 
+// ─── HeaderAction ─────────────────────────────────────────────
+
+const HeaderAction = ({
+  status,
+  onQuickOrder,
+}: {
+  status: OrderbookStatus;
+  onQuickOrder?: () => void;
+}) => {
+  if (status === "empty") {
+    return <GlobalEmptyState variant="market-closed" display="badge" />;
+  }
+  if (status === "error" || status === "skeleton") return null;
+  return <QuickOrderButton onClick={onQuickOrder} />;
+};
+
 // ─── OrderbookTable ───────────────────────────────────────────
 
 export const OrderbookTable = ({
-  currentPrice,
-  currentChangeRate,
-  asks,
-  bids,
-  trades,
-  tradeStrength,
+  status: statusProp,
+  isMarketClosed,
+  onRetry,
+  currentPrice = 0,
+  currentChangeRate = 0,
+  asks = [],
+  bids = [],
+  trades = [],
+  tradeStrength = 0,
   marketInfo,
-  isMarketClosed = false,
   onQuickOrder,
   className,
 }: OrderbookTableProps) => {
+  const status: OrderbookStatus = statusProp ?? (isMarketClosed ? "empty" : "default");
+
   const maxAskQty = Math.max(...asks.map((a) => a.quantity), 1);
   const maxBidQty = Math.max(...bids.map((b) => b.quantity), 1);
 
@@ -285,94 +385,82 @@ export const OrderbookTable = ({
         overflow: "hidden",
       }}
     >
-      {/* 좌측상단 방사형 그라데이션 — opacity 10% */}
+      {/* 방사형 그라데이션 배경 */}
       <div style={{
-        position: "absolute",
-        top: 0, left: 0,
-        width: "200px",
-        height: "200px",
+        position: "absolute", top: 0, left: 0, width: "200px", height: "200px",
         background: "radial-gradient(ellipse at top left, rgba(37,106,244,0.1) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
-      {/* 우측하단 방사형 그라데이션 — opacity 10% */}
       <div style={{
-        position: "absolute",
-        bottom: 0, right: 0,
-        width: "200px",
-        height: "200px",
+        position: "absolute", bottom: 0, right: 0, width: "200px", height: "200px",
         background: "radial-gradient(ellipse at bottom right, rgba(234,88,12,0.1) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
 
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
+      {/* 헤더 — 항상 표시 */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative",
+      }}>
         <span style={{ fontSize: "14px", fontWeight: 400, color: "#FFFFFF" }}>호가</span>
-        {isMarketClosed
-          ? <GlobalEmptyState variant="market-closed" display="badge" />
-          : <QuickOrderButton onClick={onQuickOrder} />
-        }
+        <HeaderAction status={status} onQuickOrder={onQuickOrder} />
       </div>
 
-      {/* 호가 본문 */}
-      <div style={{ display: "flex", position: "relative" }}>
+      {/* 상태별 본문 */}
+      {status === "skeleton" && <OrderbookSkeleton />}
 
-        {/* 좌측: 매도 잔량 + 체결강도 + 체결내역 */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {/* 현재가 행 비움 */}
-          <AskRow isEmpty />
-          {asks.map((ask, i) => (
-            <AskRow key={i} row={ask} maxQty={maxAskQty} />
-          ))}
-        <TradeTickerList
-            trades={trades.map((t, i) => ({ ...t, id: `trade-${i}` }))}
-            tradeStrength={tradeStrength}
-             height={trades.length * 32 + 24}
+      {status === "error" && <OrderbookError onRetry={onRetry} />}
+
+      {(status === "default" || status === "empty") && marketInfo && (
+        <div style={{ display: "flex", position: "relative" }}>
+          {/* 좌측: 매도 잔량 + 체결 내역 */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <AskRow isEmpty />
+            {asks.map((ask, i) => (
+              <AskRow key={i} row={ask} maxQty={maxAskQty} />
+            ))}
+            <TradeTickerList
+              trades={trades.map((t, i) => ({ ...t, id: `trade-${i}` }))}
+              tradeStrength={tradeStrength}
+              height={trades.length * 32 + 24}
             />
-        </div>
-
-        {/* 중앙: 현재가 + 호가 가격 */}
-        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-          {/* 현재가 강조 */}
-          <div style={{
-            height: "32px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0px",
-          }}>
-            <span style={{ fontSize: "14px", fontWeight: 400, color: "#256AF4", lineHeight: 1.2 }}>
-              {fmt(currentPrice)}
-            </span>
-            <span style={{ fontSize: "8px", fontWeight: 500, color: "#EA580C", lineHeight: 1.2 }}>
-              {fmtRate(currentChangeRate)}
-            </span>
           </div>
-          {/* 매도 호가 */}
-          {asks.map((ask, i) => (
-            <div key={i} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <PriceCell price={ask.price} changeRate={ask.changeRate} />
-            </div>
-          ))}
-          {/* 매수 호가 */}
-          {bids.map((bid, i) => (
-            <div key={i} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <PriceCell price={bid.price} changeRate={bid.changeRate} />
-            </div>
-          ))}
-        </div>
 
-        {/* 우측: 시세 정보 패널 + 매수 잔량 */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {/* 현재가 강조 행 비움 */}
-          <div style={{ height: "32px" }} />
-          <MarketInfoPanel info={marketInfo} />
-          <div style={{ height: "50px" }} />
-          {bids.map((bid, i) => (
-            <BidRow key={i} row={bid} maxQty={maxBidQty} />
-          ))}
+          {/* 중앙: 현재가 + 호가 가격 */}
+          <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+            <div style={{
+              height: "32px", display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: "14px", fontWeight: 400, color: "#256AF4", lineHeight: 1.2 }}>
+                {fmt(currentPrice)}
+              </span>
+              <span style={{ fontSize: "8px", fontWeight: 500, color: "#EA580C", lineHeight: 1.2 }}>
+                {fmtRate(currentChangeRate)}
+              </span>
+            </div>
+            {asks.map((ask, i) => (
+              <div key={i} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PriceCell price={ask.price} changeRate={ask.changeRate} />
+              </div>
+            ))}
+            {bids.map((bid, i) => (
+              <div key={i} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PriceCell price={bid.price} changeRate={bid.changeRate} />
+              </div>
+            ))}
+          </div>
+
+          {/* 우측: 시세 정보 + 매수 잔량 */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ height: "32px" }} />
+            <MarketInfoPanel info={marketInfo} />
+            <div style={{ height: "50px" }} />
+            {bids.map((bid, i) => (
+              <BidRow key={i} row={bid} maxQty={maxBidQty} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
