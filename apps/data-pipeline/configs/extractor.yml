@@ -732,3 +732,128 @@ policy:
     params:
       <<: *kis_overseas_params
       FID_INPUT_ISCD: "PDJUSWC"
+
+  # ========== [글로벌 주요 국가 지수 일별 데이터 : 17개] ==========
+
+  # --- [아시아] ---
+  kis_global_china_shanghai_daily:
+    <<: *kis_overseas_base
+    description: "중국 상해종합지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WSHANG"
+
+  kis_global_china_chinext_daily:
+    <<: *kis_overseas_base
+    description: "중국 심천 ChiNext 지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WCZ#399102"
+
+  kis_global_hk_hangseng_daily:
+    <<: *kis_overseas_base
+    description: "홍콩 항셍지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WHK#HS"
+
+  kis_global_taiwan_taiex_daily:
+    <<: *kis_overseas_base
+    description: "대만 가권 지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WTW#WT"
+
+  kis_global_japan_nikkei_daily:
+    <<: *kis_overseas_base
+    description: "일본 니케이 225 지수 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WJP#NI225"
+
+  # --- [2. 유럽] ---
+  kis_global_europe_stoxx50_daily:
+    <<: *kis_overseas_base
+    description: "유럽 유로 STOXX 50 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WSX5E"
+
+  kis_global_germany_dax_daily:
+    <<: *kis_overseas_base
+    description: "독일 DAX 30 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WGR#DAX"
+
+  kis_global_france_cac40_daily:
+    <<: *kis_overseas_base
+    description: "프랑스 CAC 40 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WFR#CAC"
+
+  kis_global_uk_ftse_daily:
+    <<: *kis_overseas_base
+    description: "영국 FTSE 100 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WGB#FTSE"
+
+  # --- [GDP Top 10] ---
+  kis_global_canada_tsx_daily:
+    <<: *kis_overseas_base
+    description: "캐나다 S&P/TSX 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WCAN#COM"
+
+  kis_global_brazil_bovespa_daily:
+    <<: *kis_overseas_base
+    description: "브라질 Bovespa 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WBR#BOVE"
+
+  kis_global_india_sensex_daily:
+    <<: *kis_overseas_base
+    description: "인도 센섹스(BSE 30) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WIN#BOMBAY"
+
+  # --- [신흥국] ---
+  kis_global_indonesia_idx_daily:
+    <<: *kis_overseas_base
+    description: "인도네시아 종합(IDX) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WID#JK"
+
+  kis_global_vietnam_vn_daily:
+    <<: *kis_overseas_base
+    description: "베트남 호치민(VNI) 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WVN#VNI"
+
+  kis_global_malaysia_klci_daily:
+    <<: *kis_overseas_base
+    description: "말레이시아 KLCI 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WMY#KLSE"
+
+  kis_global_philippines_psei_daily:
+    <<: *kis_overseas_base
+    description: "필리핀 PSEi 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WPH#MANILA"
+
+  kis_global_thailand_set_daily:
+    <<: *kis_overseas_base
+    description: "태국 SET 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "WTH#BANG"
