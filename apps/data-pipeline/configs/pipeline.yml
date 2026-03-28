@@ -120,28 +120,49 @@ tasks:
       # - "kis_dow_jones_tires_daily"
       # - "kis_dow_jones_wireless_comm_daily"
 
-      # ========== [글로벌 주요 국가 지수 일별 데이터 : 17개] ==========
-      # 아시아 핵심
-      - "kis_global_china_shanghai_daily"
-      - "kis_global_china_chinext_daily"
-      - "kis_global_hk_hangseng_daily"
-      - "kis_global_taiwan_taiex_daily"
-      - "kis_global_japan_nikkei_daily"
+      # # ========== [글로벌 주요 국가 지수 일별 데이터 : 17개] ==========
+      # # 아시아 핵심
+      # - "kis_global_china_shanghai_daily"
+      # - "kis_global_china_chinext_daily"
+      # - "kis_global_hk_hangseng_daily"
+      # - "kis_global_taiwan_taiex_daily"
+      # - "kis_global_japan_nikkei_daily"
 
-      # 유럽
-      - "kis_global_europe_stoxx50_daily"
-      - "kis_global_germany_dax_daily"
-      - "kis_global_france_cac40_daily"
-      - "kis_global_uk_ftse_daily"
+      # # 유럽
+      # - "kis_global_europe_stoxx50_daily"
+      # - "kis_global_germany_dax_daily"
+      # - "kis_global_france_cac40_daily"
+      # - "kis_global_uk_ftse_daily"
 
-      # 아메리카 및 기타 거대 국가
-      - "kis_global_canada_tsx_daily"
-      - "kis_global_brazil_bovespa_daily"
-      - "kis_global_india_sensex_daily"
+      # # 아메리카 및 기타 거대 국가
+      # - "kis_global_canada_tsx_daily"
+      # - "kis_global_brazil_bovespa_daily"
+      # - "kis_global_india_sensex_daily"
 
-      # ASEAN 신흥국
-      - "kis_global_indonesia_idx_daily"
-      - "kis_global_vietnam_vn_daily"
-      - "kis_global_malaysia_klci_daily"
-      - "kis_global_philippines_psei_daily"
-      - "kis_global_thailand_set_daily"
+      # # ASEAN 신흥국
+      # - "kis_global_indonesia_idx_daily"
+      # - "kis_global_vietnam_vn_daily"
+      # - "kis_global_malaysia_klci_daily"
+      # - "kis_global_philippines_psei_daily"
+      # - "kis_global_thailand_set_daily"
+
+      # ========== [환율 일별 데이터 : 14개] ==========
+      # 한국 및 기축/준기축 통화
+      - "kis_fx_krw_usd_daily"
+      - "kis_fx_eur_usd_daily"
+      - "kis_fx_gbp_usd_daily"
+      - "kis_fx_jpy_usd_daily"
+      - "kis_fx_cny_usd_daily"
+      - "kis_fx_twd_usd_daily"
+
+      # 아메리카
+      - "kis_fx_cad_usd_daily"
+      - "kis_fx_brl_usd_daily"
+
+      # 신흥국 및 ASEAN
+      - "kis_fx_inr_usd_daily"
+      - "kis_fx_idr_usd_daily"
+      - "kis_fx_vnd_usd_daily"
+      - "kis_fx_myr_usd_daily"
+      - "kis_fx_php_usd_daily"
+      - "kis_fx_thb_usd_daily"

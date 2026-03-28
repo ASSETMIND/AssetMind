@@ -37,6 +37,18 @@
     FID_INPUT_DATE_2: "20240131"
     FID_PERIOD_DIV_CODE: "D"
 
+  # 3. KIS 해외 환율 공통 템플릿
+  kis_fx_base: &kis_fx_base
+    provider: "KIS"
+    domain: "overseas-price"
+    path: "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
+    tr_id: "FHKST03030100"
+  kis_fx_params: &kis_fx_params
+    FID_COND_MRKT_DIV_CODE: "X"
+    FID_INPUT_DATE_1: "20240101"
+    FID_INPUT_DATE_2: "20240131"
+    FID_PERIOD_DIV_CODE: "D"
+
 policy:
   # ----------------------------------------------------------------------------
   # 한국투자증권 (KIS) : https://apiportal.koreainvestment.com/intro
@@ -857,3 +869,107 @@ policy:
     params:
       <<: *kis_overseas_params
       FID_INPUT_ISCD: "WTH#BANG"
+
+  # ========== [환율 일별 데이터 : 14개] ==========
+
+  # --- [한국 및 기축/준기축 통화] ---
+  kis_fx_krw_usd_daily:
+    <<: *kis_fx_base
+    description: "원/달러 환율 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@KRW"
+
+  kis_fx_eur_usd_daily:
+    <<: *kis_fx_base
+    description: "유로/달러 환율 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@EUR"
+
+  kis_fx_gbp_usd_daily:
+    <<: *kis_fx_base
+    description: "파운드/달러 환율 (영국) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@GBP"
+
+  kis_fx_jpy_usd_daily:
+    <<: *kis_fx_base
+    description: "엔/달러 환율 (일본) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@JPY"
+
+  # --- [아시아 주요국 통화] ---
+  kis_fx_cny_usd_daily:
+    <<: *kis_fx_base
+    description: "위안/달러 환율 (중국) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@CNY"
+
+  kis_fx_twd_usd_daily:
+    <<: *kis_fx_base
+    description: "대만달러/달러 환율 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@TWD"
+
+  # --- [아메리카 통화] ---
+  kis_fx_cad_usd_daily:
+    <<: *kis_fx_base
+    description: "캐나다달러/달러 환율 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@CAD"
+
+  kis_fx_brl_usd_daily:
+    <<: *kis_fx_base
+    description: "헤알/달러 환율 (브라질) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@BRL"
+
+  # --- [신흥국 (ASEAN 및 인도) 통화] ---
+  kis_fx_inr_usd_daily:
+    <<: *kis_fx_base
+    description: "루피/달러 환율 (인도) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@IDR"
+
+  kis_fx_idr_usd_daily:
+    <<: *kis_fx_base
+    description: "루피아/달러 환율 (인도네시아) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@INR"
+
+  kis_fx_vnd_usd_daily:
+    <<: *kis_fx_base
+    description: "동/달러 환율 (베트남) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@VND"
+
+  kis_fx_myr_usd_daily:
+    <<: *kis_fx_base
+    description: "링깃/달러 환율 (말레이시아) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@MYR"
+
+  kis_fx_php_usd_daily:
+    <<: *kis_fx_base
+    description: "페소/달러 환율 (필리핀) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@PHP"
+
+  kis_fx_thb_usd_daily:
+    <<: *kis_fx_base
+    description: "바트/달러 환율 (태국) 일봉"
+    params:
+      <<: *kis_fx_params
+      FID_INPUT_ISCD: "XFX@THB"
