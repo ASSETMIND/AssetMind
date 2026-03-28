@@ -2,8 +2,10 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -41,7 +43,26 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
 
     @Override
     public List<OhlcvDto> findCandlesByDate(String stockCode, LocalDate date) {
-        // TODO: 1일봉 롤업 스케줄러 개발 시 구현 예정
-        return List.of();
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
+
+        List<Ohlcv1mJpaEntity> entities = ohlcv1mJpaRepository.findCandlesByTimeRange(
+                stockCode, startOfDay, endOfDay);
+
+        return entities.stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    private OhlcvDto toDto(Ohlcv1mJpaEntity entity) {
+        return new OhlcvDto(
+                entity.getStockCode(),
+                entity.getCandleTimestamp(),
+                entity.getOpenPrice(),
+                entity.getHighPrice(),
+                entity.getLowPrice(),
+                entity.getClosePrice(),
+                entity.getVolume()
+        );
     }
 }
