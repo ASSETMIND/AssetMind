@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useId } from "react";
 
 export interface SparklineDataPoint {
   time: string;
@@ -50,6 +50,8 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
   forecastData,
   width = "100%",
 }) => {
+  const uid = useId();
+
   const yTop = PADDING.top;
   const yBottom = CHART_HEIGHT - PADDING.bottom;
 
@@ -142,13 +144,13 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
         style={{ display: "block" }}
       >
         <defs>
-          {/* 과거 데이터 그라데이션 — 파란색 */}
-          <linearGradient id="grad-hist" x1="0" y1="0" x2="0" y2="1">
+          {/* 과거 데이터 그라데이션 — 파란색 (고유 ID 적용) */}
+          <linearGradient id={`grad-hist-${uid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={HISTORICAL_COLOR} stopOpacity="0.25" />
             <stop offset="100%" stopColor={HISTORICAL_COLOR} stopOpacity="0" />
           </linearGradient>
-          {/* 예측 데이터 그라데이션 — 초록색 */}
-          <linearGradient id="grad-forecast" x1="0" y1="0" x2="0" y2="1">
+          {/* 예측 데이터 그라데이션 — 초록색 (고유 ID 적용) */}
+          <linearGradient id={`grad-forecast-${uid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={FORECAST_COLOR} stopOpacity="0.20" />
             <stop offset="100%" stopColor={FORECAST_COLOR} stopOpacity="0" />
           </linearGradient>
@@ -165,9 +167,9 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
           strokeDasharray="3 3"
         />
 
-        {/* 과거 — 그라데이션 fill */}
+        {/* 과거 — 그라데이션 fill (고유 ID 참조) */}
         {histFill && (
-          <path d={histFill} fill="url(#grad-hist)" />
+          <path d={histFill} fill={`url(#grad-hist-${uid})`} />
         )}
 
         {/* 과거 — 파란 실선 */}
@@ -182,9 +184,9 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
           />
         )}
 
-        {/* 예측 — 그라데이션 fill */}
+        {/* 예측 — 그라데이션 fill (고유 ID 참조) */}
         {forecastFill && (
-          <path d={forecastFill} fill="url(#grad-forecast)" />
+          <path d={forecastFill} fill={`url(#grad-forecast-${uid})`} />
         )}
 
         {/* 예측 — 초록 점선 */}

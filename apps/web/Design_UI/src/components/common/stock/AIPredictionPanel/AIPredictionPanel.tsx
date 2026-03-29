@@ -91,7 +91,7 @@ const PanelError: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => (
       </p>
     </div>
     <div style={{ marginTop: "36px" }}>
-      <button onClick={onRetry} style={{ width: "100px", height: "38px", backgroundColor: "#6B4EFF", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: 500, color: "#FFFFFF" }}>
+      <button onClick={onRetry} style={{ width: "100px", height: "38px", backgroundColor: "#6D4AE6", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: 500, color: "#FFFFFF" }}>
         다시 시도
       </button>
     </div>
