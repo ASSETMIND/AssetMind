@@ -2,9 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { AIPredictionPanel } from "./AIPredictionPanel";
 import type { AnalysisData } from "./PredictionAnalysisWidget";
 
-/* ══════════════════════════════════════
-   Mock 데이터
-══════════════════════════════════════ */
+// ─── Mock Data ────────────────────────────────────────────────
+
 const mockHistorical = [
   { time: "2025-03-17", value: 68000 },
   { time: "2025-03-18", value: 71000 },
@@ -35,40 +34,39 @@ const mockForecastDown = [
 
 const mockAnalysis: AnalysisData = {
   "기술적 지표": [
-    { type: "warning", text: "경고 또는 위험 신호가 있는 내용" },
-    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
+    { type: "warning",  text: "경고 또는 위험 신호가 있는 내용" },
+    { type: "neutral",  text: "중립적이거나 추가 확인이 필요한 내용" },
     { type: "positive", text: "긍정적 신호가 있는 내용" },
-    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
-    { type: "neutral", text: "중립적이거나 추가 확인이 필요한 내용" },
+    { type: "neutral",  text: "중립적이거나 추가 확인이 필요한 내용" },
+    { type: "neutral",  text: "중립적이거나 추가 확인이 필요한 내용" },
   ],
   "시장 심리": [
     { type: "positive", text: "투자자 심리 지수 낙관 구간 진입" },
-    { type: "neutral", text: "외국인 순매수 흐름 지속 중" },
-    { type: "warning", text: "공매도 비율 단기 급등 감지" },
+    { type: "neutral",  text: "외국인 순매수 흐름 지속 중" },
+    { type: "warning",  text: "공매도 비율 단기 급등 감지" },
   ],
   "수급 동향": [
-    { type: "neutral", text: "기관 순매수 전환 신호 감지" },
+    { type: "neutral",  text: "기관 순매수 전환 신호 감지" },
     { type: "positive", text: "외국인 대규모 매수 유입" },
-    { type: "warning", text: "개인 투자자 과매도 구간 진입" },
-    { type: "neutral", text: "프로그램 매매 비중 중립" },
+    { type: "warning",  text: "개인 투자자 과매도 구간 진입" },
+    { type: "neutral",  text: "프로그램 매매 비중 중립" },
   ],
 };
 
 const defaultArgs = {
   historicalData: mockHistorical,
   forecastData: mockForecastUp,
-  predictedPrice: 100000,
-  priceDiff: 0,
-  changeRate: 0.0,
-  baseDate: "0000년 00월 00일",
-  upProbability: 60,
-  downProbability: 40,
+  predictedPrice: 80000,
+  priceDiff: 17000,
+  changeRate: 26.98,
+  baseDate: "2025년 03월 26일",
+  upProbability: 72,
+  downProbability: 28,
   analysisData: mockAnalysis,
 };
 
-/* ══════════════════════════════════════
-   Meta
-══════════════════════════════════════ */
+// ─── Meta ─────────────────────────────────────────────────────
+
 const meta: Meta<typeof AIPredictionPanel> = {
   title: "Components/Stock/AIPredictionPanel",
   component: AIPredictionPanel,
@@ -82,7 +80,7 @@ const meta: Meta<typeof AIPredictionPanel> = {
     docs: {
       description: {
         component:
-          "AI 가격 예측 패널 컴포넌트. 기간 탭(1주·1개월·3개월) 전환, SVG 기반 스파크라인 차트(과거 파란 실선 + 예측 초록 점선 + 그라데이션), AI 예측가, 방향성 확률 바, 분석 근거 탭 위젯을 포함한 통합 패널. `status` prop으로 로딩·에러·휴장시간 variant 전환 가능.",
+          "AI 가격 예측 패널 컴포넌트. 기간 탭(1주·1개월·3개월) 전환, SVG 기반 스파크라인 차트(과거 파란 실선 + 예측 초록 점선 + 그라데이션), AI 예측가, 방향성 확률 바, 분석 근거 탭 위젯을 포함한 통합 패널. `status` prop으로 skeleton·error·empty(휴장) variant, `viewport` prop으로 desktop·tablet(340px 고정) · mobile(345×657, 하단 MobileTabSwitcher 포함) 전환 가능.",
       },
     },
   },
@@ -92,124 +90,87 @@ const meta: Meta<typeof AIPredictionPanel> = {
       options: ["default", "skeleton", "error", "empty"],
       description: "Panel display status",
     },
-    period: {
+    viewport: {
       control: "radio",
-      options: ["1주", "1개월", "3개월"],
+      options: ["desktop", "tablet", "mobile"],
+      description: "Layout viewport",
     },
-    upProbability: { control: { type: "range", min: 0, max: 100, step: 1 } },
+    period: { control: "radio", options: ["1주", "1개월", "3개월"] },
+    upProbability:   { control: { type: "range", min: 0, max: 100, step: 1 } },
     downProbability: { control: { type: "range", min: 0, max: 100, step: 1 } },
-    predictedPrice: { control: { type: "number" } },
-    priceDiff: { control: { type: "number" } },
-    changeRate: { control: { type: "number" } },
+    predictedPrice:  { control: { type: "number" } },
+    priceDiff:       { control: { type: "number" } },
+    changeRate:      { control: { type: "number" } },
   },
 };
 
 export default meta;
 type Story = StoryObj<typeof AIPredictionPanel>;
 
-/* ══════════════════════════════════════
-   Stories
-══════════════════════════════════════ */
+// ─── Stories ──────────────────────────────────────────────────
 
-/** Default — Up Trend */
 export const Default: Story = {
   name: "Default / Up Trend",
-  args: {
-    ...defaultArgs,
-    status: "default",
-    predictedPrice: 80000,
-    priceDiff: 17000,
-    changeRate: 26.98,
-    baseDate: "2025년 03월 26일",
-    upProbability: 72,
-    downProbability: 28,
-  },
+  args: { ...defaultArgs, status: "default", viewport: "desktop" },
 };
 
-/** Down Trend */
+export const Tablet: Story = {
+  name: "Tablet",
+  args: { ...defaultArgs, status: "default", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [
+    (Story) => (
+      <div style={{ backgroundColor: "#111113", padding: "16px" }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const Mobile: Story = {
+  name: "Mobile",
+  args: { ...defaultArgs, status: "default", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [
+    (Story) => (
+      <div style={{ backgroundColor: "#111113", padding: "0" }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
 export const DownTrend: Story = {
   name: "Down Trend",
-  args: {
-    ...defaultArgs,
-    status: "default",
-    forecastData: mockForecastDown,
-    predictedPrice: 51000,
-    priceDiff: -12000,
-    changeRate: -19.05,
-    baseDate: "2025년 03월 26일",
-    upProbability: 25,
-    downProbability: 75,
-  },
+  args: { ...defaultArgs, status: "default", viewport: "desktop", forecastData: mockForecastDown, predictedPrice: 51000, priceDiff: -12000, changeRate: -19.05, upProbability: 25, downProbability: 75 },
 };
 
-/** Even Probability (50:50) */
 export const EvenProbability: Story = {
   name: "Even Probability (50:50)",
-  args: {
-    ...defaultArgs,
-    status: "default",
-    predictedPrice: 65000,
-    priceDiff: 2000,
-    changeRate: 3.17,
-    baseDate: "2025년 03월 26일",
-    upProbability: 50,
-    downProbability: 50,
-  },
+  args: { ...defaultArgs, status: "default", viewport: "desktop", predictedPrice: 65000, priceDiff: 2000, changeRate: 3.17, upProbability: 50, downProbability: 50 },
 };
 
-/** Extreme Probability (99:1) */
 export const ExtremeProbability: Story = {
   name: "Extreme Probability (99:1)",
-  args: {
-    ...defaultArgs,
-    status: "default",
-    predictedPrice: 100000,
-    priceDiff: 37000,
-    changeRate: 58.73,
-    baseDate: "2025년 03월 26일",
-    upProbability: 99,
-    downProbability: 1,
-  },
+  args: { ...defaultArgs, status: "default", viewport: "desktop", predictedPrice: 100000, priceDiff: 37000, changeRate: 58.73, upProbability: 99, downProbability: 1 },
 };
 
-/** Skeleton */
 export const Skeleton: Story = {
   name: "Skeleton",
-  args: {
-    ...defaultArgs,
-    status: "skeleton",
-  },
+  args: { ...defaultArgs, status: "skeleton", viewport: "desktop" },
 };
 
-/** Error */
 export const ErrorState: Story = {
   name: "Error",
-  args: {
-    status: "error",
-    onRetry: () => alert("Retry"),
-  },
+  args: { status: "error", viewport: "desktop", onRetry: () => alert("Retry") },
 };
 
-/** Empty (Market Closed) */
 export const Empty: Story = {
   name: "Empty (Market Closed)",
-  args: {
-    ...defaultArgs,
-    status: "empty",
-    predictedPrice: 80000,
-    priceDiff: 17000,
-    changeRate: 26.98,
-    baseDate: "2025년 03월 26일",
-    upProbability: 72,
-    downProbability: 28,
-  },
+  args: { ...defaultArgs, status: "empty", viewport: "desktop" },
 };
 
-/** Playground */
 export const Playground: Story = {
   name: "Playground",
-  args: {
-    ...defaultArgs,
-    status: "default",
-  },
+  args: { ...defaultArgs, status: "default", viewport: "desktop" },
 };
