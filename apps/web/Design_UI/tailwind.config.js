@@ -177,6 +177,8 @@ export default {
             rise:    "#EA580C",
             fall:    "#256AF4",
             premium: "#EAB308",
+            positive: "#00C853",  
+            forecast: "#22C55E",  
           },
         },
       },
