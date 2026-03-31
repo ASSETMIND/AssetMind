@@ -10,7 +10,7 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# [Templates] 공통 설정 선언부 (Python 파서에서는 무시되는 영역)
+# [Templates] 공통 설정 선언부
 # ------------------------------------------------------------------------------
 .templates:
   # 1. KIS 국내 지수 공통 템플릿
@@ -1140,3 +1140,43 @@ policy:
     params:
       <<: *kis_overseas_params
       FID_INPUT_ISCD: "EM0405"
+
+  # ----------------------------------------------------------------------------
+  # FRED : https://fred.stlouisfed.org/categories
+  # ----------------------------------------------------------------------------
+
+  # 미국 국채 2년물
+  fred_us_treasury_2y_daily:
+    provider: "FRED"
+    description: "미국 국채 금리 2년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS2"
+      frequency: "d"
+
+  # 미국 국채 5년물
+  fred_us_treasury_5y_daily:
+    provider: "FRED"
+    description: "미국 국채 금리 5년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS5"
+      frequency: "d"
+
+  # 미국 국채 10년물 (시장 벤치마크)
+  fred_us_treasury_10y_daily:
+    provider: "FRED"
+    description: "미국 국채 금리 10년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS10"
+      frequency: "d"
+
+  # 미국 국채 30년물
+  fred_us_treasury_30y_daily:
+    provider: "FRED"
+    description: "미국 국채 금리 30년물 (일별)"
+    path: "/series/observations"
+    params:
+      series_id: "DGS30"
+      frequency: "d"
