@@ -42,6 +42,10 @@ spring:
       database-platform: org.hibernate.dialect.PostgreSQLDialect
       defer-datasource-initialization: true
 
+logging:
+  file:
+    name: ./logs/error-tracking.log
+
 
 kis:
   token-expiration: 86400
