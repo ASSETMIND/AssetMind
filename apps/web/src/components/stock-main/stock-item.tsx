@@ -1,10 +1,9 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStockItemLogic } from '../../hooks/stock/use-stock-item-logic';
 import RatioBar from './ratio-bar';
 
 // 개별 주식 아이템에 필요한 데이터 인터페이스
-
 export interface StockItemData {
 	stockCode: string;
 	rank: number;
@@ -36,22 +35,28 @@ function StockItem({ data }: Props) {
 		sellRatio,
 	} = data;
 
-	// UI 렌더링에 필요한 포맷팅 데이터(문자열, 색상 클래스 등) 가공 로직
-	const { name, formattedChangeRate, badgeClass } = useStockItemLogic({
+	// UI 렌더링에 필요한 포맷팅 데이터 가공 (성능 최적화: 내부 상태 제거)
+	const { name, formattedChangeRate, textColorClass } = useStockItemLogic({
 		stockName,
 		changeRate,
 	});
 
 	const navigate = useNavigate();
 
-	const handleItemClick = () => {
+	// 이벤트 핸들러 메모이제이션
+	const handleItemClick = useCallback(() => {
 		navigate(`/stock/${stockCode}`);
-	};
+	}, [navigate, stockCode]);
+
+	const handleFavoriteClick = useCallback((e: React.MouseEvent) => {
+		e.stopPropagation();
+		// 관심종목 로직 추가 가능
+	}, []);
 
 	return (
 		<div
 			onClick={handleItemClick}
-			className='grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr] gap-4 items-center py-2 text-sm hover:bg-neutral-800 hover:rounded-md transition-colors cursor-pointer'
+			className='grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr] gap-4 items-center py-2 text-sm hover:bg-neutral-800 hover:rounded-md transition-colors cursor-pointer group'
 		>
 			{/* 하트 + 순위 + 로고 + 이름 */}
 			<div className='flex items-center gap-3 pl-2'>
@@ -59,34 +64,36 @@ function StockItem({ data }: Props) {
 					type='button'
 					className='text-gray-300 hover:text-red-500 transition-colors'
 					aria-label={`${name} 관심종목 추가`}
-					onClick={(e) => e.stopPropagation()}
+					onClick={handleFavoriteClick}
 				>
 					♥
 				</button>
 				<span className='w-5 text-center font-bold text-gray-500'>{rank}</span>
 				<div
-					className='w-8 h-8 rounded-full bg-blue-300 flex items-center justify-center text-[10px] font-bold'
+					className='w-8 h-8 rounded-full bg-neutral-700 flex items-center justify-center text-[10px] font-bold text-gray-400'
 					aria-hidden='true'
 				>
 					로고
 				</div>
-				<span className='font-semibold'>{name}</span>
+				<span className='font-semibold group-hover:text-white transition-colors'>
+					{name}
+				</span>
 			</div>
 
 			{/* 현재가 */}
 			<div className='text-right font-medium'>{price}원</div>
 
-			{/* 등락률 */}
+			{/* 등락률 - 애니메이션 제거 버전 */}
 			<div className='text-right'>
 				<span
-					className={`font-semibold px-2 py-1 rounded transition-colors duration-300 ${badgeClass}`}
+					className={`inline-block font-semibold px-2 py-1 rounded transition-colors ${textColorClass}`}
 				>
 					{formattedChangeRate}
 				</span>
 			</div>
 
 			{/* 거래대금 순 / 거래량 순 */}
-			<div className='text-right font-medium text-gray-600'>{tradeVolume}</div>
+			<div className='text-right font-medium text-gray-500'>{tradeVolume}</div>
 
 			{/* 비율 바 */}
 			<div className='flex justify-end pr-2'>
@@ -98,7 +105,7 @@ function StockItem({ data }: Props) {
 
 /**
  * React.memo를 위한 커스텀 비교 함수
- * 참조 주소가 아닌 실제 렌더링에 영향을 주는 데이터 값들만 비교하여 불필요한 리렌더링을 차단합니다.
+ * 실제 렌더링에 영향을 주는 데이터 값들만 깊은 비교(Deep Comparison)를 수행합니다.
  */
 const areEqual = (prevProps: Props, nextProps: Props) => {
 	return (
