@@ -1,57 +1,56 @@
 import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStockItemLogic } from '../../hooks/stock/use-stock-item-logic';
+import { useStockStore } from '../../store/use-stock-store';
 import RatioBar from './ratio-bar';
 
-// 개별 주식 아이템에 필요한 데이터 인터페이스
-export interface StockItemData {
+interface Props {
 	stockCode: string;
 	rank: number;
-	stockName: string;
-	price: string;
-	changeRate: number;
-	tradeVolume: string;
-	buyRatio: number;
-	sellRatio: number;
-}
-
-interface Props {
-	data: StockItemData;
+	rankingType: 'VALUE' | 'VOLUME';
 }
 
 /**
- * 주식 목록의 개별 행(Row)을 렌더링하는 컴포넌트
- * @param data 주식 종목 데이터 객체
+ * 주식 목록의 개별 행(Row) 컴포넌트 (지점 업데이트 방식)
+ * - 부모로부터 stockCode만 받고, 상세 데이터는 스토어에서 직접 구독합니다.
+ * - 특정 종목의 데이터가 변해도 다른 종목은 리렌더링되지 않습니다.
  */
-function StockItem({ data }: Props) {
-	const {
-		rank,
-		stockCode,
-		stockName,
-		price,
-		changeRate,
-		tradeVolume,
-		buyRatio,
-		sellRatio,
-	} = data;
-
-	// UI 렌더링에 필요한 포맷팅 데이터 가공 (성능 최적화: 내부 상태 제거)
-	const { name, formattedChangeRate, textColorClass } = useStockItemLogic({
-		stockName,
-		changeRate,
-	});
-
+function StockItem({ stockCode, rank, rankingType }: Props) {
+	// Selector 패턴: 이 종목의 데이터가 변경될 때만 리렌더링 발생
+	const data = useStockStore((state) => state.stockMap.get(stockCode));
 	const navigate = useNavigate();
 
-	// 이벤트 핸들러 메모이제이션
 	const handleItemClick = useCallback(() => {
 		navigate(`/stock/${stockCode}`);
 	}, [navigate, stockCode]);
 
 	const handleFavoriteClick = useCallback((e: React.MouseEvent) => {
 		e.stopPropagation();
-		// 관심종목 로직 추가 가능
 	}, []);
+
+	// 데이터가 아직 로드되지 않은 경우 (Skeleton 처리)
+	if (!data)
+		return (
+			<div className='h-13 animate-pulse bg-neutral-900/50 rounded-md my-1' />
+		);
+
+	// UI 렌더링에 필요한 포맷팅 가공 (Dto의 원본 필드 사용)
+	const {
+		name,
+		formattedPrice,
+		formattedChangeRate,
+		tradeVolumeStr,
+		buyRatio,
+		sellRatio,
+		textColorClass,
+	} = useStockItemLogic({
+		stockName: data.stockName,
+		changeRate: data.changeRate,
+		currentPrice: data.currentPrice,
+		cumulativeAmount: data.cumulativeAmount,
+		cumulativeVolume: data.cumulativeVolume,
+		rankingType,
+	});
 
 	return (
 		<div
@@ -81,9 +80,9 @@ function StockItem({ data }: Props) {
 			</div>
 
 			{/* 현재가 */}
-			<div className='text-right font-medium'>{price}원</div>
+			<div className='text-right font-medium'>{formattedPrice}원</div>
 
-			{/* 등락률 - 애니메이션 제거 버전 */}
+			{/* 등락률 */}
 			<div className='text-right'>
 				<span
 					className={`inline-block font-semibold px-2 py-1 rounded transition-colors ${textColorClass}`}
@@ -92,10 +91,12 @@ function StockItem({ data }: Props) {
 				</span>
 			</div>
 
-			{/* 거래대금 순 / 거래량 순 */}
-			<div className='text-right font-medium text-gray-500'>{tradeVolume}</div>
+			{/* 거래대금 순 / 거래량 순 (가공된 문자열 표시) */}
+			<div className='text-right font-medium text-gray-500'>
+				{tradeVolumeStr}
+			</div>
 
-			{/* 비율 바 */}
+			{/* 비율 바 (매수/매도 비율 시뮬레이션 적용) */}
 			<div className='flex justify-end pr-2'>
 				<RatioBar buy={buyRatio} sell={sellRatio} />
 			</div>
@@ -103,21 +104,4 @@ function StockItem({ data }: Props) {
 	);
 }
 
-/**
- * React.memo를 위한 커스텀 비교 함수
- * 실제 렌더링에 영향을 주는 데이터 값들만 깊은 비교(Deep Comparison)를 수행합니다.
- */
-const areEqual = (prevProps: Props, nextProps: Props) => {
-	return (
-		prevProps.data.stockCode === nextProps.data.stockCode &&
-		prevProps.data.price === nextProps.data.price &&
-		prevProps.data.changeRate === nextProps.data.changeRate &&
-		prevProps.data.tradeVolume === nextProps.data.tradeVolume &&
-		prevProps.data.buyRatio === nextProps.data.buyRatio &&
-		prevProps.data.sellRatio === nextProps.data.sellRatio &&
-		prevProps.data.rank === nextProps.data.rank &&
-		prevProps.data.stockName === nextProps.data.stockName
-	);
-};
-
-export default memo(StockItem, areEqual);
+export default memo(StockItem);
