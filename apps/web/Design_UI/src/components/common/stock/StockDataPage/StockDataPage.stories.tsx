@@ -1,14 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { useState, useEffect } from "react";
-import { StockTable } from "../StockTable/StockTable";
-import { TickerAnimation } from "../TickerAnimation/TickerAnimation";
-import { LocalError } from "../../../common/LocalError/LocalError";
-import { GlobalEmptyState } from "../../../common/GlobalEmptyState/GlobalEmptyState";
-import { Skeleton } from "../../../common/Skeleton/Skeleton";
 import { LinearGauge } from "../LinearGauge/LinearGauge";
-import { Tab } from "../../../common/Tab/Tab";
+import { StockDataPage } from "./StockDataPage";
 import type { StockRow } from "../StockTable/StockTable";
-import type { Viewport } from "../StockTable/StockTable";
 
 // ─── Mock Data ────────────────────────────────────────────────
 
@@ -31,158 +24,11 @@ const EXTREME_ROWS: StockRow[] = [
   { id: "e3", rank: 3, isFavorite: false, name: "보합 (50:50)",     price: 10000, changeRate: 0,     tradeAmount: 500000, buyRatio: 50 },
 ];
 
-// ─── Types ────────────────────────────────────────────────────
-
-type PageState =
-  | "default"       // 정상 데이터
-  | "skeleton"      // 로딩 (Skeleton 애니메이션)
-  | "realtime"      // 실시간 가격 갱신
-  | "error"         // API 실패
-  | "empty"         // 조회 결과 없음
-  | "market-closed" // 시장 휴장
-  | "extreme";      // 극단값 (99:1, 1:99)
-
-interface StockDataPageProps {
-  pageState?: PageState;
-  viewport?: Viewport;
-}
-
-// ─── Filter Tab Items ─────────────────────────────────────────
-
-const MARKET_FILTER_ITEMS = [
-  { label: "전체", value: "all" },
-  { label: "국내", value: "domestic" },
-  { label: "해외", value: "overseas" },
-];
-
-const SORT_FILTER_ITEMS = [
-  { label: "증권 거래대금", value: "amount" },
-  { label: "증권 거래량",   value: "volume" },
-  { label: "거래대금",      value: "trade-amount" },
-  { label: "거래량",        value: "trade-volume" },
-];
-
-// ─── Page Container Width per Viewport ───────────────────────
-
-const VIEWPORT_WIDTH: Record<Viewport, string> = {
-  desktop: "1200px",
-  tablet:  "768px",
-  mobile:  "393px",
-};
-
-// ─── StockDataPage Component ──────────────────────────────────
-
-const StockDataPage = ({
-  pageState = "default",
-  viewport = "desktop",
-}: StockDataPageProps) => {
-  const [rows, setRows] = useState<StockRow[]>(MOCK_ROWS);
-  const containerWidth = VIEWPORT_WIDTH[viewport];
-
-  // 실시간 갱신 — realtime 상태에서만 활성화
-  useEffect(() => {
-    if (pageState !== "realtime") return;
-    const timers = MOCK_ROWS.map((row) => {
-      const interval = 1500 + Math.random() * 3000;
-      return setInterval(() => {
-        const delta = Math.floor((Math.random() - 0.5) * 2000);
-        if (delta === 0) return;
-        setRows((prev) =>
-          prev.map((r) =>
-            r.id === row.id ? { ...r, price: Math.max(1000, r.price + delta) } : r
-          )
-        );
-      }, interval);
-    });
-    return () => timers.forEach(clearInterval);
-  }, [pageState]);
-
-  // 콘텐츠 상태 여부 (테이블 렌더링)
-  const isTableState =
-    pageState === "default" ||
-    pageState === "realtime" ||
-    pageState === "extreme";
-
-  return (
-    <div
-      style={{
-        width: containerWidth,
-        backgroundColor: "#131316",
-        minHeight: "800px",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* ── 필터 탭 영역 ── */}
-      <div
-        style={{
-          padding: "16px",
-          display: "flex",
-          gap: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        <Tab items={MARKET_FILTER_ITEMS} defaultValue="all" />
-        {/* 태블릿/모바일에서는 정렬 필터 숨김 (공간 부족) */}
-        {viewport === "desktop" && (
-          <Tab items={SORT_FILTER_ITEMS} defaultValue="amount" />
-        )}
-      </div>
-
-      {/* ── 콘텐츠 영역 ── */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: isTableState ? "flex-start" : "center",
-          alignItems: isTableState ? "flex-start" : "center",
-        }}
-      >
-        {/* Skeleton — 초기 로딩 */}
-        {pageState === "skeleton" && (
-          <Skeleton variant="table-row" rows={10} />
-        )}
-
-        {/* Error — API 실패 */}
-        {pageState === "error" && (
-          <LocalError
-            message="데이터를 불러오는 데 실패했습니다."
-            onRetry={() => alert("다시 시도")}
-          />
-        )}
-
-        {/* Empty — 조회 결과 없음 */}
-        {pageState === "empty" && (
-          <GlobalEmptyState variant="no-data" display="inline" />
-        )}
-
-        {/* Market Closed — 시장 휴장 */}
-        {pageState === "market-closed" && (
-          <GlobalEmptyState variant="market-closed" display="inline" />
-        )}
-
-        {/* Extreme — 극단값 검증 */}
-        {pageState === "extreme" && (
-          <StockTable rows={EXTREME_ROWS} viewport={viewport} />
-        )}
-
-        {/* Default — 정상 데이터 */}
-        {pageState === "default" && (
-          <StockTable rows={rows} viewport={viewport} />
-        )}
-
-        {/* Realtime — 실시간 가격 갱신 */}
-        {pageState === "realtime" && (
-          <div style={{ width: containerWidth }}>
-            {rows.map((row) => (
-              <TickerAnimation key={row.id} row={row} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+// Story args에서 공통으로 사용할 데이터
+const DEFAULT_ARGS = {
+  rows: MOCK_ROWS,
+  extremeRows: EXTREME_ROWS,
+  onRetry: () => alert("다시 시도"),
 };
 
 // ─── Meta ─────────────────────────────────────────────────────
@@ -249,14 +95,14 @@ const mobileDecorator = (Story: React.ComponentType) => (
 /** 정상 데이터 — 기본 상태 */
 export const Default: Story = {
   name: "Default",
-  args: { pageState: "default", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "desktop" },
   decorators: [desktopDecorator],
 };
 
 /** 로딩 — Skeleton 애니메이션 */
 export const Loading: Story = {
   name: "Loading (Skeleton)",
-  args: { pageState: "skeleton", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -270,7 +116,7 @@ export const Loading: Story = {
 /** 실시간 갱신 — TickerAnimation */
 export const Realtime: Story = {
   name: "Realtime — Dynamic Price Updates",
-  args: { pageState: "realtime", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "realtime", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -284,7 +130,7 @@ export const Realtime: Story = {
 /** API 오류 — LocalError */
 export const Error: Story = {
   name: "Error",
-  args: { pageState: "error", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -298,7 +144,7 @@ export const Error: Story = {
 /** 빈 데이터 — 조회 결과 없음 */
 export const Empty: Story = {
   name: "Empty",
-  args: { pageState: "empty", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -312,7 +158,7 @@ export const Empty: Story = {
 /** 시장 휴장 */
 export const MarketClosed: Story = {
   name: "Market Closed",
-  args: { pageState: "market-closed", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "market-closed", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -326,7 +172,7 @@ export const MarketClosed: Story = {
 /** 극단값 검증 — LinearGauge min-width 4px */
 export const ExtremeValues: Story = {
   name: "Extreme Values (99:1)",
-  args: { pageState: "extreme", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "extreme", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
@@ -344,7 +190,7 @@ export const ExtremeValues: Story = {
 /** 태블릿 — 정상 데이터 */
 export const TabletDefault: Story = {
   name: "Tablet / Default",
-  args: { pageState: "default", viewport: "tablet" },
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "tablet" },
   parameters: { viewport: { defaultViewport: "tablet" } },
   decorators: [tabletDecorator],
 };
@@ -352,7 +198,7 @@ export const TabletDefault: Story = {
 /** 태블릿 — 로딩 */
 export const TabletLoading: Story = {
   name: "Tablet / Loading",
-  args: { pageState: "skeleton", viewport: "tablet" },
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "tablet" },
   parameters: { viewport: { defaultViewport: "tablet" } },
   decorators: [tabletDecorator],
 };
@@ -360,7 +206,7 @@ export const TabletLoading: Story = {
 /** 태블릿 — 오류 */
 export const TabletError: Story = {
   name: "Tablet / Error",
-  args: { pageState: "error", viewport: "tablet" },
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "tablet" },
   parameters: { viewport: { defaultViewport: "tablet" } },
   decorators: [tabletDecorator],
 };
@@ -368,7 +214,7 @@ export const TabletError: Story = {
 /** 태블릿 — 빈 데이터 */
 export const TabletEmpty: Story = {
   name: "Tablet / Empty",
-  args: { pageState: "empty", viewport: "tablet" },
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "tablet" },
   parameters: { viewport: { defaultViewport: "tablet" } },
   decorators: [tabletDecorator],
 };
@@ -380,7 +226,7 @@ export const TabletEmpty: Story = {
 /** 모바일 — 정상 데이터 */
 export const MobileDefault: Story = {
   name: "Mobile / Default",
-  args: { pageState: "default", viewport: "mobile" },
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "mobile" },
   parameters: { viewport: { defaultViewport: "mobile1" } },
   decorators: [mobileDecorator],
 };
@@ -388,7 +234,7 @@ export const MobileDefault: Story = {
 /** 모바일 — 로딩 */
 export const MobileLoading: Story = {
   name: "Mobile / Loading",
-  args: { pageState: "skeleton", viewport: "mobile" },
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "mobile" },
   parameters: { viewport: { defaultViewport: "mobile1" } },
   decorators: [mobileDecorator],
 };
@@ -396,7 +242,7 @@ export const MobileLoading: Story = {
 /** 모바일 — 오류 */
 export const MobileError: Story = {
   name: "Mobile / Error",
-  args: { pageState: "error", viewport: "mobile" },
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "mobile" },
   parameters: { viewport: { defaultViewport: "mobile1" } },
   decorators: [mobileDecorator],
 };
@@ -404,7 +250,7 @@ export const MobileError: Story = {
 /** 모바일 — 빈 데이터 */
 export const MobileEmpty: Story = {
   name: "Mobile / Empty",
-  args: { pageState: "empty", viewport: "mobile" },
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "mobile" },
   parameters: { viewport: { defaultViewport: "mobile1" } },
   decorators: [mobileDecorator],
 };
@@ -416,7 +262,7 @@ export const MobileEmpty: Story = {
 /** Controls로 모든 상태·뷰포트 자유 조작 */
 export const Playground: Story = {
   name: "Playground",
-  args: { pageState: "default", viewport: "desktop" },
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "desktop" },
   decorators: [desktopDecorator],
 };
 
