@@ -2,6 +2,7 @@ package com.assetmind.server_stock.stock.domain.repository;
 
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -22,4 +23,14 @@ public interface Ohlcv1mRepository {
      * @return 해당 날짜의 1분봉 OHLCV DTO 리스트
      */
     List<OhlcvDto> findCandlesByDate(String stockCode, LocalDate date);
+
+    /**
+     * DB에서 2000년 01월 01일부터 EndTime 까지의 N분봉 데이터를 조회
+     * @param stockCode 종목 코드
+     * @param intervalString 시간 간격(3 minute, 5 minute ...)
+     * @param endTime 조회의 마지막 시점 시간
+     * @param limit 조회 요청 개수
+     * @return N분봉 OHLCV DTO 리스트
+     */
+    List<OhlcvDto> findDynamicMinuteCandles(String stockCode, String intervalString, LocalDateTime endTime, int limit);
 }

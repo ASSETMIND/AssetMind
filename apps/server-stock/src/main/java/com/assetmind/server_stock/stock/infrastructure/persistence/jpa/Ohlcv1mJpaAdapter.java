@@ -4,6 +4,7 @@ import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -68,6 +69,16 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                 .toList();
     }
 
+    @Override
+    public List<OhlcvDto> findDynamicMinuteCandles(String stockCode, String intervalString,
+            LocalDateTime endTime, int limit) {
+        return ohlcv1mJpaRepository.findDynamicMinuteCandles(stockCode, intervalString, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+
+    }
+
     private OhlcvDto toDto(Ohlcv1mJpaEntity entity) {
         return new OhlcvDto(
                 entity.getStockCode(),
@@ -77,6 +88,18 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                 entity.getLowPrice(),
                 entity.getClosePrice(),
                 entity.getVolume()
+        );
+    }
+
+    private OhlcvDto toDto(String stockCode, ChartCandleProjection projection) {
+        return new OhlcvDto(
+                stockCode,
+                projection.getCandleTimestamp(),
+                projection.getOpen(),
+                projection.getHigh(),
+                projection.getLow(),
+                projection.getClose(),
+                projection.getVolume()
         );
     }
 }
