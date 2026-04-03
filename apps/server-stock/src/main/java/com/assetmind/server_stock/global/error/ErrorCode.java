@@ -10,7 +10,10 @@ public enum ErrorCode {
 
     // Stock 에러
     INVALID_STOCK_PARAMETER(HttpStatus.BAD_REQUEST, "S001", "유효하지 않은 입력값 입니다."),
-    NOT_FOUND_STOCK(HttpStatus.NOT_FOUND, "S002", "주식 데이터를 찾을 수 없습니다.");
+    NOT_FOUND_STOCK(HttpStatus.NOT_FOUND, "S002", "주식 데이터를 찾을 수 없습니다."),
+
+    // Chart 에러
+    INVALID_CHART_PARAMETER(HttpStatus.BAD_REQUEST, "S003", "유효하지 않은 입력값 입니다.");
 
     private final HttpStatus status;
     private final String code;
