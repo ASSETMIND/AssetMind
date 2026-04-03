@@ -3,6 +3,7 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,6 +48,31 @@ public class Ohlcv1dJpaAdapter implements Ohlcv1dRepository {
                 .map(this::toDto);
     }
 
+    @Override
+    public List<OhlcvDto> findDynamicDailyCandles(String stockCode, String intervalString,
+            LocalDateTime endTime, int limit) {
+        return ohlcv1dJpaRepository.findDynamicDailyCandles(stockCode, intervalString, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+    }
+
+    @Override
+    public List<OhlcvDto> findMonthlyCandles(String stockCode, LocalDateTime endTime, int limit) {
+        return ohlcv1dJpaRepository.findMonthlyCandles(stockCode, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+    }
+
+    @Override
+    public List<OhlcvDto> findYearlyCandles(String stockCode, LocalDateTime endTime, int limit) {
+        return ohlcv1dJpaRepository.findYearlyCandles(stockCode, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+    }
+
     private Ohlcv1dJpaEntity toEntity(OhlcvDto dto) {
         return Ohlcv1dJpaEntity.builder()
                 .stockCode(dto.stockCode())
@@ -68,6 +94,18 @@ public class Ohlcv1dJpaAdapter implements Ohlcv1dRepository {
                 entity.getLowPrice(),
                 entity.getClosePrice(),
                 entity.getVolume()
+        );
+    }
+
+    private OhlcvDto toDto(String stockCode, ChartCandleProjection projection) {
+        return new OhlcvDto(
+                stockCode,
+                projection.getCandleTimestamp(),
+                projection.getOpen(),
+                projection.getHigh(),
+                projection.getLow(),
+                projection.getClose(),
+                projection.getVolume()
         );
     }
 }
