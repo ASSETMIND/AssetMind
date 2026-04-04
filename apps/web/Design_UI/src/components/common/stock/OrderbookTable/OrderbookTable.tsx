@@ -67,20 +67,107 @@ const SkeletonBox: React.FC<{
   />
 );
 
-const OrderbookSkeleton: React.FC = () => (
-  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-    <div style={{ display: "flex", gap: "4px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100px" }}>
-        {Array.from({ length: 12 }).map((_, i) => <SkeletonBox key={i} width={100} height={28} borderRadius={4} />)}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
-        <SkeletonBox height={28} borderRadius={4} />
-        {Array.from({ length: 11 }).map((_, i) => <SkeletonBox key={i} height={28} borderRadius={4} />)}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100px" }}>
-        {Array.from({ length: 12 }).map((_, i) => <SkeletonBox key={i} width={100} height={28} borderRadius={4} />)}
-      </div>
+// 우측 시세 정보 전용 스켈레톤
+const SkeletonMarketInfo = () => {
+  const D = <div style={{ height: "1px", background: "rgba(255,255,255,0.08)", margin: "6px 0" }} />;
+  const R = ({ label }: { label: string }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "6px" }}>
+      <span style={{ fontSize: "11px", fontWeight: 400, color: "#9F9F9F", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "11px", fontWeight: 400, color: "#9F9F9F", whiteSpace: "nowrap" }}>-</span>
     </div>
+  );
+  return (
+    <div style={{ width: "110px", display: "flex", flexDirection: "column" }}>
+      <R label="- 주 최고" />
+      <R label="- 주 최저" />
+      {D}
+      <R label="상한가" />
+      <R label="하한가" />
+      <R label="상승VI" />
+      <R label="하강VI" />
+      {D}
+      <R label="시작" />
+      <R label="최고" />
+      <R label="최저" />
+      {D}
+      <div style={{ fontSize: "11px", color: "#9F9F9F", whiteSpace: "nowrap" }}>거래량</div>
+      <div style={{ fontSize: "11px", color: "#9F9F9F", whiteSpace: "nowrap" }}>-</div>
+      <R label="어제보다" />
+      {D}
+      <R label="중간호가" />
+    </div>
+  );
+};
+
+// 데스크톱 & 태블릿 스켈레톤
+const DesktopOrderbookSkeleton: React.FC = () => (
+  <div style={{ display: "flex", position: "relative" }}>
+    {/* 좌측: 매도 잔량 및 체결 내역 */}
+    <div style={{ display: "flex", flexDirection: "column", width: "100px" }}>
+      <div style={{ height: "32px" }} />
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div key={`ask-qty-${i}`} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: "8px" }}>
+          <SkeletonBox width={76} height={20} borderRadius={6} />
+        </div>
+      ))}
+      <div style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px" }}>
+        <span style={{ fontSize: "12px", color: "#FFFFFF", fontWeight: 400 }}>체결강도</span>
+        <SkeletonBox width={32} height={18} borderRadius={9} />
+      </div>
+      {Array.from({ length: 14 }).map((_, i) => (
+        <div key={`trade-${i}`} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px" }}>
+          <span style={{ fontSize: "13px", color: "#FFFFFF", fontWeight: 400 }}>-</span>
+          <span style={{ fontSize: "13px", color: "#FFFFFF", fontWeight: 400 }}>-</span>
+        </div>
+      ))}
+    </div>
+
+    {/* 중앙: 호가 가격 */}
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, alignItems: "center" }}>
+      {Array.from({ length: 21 }).map((_, i) => (
+        <div key={`price-${i}`} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+          <SkeletonBox width={76} height={20} borderRadius={6} />
+        </div>
+      ))}
+    </div>
+
+    {/* 우측: 시세 정보 및 매수 잔량 */}
+    <div style={{ display: "flex", flexDirection: "column", width: "110px" }}>
+      <div style={{ height: "32px" }} />
+      <SkeletonMarketInfo />
+      <div style={{ height: "50px" }} />
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div key={`bid-qty-${i}`} style={{ height: "32px", display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: "8px" }}>
+          <SkeletonBox width={76} height={20} borderRadius={6} />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// 모바일 스켈레톤
+const MobileOrderbookSkeleton: React.FC = () => (
+  <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", height: "32px" }}>
+      <div style={{ flex: 1 }} />
+      <div style={{ width: "110px", display: "flex", justifyContent: "center" }}>
+        <SkeletonBox width={76} height={20} borderRadius={6} />
+      </div>
+      <div style={{ flex: 1 }} />
+    </div>
+    {Array.from({ length: 10 }).map((_, i) => (
+      <div key={`mob-skel-${i}`} style={{ display: "flex", alignItems: "center", height: "32px", width: "100%" }}>
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", paddingRight: "8px" }}>
+          <SkeletonBox width="80%" height={20} borderRadius={6} />
+        </div>
+        <div style={{ width: "110px", display: "flex", justifyContent: "center" }}>
+          <SkeletonBox width={76} height={20} borderRadius={6} />
+        </div>
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-start", paddingLeft: "8px" }}>
+          <SkeletonBox width="80%" height={20} borderRadius={6} />
+        </div>
+      </div>
+    ))}
   </div>
 );
 
@@ -323,7 +410,7 @@ export const OrderbookTable = ({
       className={cn(className)}
       style={{
         width: isMobile ? "345px" : "340px",
-        height: isMobile ? "454px" : undefined, 
+        height: isMobile ? "454px" : "820px", 
         backgroundColor: "#1C1D21",
         borderRadius: "12px",
         padding: "16px",
@@ -343,8 +430,10 @@ export const OrderbookTable = ({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
         <span style={{ fontSize: "14px", fontWeight: 400, color: "#FFFFFF" }}>호가</span>
         {status === "empty" && <GlobalEmptyState variant="market-closed" display="badge" />}
-        {status === "default" && !isMobile && <QuickOrderButton onClick={onQuickOrder} />}
-        {status === "default" && isMobile && (
+        
+        {/* 스켈레톤 상태일 때도 버튼이 보이도록 변경 */}
+        {(status === "default" || status === "skeleton") && !isMobile && <QuickOrderButton onClick={onQuickOrder} />}
+        {(status === "default" || status === "skeleton") && isMobile && (
           <button
             onClick={onQuickOrder}
             style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 12px", backgroundColor: "transparent", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 400, color: "#9F9F9F" }}
@@ -355,7 +444,7 @@ export const OrderbookTable = ({
       </div>
 
       {/* 상태별 본문 */}
-      {status === "skeleton" && <OrderbookSkeleton />}
+      {status === "skeleton" && (isMobile ? <MobileOrderbookSkeleton /> : <DesktopOrderbookSkeleton />)}
       {status === "error" && <OrderbookError onRetry={onRetry} />}
 
       {(status === "default" || status === "empty") && marketInfo && (
