@@ -47,7 +47,7 @@ public class ChartService {
                         .open(String.valueOf(dto.openPrice()))
                         .high(String.valueOf(dto.highPrice()))
                         .low(String.valueOf(dto.lowPrice()))
-                        .close(String.valueOf(dto.lowPrice()))
+                        .close(String.valueOf(dto.closePrice()))
                         .volume(String.valueOf(dto.volume()))
                         .build()
                 ).toList();
@@ -66,9 +66,9 @@ public class ChartService {
     private String getMinuteInterval(String timeframe) {
         return switch (timeframe.toLowerCase()) {
             case "1m" -> "1 minute";
-            case "3m" -> "3 minute";
-            case "5m" -> "5 minute";
-            case "15m" -> "15 minute";
+            case "3m" -> "3 minutes";
+            case "5m" -> "5 minutes";
+            case "15m" -> "15 minutes";
             default -> throw new InvalidChartParameterException(ErrorCode.INVALID_CHART_PARAMETER, "지원하지 않는 분봉 타임프레임입니다.");
         };
     }
