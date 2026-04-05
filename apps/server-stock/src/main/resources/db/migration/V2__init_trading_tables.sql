@@ -10,11 +10,14 @@ CREATE TABLE IF NOT EXISTS stock_meta_data (
 
 -- 실시간 체결 데이터 파티셔닝 테이블(부모 테이블) 생성
 CREATE TABLE raw_tick (
+    id BIGSERIAL,
     stock_code VARCHAR(20) NOT NULL,
-    current_price INTEGER NOT NULL,
-    price_change INTEGER NOT NULL,
-    volume INTEGER NOT NULL,
-    trade_timestamp TIMESTAMPTZ NOT NULL
+    current_price DOUBLE PRECISION NOT NULL,
+    price_change DOUBLE PRECISION NOT NULL,
+    volume BIGINT NOT NULL,
+    trade_timestamp TIMESTAMP NOT NULL,
+
+    PRIMARY KEY (id, trade_timestamp)
 ) PARTITION BY RANGE (trade_timestamp);
 
 CREATE INDEX idx_raw_tick_stock_time ON raw_tick (stock_code, trade_timestamp DESC);

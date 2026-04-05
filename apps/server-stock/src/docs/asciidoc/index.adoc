@@ -45,3 +45,18 @@ include::{snippets}/stock-history/get-history-success/query-parameters.adoc[]
 ==== 응답 (Response)
 include::{snippets}/stock-history/get-history-success/http-response.adoc[]
 include::{snippets}/stock-history/get-history-success/response-fields.adoc[]
+
+== 3. 주식 차트 (Chart)
+
+=== 3-1. 특정 종목 차트 캔들 조회
+특정 종목의 과거 N분봉, N일봉 등의 캔들 데이터(시가, 고가, 저가, 종가, 거래량)를 조회합니다.
+차트의 초기 렌더링 및 과거 데이터 무한 스크롤(Paging) 목적으로 사용됩니다.
+
+==== 요청 (Request)
+include::{snippets}/chart-get-candles/http-request.adoc[]
+include::{snippets}/chart-get-candles/path-parameters.adoc[]
+include::{snippets}/chart-get-candles/query-parameters.adoc[]
+
+==== 응답 (Response)
+include::{snippets}/chart-get-candles/http-response.adoc[]
+include::{snippets}/chart-get-candles/response-fields.adoc[]

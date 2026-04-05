@@ -4,9 +4,13 @@ import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -38,7 +42,18 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                         .build()
                 ).toList();
 
-        ohlcv1mJpaRepository.saveAll(entities);
+        // 리스트 내부에 식별자가 같은 데이터가 있다면 최산 값으로 덮어씀
+        Map<String, Ohlcv1mJpaEntity> deduplicatedMap = entities.stream()
+                .collect(Collectors.toMap(
+                        entity -> entity.getStockCode() + "_" + entity.getCandleTimestamp()
+                                .toString(),
+                        entity -> entity,
+                        (existing, replacement) -> replacement
+                ));
+
+        Collection<Ohlcv1mJpaEntity> uniqueEntities = deduplicatedMap.values();
+
+        ohlcv1mJpaRepository.saveAll(uniqueEntities);
     }
 
     @Override
@@ -54,6 +69,16 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                 .toList();
     }
 
+    @Override
+    public List<OhlcvDto> findDynamicMinuteCandles(String stockCode, String intervalString,
+            LocalDateTime endTime, int limit) {
+        return ohlcv1mJpaRepository.findDynamicMinuteCandles(stockCode, intervalString, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+
+    }
+
     private OhlcvDto toDto(Ohlcv1mJpaEntity entity) {
         return new OhlcvDto(
                 entity.getStockCode(),
@@ -63,6 +88,18 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                 entity.getLowPrice(),
                 entity.getClosePrice(),
                 entity.getVolume()
+        );
+    }
+
+    private OhlcvDto toDto(String stockCode, ChartCandleProjection projection) {
+        return new OhlcvDto(
+                stockCode,
+                projection.getCandleTimestamp(),
+                projection.getOpen(),
+                projection.getHigh(),
+                projection.getLow(),
+                projection.getClose(),
+                projection.getVolume()
         );
     }
 }

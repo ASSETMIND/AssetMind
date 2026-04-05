@@ -14,6 +14,8 @@ import com.assetmind.server_stock.stock.application.event.StockRankingUpdatedEve
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
+import com.assetmind.server_stock.stock.domain.enums.CandleType;
+import com.assetmind.server_stock.stock.domain.repository.CandleRepository;
 import com.assetmind.server_stock.stock.domain.repository.RawTickRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
 import com.assetmind.server_stock.stock.exception.StockNotFoundException;
@@ -34,6 +36,9 @@ import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class StockServiceTest {
+
+    @Mock
+    private CandleRepository candleRepository;
 
     @Mock
     private StockSnapshotRepository stockSnapshotRepository;
@@ -104,6 +109,10 @@ class StockServiceTest {
             // 2개의 이벤트(History, Ranking) 발행 확인
             verify(eventPublisher, times(1)).publishEvent(any(StockHistorySavedEvent.class));
             verify(eventPublisher, times(1)).publishEvent(any(StockRankingUpdatedEvent.class));
+
+            // 1분봉 캐싱 호출 확인
+            verify(candleRepository, times(1)).save(any(RealTimeStockTradeEvent.class), any(
+                    CandleType.class));
         }
 
         @Test

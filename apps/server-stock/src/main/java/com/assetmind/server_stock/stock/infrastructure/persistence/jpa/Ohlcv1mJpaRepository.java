@@ -2,6 +2,7 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.keys.OhlcvId;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,5 +23,26 @@ public interface Ohlcv1mJpaRepository extends JpaRepository<Ohlcv1mJpaEntity, Oh
             @Param("stockCode") String stockCode,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
+    );
+
+    @Query(value = """
+          SELECT 
+              date_bin(CAST(:intervalString AS INTERVAL), candle_timestamp, TIMESTAMP '2000-01-01') AS candleTimestamp,
+              (array_agg(open_price ORDER BY candle_timestamp ASC))[1] AS open,
+              MAX(high_price) AS high,
+              MIN(low_price) AS low,
+              (array_agg(close_price ORDER BY candle_timestamp DESC ))[1] AS close,
+              SUM(volume) AS volume
+          FROM ohlcv_1m
+          WHERE stock_code = :stockCode AND candle_timestamp <= :endTime
+          GROUP BY candleTimestamp
+          ORDER BY candleTimestamp DESC
+          LIMIT :limit
+        """, nativeQuery = true)
+    List<ChartCandleProjection> findDynamicMinuteCandles(
+            @Param("stockCode") String stockCode,
+            @Param("intervalString") String intervalString,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("limit") int limit
     );
 }
