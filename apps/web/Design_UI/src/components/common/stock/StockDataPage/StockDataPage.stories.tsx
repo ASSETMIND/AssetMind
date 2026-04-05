@@ -1,11 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { useState, useEffect } from "react";
-import { StockTable } from "../StockTable/StockTable";
-import { TickerAnimation } from "../TickerAnimation/TickerAnimation";
-import { LocalError } from "../../../common/LocalError/LocalError";
-import { GlobalEmptyState } from "../../../common/GlobalEmptyState/GlobalEmptyState";
 import { LinearGauge } from "../LinearGauge/LinearGauge";
-import { Tab } from "../../../common/Tab/Tab";
+import { StockDataPage } from "./StockDataPage";
 import type { StockRow } from "../StockTable/StockTable";
 
 // ─── Mock Data ────────────────────────────────────────────────
@@ -29,97 +24,11 @@ const EXTREME_ROWS: StockRow[] = [
   { id: "e3", rank: 3, isFavorite: false, name: "보합 (50:50)",     price: 10000, changeRate: 0,     tradeAmount: 500000, buyRatio: 50 },
 ];
 
-// ─── Page State Types ─────────────────────────────────────────
-
-type PageState = "data" | "realtime" | "error" | "empty" | "market-closed" | "extreme";
-
-interface StockDataPageProps {
-  pageState?: PageState;
-}
-
-// ─── Page Component ───────────────────────────────────────────
-
-const MARKET_FILTER_ITEMS = [
-  { label: "전체", value: "all" },
-  { label: "국내", value: "domestic" },
-  { label: "해외", value: "overseas" },
-];
-
-const SORT_FILTER_ITEMS = [
-  { label: "증권 거래대금", value: "amount" },
-  { label: "증권 거래량", value: "volume" },
-  { label: "거래대금", value: "trade-amount" },
-  { label: "거래량", value: "trade-volume" },
-];
-
-const StockDataPage = ({ pageState = "data" }: StockDataPageProps) => {
-  const [rows, setRows] = useState<StockRow[]>(MOCK_ROWS);
-
-  useEffect(() => {
-    if (pageState !== "realtime") return;
-    const timers = MOCK_ROWS.map((row) => {
-      const interval = 1500 + Math.random() * 3000;
-      return setInterval(() => {
-        const delta = Math.floor((Math.random() - 0.5) * 2000);
-        if (delta === 0) return;
-        setRows((prev) =>
-          prev.map((r) =>
-            r.id === row.id ? { ...r, price: Math.max(1000, r.price + delta) } : r
-          )
-        );
-      }, interval);
-    });
-    return () => timers.forEach(clearInterval);
-  }, [pageState]);
-
-  const isContentState = pageState === "data" || pageState === "realtime" || pageState === "extreme";
-
-  return (
-    <div style={{ width: "1200px", backgroundColor: "#131316", minHeight: "800px", display: "flex", flexDirection: "column" }}>
-      {/* 탭 필터 영역 */}
-      <div style={{ padding: "16px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
-        <Tab items={MARKET_FILTER_ITEMS} defaultValue="all" />
-        <Tab items={SORT_FILTER_ITEMS} defaultValue="amount" />
-      </div>
-
-      {/* 콘텐츠 영역 — 에러/빈 상태일 때 수직 중앙 */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: isContentState ? "flex-start" : "center",
-          alignItems: isContentState ? "flex-start" : "center",
-        }}
-      >
-        {pageState === "error" && (
-          <LocalError
-            message="데이터를 불러오는 데 실패했습니다."
-            onRetry={() => alert("다시 시도")}
-          />
-        )}
-        {pageState === "empty" && (
-          <GlobalEmptyState variant="no-data" display="inline" />
-        )}
-        {pageState === "market-closed" && (
-          <GlobalEmptyState variant="market-closed" display="inline" />
-        )}
-        {pageState === "extreme" && (
-          <StockTable rows={EXTREME_ROWS} />
-        )}
-        {pageState === "data" && (
-          <StockTable rows={rows} />
-        )}
-        {pageState === "realtime" && (
-          <div style={{ width: "1200px" }}>
-            {rows.map((row) => (
-              <TickerAnimation key={row.id} row={row} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+// Story args에서 공통으로 사용할 데이터
+const DEFAULT_ARGS = {
+  rows: MOCK_ROWS,
+  extremeRows: EXTREME_ROWS,
+  onRetry: () => alert("다시 시도"),
 };
 
 // ─── Meta ─────────────────────────────────────────────────────
@@ -136,16 +45,22 @@ const meta: Meta<typeof StockDataPage> = {
     layout: "fullscreen",
     docs: {
       description: {
-        component: "주가 데이터 페이지의 전체 상태를 Controls로 전환하며 확인할 수 있는 통합 Story입니다.",
+        component:
+          "주가 데이터 페이지 통합 Story. `pageState` prop으로 7가지 상태(default·skeleton·realtime·error·empty·market-closed·extreme)를 전환하며 확인할 수 있습니다. `viewport` prop으로 desktop(1200px)·tablet(768px)·mobile(393px) 레이아웃을 전환합니다.",
       },
     },
   },
   argTypes: {
     pageState: {
       control: "radio",
-      options: ["data", "realtime", "error", "empty", "market-closed", "extreme"],
+      options: ["default", "skeleton", "realtime", "error", "empty", "market-closed", "extreme"],
       description:
-        "data: 정상 데이터 | realtime: 실시간 갱신 | error: API 실패 | empty: 조회 결과 없음 | market-closed: 시장 휴장 | extreme: 극단값(99:1)",
+        "default: 정상 데이터 | skeleton: 로딩 중 | realtime: 실시간 갱신 | error: API 실패 | empty: 조회 결과 없음 | market-closed: 시장 휴장 | extreme: 극단값(99:1)",
+    },
+    viewport: {
+      control: "radio",
+      options: ["desktop", "tablet", "mobile"],
+      description: "desktop: 1200px | tablet: 768px | mobile: 393px",
     },
   },
 };
@@ -153,84 +68,207 @@ const meta: Meta<typeof StockDataPage> = {
 export default meta;
 type Story = StoryObj<typeof StockDataPage>;
 
-// ─── Integrated Controls ──────────────────────────────────────
+// ─── 공통 데코레이터 ──────────────────────────────────────────
 
-export const IntegratedControls: Story = {
-  name: "Integrated — Page State Controls",
-  args: { pageState: "data" },
-  decorators: [
-    (Story) => (
-      <div style={{ minWidth: "1200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+const desktopDecorator = (Story: React.ComponentType) => (
+  <div style={{ minWidth: "1200px" }}>
+    <Story />
+  </div>
+);
+
+const tabletDecorator = (Story: React.ComponentType) => (
+  <div style={{ width: "768px" }}>
+    <Story />
+  </div>
+);
+
+const mobileDecorator = (Story: React.ComponentType) => (
+  <div style={{ width: "393px" }}>
+    <Story />
+  </div>
+);
+
+// ════════════════════════════════════════════════════════════════
+// Desktop Stories
+// ════════════════════════════════════════════════════════════════
+
+/** 정상 데이터 — 기본 상태 */
+export const Default: Story = {
+  name: "Default",
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "desktop" },
+  decorators: [desktopDecorator],
 };
 
-export const ExtremeValueCheck: Story = {
-  name: "Criteria 1 — Extreme Value Rendering",
-  args: { pageState: "extreme" },
+/** 로딩 — Skeleton 애니메이션 */
+export const Loading: Story = {
+  name: "Loading (Skeleton)",
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
-        story: "극단적인 비율(99:1, 1:99)에서 UI 오류 없이 LinearGauge의 최소 너비 4px 규칙이 올바르게 적용되는지 확인합니다.",
+        story: "데이터 로딩 중 상태. Skeleton variant='table-row' 10행으로 표시됩니다. 400ms 딜레이 후 pulse 애니메이션이 시작됩니다.",
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <div style={{ minWidth: "1200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [desktopDecorator],
 };
 
-export const ErrorStateCheck: Story = {
-  name: "Criteria 2 — Local Error + Retry Action",
-  args: { pageState: "error" },
+/** 실시간 갱신 — TickerAnimation */
+export const Realtime: Story = {
+  name: "Realtime — Dynamic Price Updates",
+  args: { ...DEFAULT_ARGS, pageState: "realtime", viewport: "desktop" },
   parameters: {
     docs: {
       description: {
-        story: "API 오류 발생 시 LocalError가 표시되는지, 그리고 onRetry 콜백이 제대로 연결되는지 확인합니다.",
+        story: "각 종목마다 1.5~4.5초 랜덤 주기로 가격이 갱신됩니다. 상승 시 붉은색, 하락 시 파란색 배경 깜빡임이 적용됩니다.",
       },
     },
   },
-  decorators: [
-    (Story) => (
-      <div style={{ minWidth: "1200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [desktopDecorator],
 };
 
-export const EmptyStateCheck: Story = {
-  name: "Criteria 2 — Empty State (No Results)",
-  args: { pageState: "empty" },
-  decorators: [
-    (Story) => (
-      <div style={{ minWidth: "1200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+/** API 오류 — LocalError */
+export const Error: Story = {
+  name: "Error",
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "desktop" },
+  parameters: {
+    docs: {
+      description: {
+        story: "API 호출 실패 시 LocalError 컴포넌트가 페이지 중앙에 표시됩니다. '다시 시도' 버튼으로 재요청을 트리거합니다.",
+      },
+    },
+  },
+  decorators: [desktopDecorator],
 };
 
-export const MarketClosedCheck: Story = {
-  name: "Criteria 2 — Empty State (Market Closed)",
-  args: { pageState: "market-closed" },
-  decorators: [
-    (Story) => (
-      <div style={{ minWidth: "1200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
+/** 빈 데이터 — 조회 결과 없음 */
+export const Empty: Story = {
+  name: "Empty",
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "desktop" },
+  parameters: {
+    docs: {
+      description: {
+        story: "필터 조건에 맞는 종목이 없을 때 표시됩니다. GlobalEmptyState variant='no-data'를 사용합니다.",
+      },
+    },
+  },
+  decorators: [desktopDecorator],
 };
 
+/** 시장 휴장 */
+export const MarketClosed: Story = {
+  name: "Market Closed",
+  args: { ...DEFAULT_ARGS, pageState: "market-closed", viewport: "desktop" },
+  parameters: {
+    docs: {
+      description: {
+        story: "시장 휴장 시간에 표시됩니다. GlobalEmptyState variant='market-closed'를 사용합니다.",
+      },
+    },
+  },
+  decorators: [desktopDecorator],
+};
+
+/** 극단값 검증 — LinearGauge min-width 4px */
+export const ExtremeValues: Story = {
+  name: "Extreme Values (99:1)",
+  args: { ...DEFAULT_ARGS, pageState: "extreme", viewport: "desktop" },
+  parameters: {
+    docs: {
+      description: {
+        story: "극단적 비율(99:1, 1:99)에서 LinearGauge의 최소 너비 4px 규칙이 올바르게 적용되는지 검증합니다.",
+      },
+    },
+  },
+  decorators: [desktopDecorator],
+};
+
+// ════════════════════════════════════════════════════════════════
+// Tablet Stories
+// ════════════════════════════════════════════════════════════════
+
+/** 태블릿 — 정상 데이터 */
+export const TabletDefault: Story = {
+  name: "Tablet / Default",
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDecorator],
+};
+
+/** 태블릿 — 로딩 */
+export const TabletLoading: Story = {
+  name: "Tablet / Loading",
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDecorator],
+};
+
+/** 태블릿 — 오류 */
+export const TabletError: Story = {
+  name: "Tablet / Error",
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDecorator],
+};
+
+/** 태블릿 — 빈 데이터 */
+export const TabletEmpty: Story = {
+  name: "Tablet / Empty",
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDecorator],
+};
+
+// ════════════════════════════════════════════════════════════════
+// Mobile Stories
+// ════════════════════════════════════════════════════════════════
+
+/** 모바일 — 정상 데이터 */
+export const MobileDefault: Story = {
+  name: "Mobile / Default",
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDecorator],
+};
+
+/** 모바일 — 로딩 */
+export const MobileLoading: Story = {
+  name: "Mobile / Loading",
+  args: { ...DEFAULT_ARGS, pageState: "skeleton", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDecorator],
+};
+
+/** 모바일 — 오류 */
+export const MobileError: Story = {
+  name: "Mobile / Error",
+  args: { ...DEFAULT_ARGS, pageState: "error", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDecorator],
+};
+
+/** 모바일 — 빈 데이터 */
+export const MobileEmpty: Story = {
+  name: "Mobile / Empty",
+  args: { ...DEFAULT_ARGS, pageState: "empty", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDecorator],
+};
+
+// ════════════════════════════════════════════════════════════════
+// QA / Validation Stories (기존 유지)
+// ════════════════════════════════════════════════════════════════
+
+/** Controls로 모든 상태·뷰포트 자유 조작 */
+export const Playground: Story = {
+  name: "Playground",
+  args: { ...DEFAULT_ARGS, pageState: "default", viewport: "desktop" },
+  decorators: [desktopDecorator],
+};
+
+/** 색상 명도 대비 검증 */
 export const ContrastCheck: Story = {
-  name: "Criteria 3 — Color Contrast Check",
+  name: "QA — Color Contrast Check",
   parameters: {
     docs: {
       description: {
@@ -241,23 +279,20 @@ WCAG AA (4.5:1) color contrast verification:
 |---|---|---|---|
 | Text (primary) | #FFFFFF | #131316 | ✅ Pass |
 | Text (secondary) | #9194A1 | #131316 | ✅ Pass |
-| Text (disabled) | #9F9F9F | #131316 | ✅ Pass |
 | Price change (rise) | #EA580C | #131316 | ✅ Pass |
 | Price change (fall) | #256AF4 | #131316 | ✅ Pass |
 | LinearGauge label (rise) | #EA580C | #131316 | ✅ Pass |
 | LinearGauge label (fall) | #256AF4 | #131316 | ✅ Pass |
-| TickerAnimation bg (rise) | #EA580C 10% | #131316 | ℹ️ Background only |
-| TickerAnimation bg (fall) | #256AF4 10% | #131316 | ℹ️ Background only |
+| TickerAnimation bg (rise) | rgba(234,88,12,0.1) | #131316 | ℹ️ Background only |
+| TickerAnimation bg (fall) | rgba(37,106,244,0.1) | #131316 | ℹ️ Background only |
 | LocalError text | #9F9F9F | #131316 | ✅ Pass |
 | GlobalEmptyState text | #9F9F9F | #131316 | ✅ Pass |
-| Badge text | #FFFFFF | #2C2C30 | ✅ Pass |
         `,
       },
     },
   },
   render: () => (
     <div style={{ backgroundColor: "#131316", padding: "32px", display: "flex", flexDirection: "column", gap: "32px", minWidth: "1200px" }}>
-      {/* 텍스트 명도 대비 */}
       <section>
         <h3 style={{ fontSize: "14px", color: "#9194A1", marginBottom: "12px" }}>Text Color Contrast</h3>
         <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
@@ -266,8 +301,6 @@ WCAG AA (4.5:1) color contrast verification:
           <span style={{ fontSize: "14px", color: "#9F9F9F" }}>Disabled #9F9F9F</span>
         </div>
       </section>
-
-      {/* 등락률 색상 대비 */}
       <section>
         <h3 style={{ fontSize: "14px", color: "#9194A1", marginBottom: "12px" }}>Price Change Color Contrast</h3>
         <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
@@ -276,8 +309,6 @@ WCAG AA (4.5:1) color contrast verification:
           <span style={{ fontSize: "15px", fontWeight: 500, color: "#9194A1" }}>0.00% (Flat #9194A1)</span>
         </div>
       </section>
-
-      {/* LinearGauge 대비 */}
       <section>
         <h3 style={{ fontSize: "14px", color: "#9194A1", marginBottom: "12px" }}>LinearGauge Color Contrast</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -286,8 +317,6 @@ WCAG AA (4.5:1) color contrast verification:
           <LinearGauge buyRatio={1} />
         </div>
       </section>
-
-      {/* TickerAnimation 배경 대비 */}
       <section>
         <h3 style={{ fontSize: "14px", color: "#9194A1", marginBottom: "12px" }}>TickerAnimation Background Contrast</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -297,14 +326,6 @@ WCAG AA (4.5:1) color contrast verification:
           <div style={{ backgroundColor: "rgba(37,106,244,0.1)", padding: "12px 16px", borderRadius: "4px" }}>
             <span style={{ fontSize: "15px", fontWeight: 500, color: "#FFFFFF" }}>Fall bg rgba(37,106,244,0.1) — Text #FFFFFF</span>
           </div>
-        </div>
-      </section>
-
-      {/* Badge 대비 */}
-      <section>
-        <h3 style={{ fontSize: "14px", color: "#9194A1", marginBottom: "12px" }}>Badge Color Contrast</h3>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px", backgroundColor: "#2C2C30", borderRadius: "4px" }}>
-          <span style={{ fontSize: "10px", fontWeight: 500, color: "#FFFFFF" }}>휴장 시간</span>
         </div>
       </section>
     </div>
