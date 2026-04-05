@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.stock.presentation.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Builder;
@@ -16,6 +17,7 @@ public record ChartResponseDto(
 
     @Builder
     public record CandleDto(
+            @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
             LocalDateTime timestamp,
             String open,
             String high,
