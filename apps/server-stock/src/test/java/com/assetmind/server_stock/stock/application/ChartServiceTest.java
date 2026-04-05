@@ -8,11 +8,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.assetmind.server_stock.stock.application.dto.ChartResponseDto;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.exception.InvalidChartParameterException;
+import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

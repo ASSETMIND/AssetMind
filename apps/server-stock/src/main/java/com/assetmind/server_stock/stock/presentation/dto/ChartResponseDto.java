@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.application.dto;
+package com.assetmind.server_stock.stock.presentation.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;

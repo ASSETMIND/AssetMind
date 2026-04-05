@@ -1,11 +1,11 @@
 package com.assetmind.server_stock.stock.application;
 
 import com.assetmind.server_stock.global.error.ErrorCode;
-import com.assetmind.server_stock.stock.application.dto.ChartResponseDto;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.exception.InvalidChartParameterException;
+import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
