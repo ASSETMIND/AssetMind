@@ -22,4 +22,6 @@ dependencies {
 	implementation 'org.flywaydb:flyway-core'
 	// Flyway PostgreSQL 전용 모듈
 	implementation 'org.flywaydb:flyway-database-postgresql'
+
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 }
