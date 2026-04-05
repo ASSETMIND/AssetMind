@@ -35,7 +35,6 @@ export interface MarketInfo {
 interface OrderbookTableProps {
   status?: OrderbookStatus;
   viewport?: Viewport;
-  /** @deprecated status="empty" 사용 권장 */
   isMarketClosed?: boolean;
   onRetry?: () => void;
   currentPrice?: number;
@@ -67,7 +66,6 @@ const SkeletonBox: React.FC<{
   />
 );
 
-// 우측 시세 정보 전용 스켈레톤
 const SkeletonMarketInfo = () => {
   const D = <div style={{ height: "1px", background: "rgba(255,255,255,0.08)", margin: "6px 0" }} />;
   const R = ({ label }: { label: string }) => (
@@ -99,7 +97,6 @@ const SkeletonMarketInfo = () => {
   );
 };
 
-// 데스크톱 & 태블릿 스켈레톤
 const DesktopOrderbookSkeleton: React.FC = () => (
   <div style={{ display: "flex", position: "relative" }}>
     {/* 좌측: 매도 잔량 및 체결 내역 */}
@@ -145,7 +142,6 @@ const DesktopOrderbookSkeleton: React.FC = () => (
   </div>
 );
 
-// 모바일 스켈레톤
 const MobileOrderbookSkeleton: React.FC = () => (
   <div style={{ display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", height: "32px" }}>
