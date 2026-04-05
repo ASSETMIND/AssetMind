@@ -211,46 +211,38 @@ export const AIPredictionPanel: React.FC<AIPredictionPanelProps> = ({
   if (viewport === "mobile") {
     return (
       <div style={{
-        width: "393px",
-        height: "852px",
-        backgroundColor: "#131316",
+        width: "345px",
+        height: "657px",
+        backgroundColor: "#1C1D21",
+        borderRadius: "12px",
+        padding: "24px",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center", 
+        gap: "10px",
         boxSizing: "border-box",
+        overflowY: "auto",
+        flexShrink: 0,
       }}>
-        <div style={{
-          width: "345px",
-          height: "657px",
-          backgroundColor: "#1C1D21",
-          borderRadius: "12px",
-          padding: "24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-          boxSizing: "border-box",
-          overflowY: "auto",
-          flexShrink: 0,
-        }}>
-          {/* 헤더 */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: "14px", fontWeight: 400, color: "#FFFFFF" }}>AI 가격 예측 패널</span>
-            <HeaderAction status={status} onBuyClick={onBuyClick} />
-          </div>
-          {/* 본문 - flexShrink 0으로 찌그러짐 방지 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", flexShrink: 0 }}>
-            {status === "error" ? <PanelError onRetry={onRetry} /> : <PanelInner {...innerProps} />}
-          </div>
+        {/* 헤더 */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: "14px", fontWeight: 400, color: "#FFFFFF" }}>AI 가격 예측 패널</span>
+          <HeaderAction status={status} onBuyClick={onBuyClick} />
+        </div>
+        {/* 본문 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", flexShrink: 0 }}>
+          {status === "error" ? <PanelError onRetry={onRetry} /> : <PanelInner {...innerProps} />}
         </div>
       </div>
     );
   }
 
   // ── Desktop / Tablet: 340px ──
+  const panelWidth = viewport === "tablet" ? "347px" : "340px";
+
   return (
     <div style={{
-      width: "340px",
+      width: panelWidth,
+      height: "820px",
       maxHeight: "100vh",
       overflowY: "auto",
       backgroundColor: "#1C1D21",

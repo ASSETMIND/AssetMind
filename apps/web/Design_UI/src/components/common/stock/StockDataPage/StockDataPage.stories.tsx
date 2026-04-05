@@ -46,16 +46,16 @@ const meta: Meta<typeof StockDataPage> = {
     docs: {
       description: {
         component:
-          "주가 데이터 페이지 통합 Story. `pageState` prop으로 7가지 상태(default·skeleton·realtime·error·empty·market-closed·extreme)를 전환하며 확인할 수 있습니다. `viewport` prop으로 desktop(1200px)·tablet(768px)·mobile(393px) 레이아웃을 전환합니다.",
+          "주가 데이터 페이지 통합 Story. `pageState` prop으로 7가지 상태(default·skeleton·realtime·error·empty·extreme)를 전환하며 확인할 수 있습니다. `viewport` prop으로 desktop(1200px)·tablet(768px)·mobile(393px) 레이아웃을 전환합니다.",
       },
     },
   },
   argTypes: {
     pageState: {
       control: "radio",
-      options: ["default", "skeleton", "realtime", "error", "empty", "market-closed", "extreme"],
+      options: ["default", "skeleton", "realtime", "error", "empty", "extreme"],
       description:
-        "default: 정상 데이터 | skeleton: 로딩 중 | realtime: 실시간 갱신 | error: API 실패 | empty: 조회 결과 없음 | market-closed: 시장 휴장 | extreme: 극단값(99:1)",
+        "default: 정상 데이터 | skeleton: 로딩 중 | realtime: 실시간 갱신 | error: API 실패 | empty: 조회 결과 없음 | extreme: 극단값(99:1)",
     },
     viewport: {
       control: "radio",
@@ -149,20 +149,6 @@ export const Empty: Story = {
     docs: {
       description: {
         story: "필터 조건에 맞는 종목이 없을 때 표시됩니다. GlobalEmptyState variant='no-data'를 사용합니다.",
-      },
-    },
-  },
-  decorators: [desktopDecorator],
-};
-
-/** 시장 휴장 */
-export const MarketClosed: Story = {
-  name: "Market Closed",
-  args: { ...DEFAULT_ARGS, pageState: "market-closed", viewport: "desktop" },
-  parameters: {
-    docs: {
-      description: {
-        story: "시장 휴장 시간에 표시됩니다. GlobalEmptyState variant='market-closed'를 사용합니다.",
       },
     },
   },

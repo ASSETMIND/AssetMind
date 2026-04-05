@@ -16,7 +16,6 @@ export type PageState =
   | "realtime"      // 실시간 가격 갱신
   | "error"         // API 실패
   | "empty"         // 조회 결과 없음
-  | "market-closed" // 시장 휴장
   | "extreme";      // 극단값 (99:1, 1:99)
 
 export interface StockDataPageProps {
@@ -143,9 +142,6 @@ export const StockDataPage = ({
         )}
         {pageState === "empty" && (
           <GlobalEmptyState variant="no-data" display="inline" />
-        )}
-        {pageState === "market-closed" && (
-          <GlobalEmptyState variant="market-closed" display="inline" />
         )}
         {pageState === "extreme" && (
           <StockTable
