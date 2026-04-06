@@ -49,7 +49,10 @@ export const useWebSocket = (
 		if (client.current?.active) return;
 
 		const stompClient = new Client({
-			webSocketFactory: () => new SockJS(url),
+			webSocketFactory: () => {
+				const options = import.meta.env.DEV ? { transports: 'websocket' } : {};
+				return new SockJS(url, undefined, options);
+			},
 			reconnectDelay: reconnectInterval, // 자동 재연결 간격 설정
 			onConnect: () => {
 				queryClient.setQueryData(queryKey, { isConnected: true, error: null });

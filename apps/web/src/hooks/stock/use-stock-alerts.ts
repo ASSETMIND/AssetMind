@@ -20,7 +20,10 @@ export function useSurgeAlerts() {
 	useEffect(() => {
 		// STOMP 클라이언트 인스턴스 생성
 		const client = new Client({
-			webSocketFactory: () => new SockJS(STOCK_WS_URL),
+			webSocketFactory: () => {
+				const options = import.meta.env.DEV ? { transports: 'websocket' } : {};
+				return new SockJS(STOCK_WS_URL, undefined, options);
+			},
 			reconnectDelay: 5000,
 			onConnect: () => {
 				client.subscribe(SURGE_ALERTS_TOPIC, (message) => {
