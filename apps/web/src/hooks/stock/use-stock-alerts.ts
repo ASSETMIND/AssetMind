@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import { useWebSocket } from '../web-socket/use-web-socket';
 import { STOCK_WS_URL, SURGE_ALERTS_TOPIC } from '../../api/stock';
 import type { SurgeAlertPayload } from '../../types/stock';
 
@@ -9,6 +8,9 @@ export const SURGE_ALERTS_QUERY_KEY = ['stock', 'surgeAlerts'];
 
 export function useSurgeAlerts() {
 	const queryClient = useQueryClient();
+	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL, {
+		autoDisconnectInBackground: true,
+	});
 
 	const { data: alerts = [] } = useQuery<SurgeAlertPayload[]>({
 		queryKey: SURGE_ALERTS_QUERY_KEY,
@@ -18,39 +20,29 @@ export function useSurgeAlerts() {
 	});
 
 	useEffect(() => {
-		// STOMP 클라이언트 인스턴스 생성
-		const client = new Client({
-			webSocketFactory: () => {
-				const options = import.meta.env.DEV ? { transports: 'websocket' } : {};
-				return new SockJS(STOCK_WS_URL, undefined, options);
-			},
-			reconnectDelay: 5000,
-			onConnect: () => {
-				client.subscribe(SURGE_ALERTS_TOPIC, (message) => {
-					if (message.body) {
-						try {
-							const newAlert: SurgeAlertPayload = JSON.parse(message.body);
+		if (!isConnected) return;
 
-							queryClient.setQueryData<SurgeAlertPayload[]>(
-								SURGE_ALERTS_QUERY_KEY,
-								(oldAlerts = []) => {
-									return [newAlert, ...oldAlerts].slice(0, 10);
-								},
-							);
-						} catch (error) {
-							console.error('Failed to parse stock alert message:', error);
-						}
-					}
-				});
-			},
+		const subscription = subscribe(SURGE_ALERTS_TOPIC, (data: any) => {
+			if (data) {
+				try {
+					const newAlert: SurgeAlertPayload = data;
+
+					queryClient.setQueryData<SurgeAlertPayload[]>(
+						SURGE_ALERTS_QUERY_KEY,
+						(oldAlerts = []) => {
+							return [newAlert, ...oldAlerts].slice(0, 10);
+						},
+					);
+				} catch (error) {
+					console.error('Failed to parse stock alert message:', error);
+				}
+			}
 		});
 
-		client.activate();
-
 		return () => {
-			client.deactivate();
+			subscription?.unsubscribe();
 		};
-	}, [queryClient]);
+	}, [isConnected, subscribe, queryClient]);
 
 	return { alerts };
 }
