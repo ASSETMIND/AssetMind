@@ -49,6 +49,29 @@
     FID_INPUT_DATE_2: "20240131"
     FID_PERIOD_DIV_CODE: "D"
 
+  # 4. ECOS 공통 베이스 템플릿
+  ecos_base: &ecos_base
+    provider: "ECOS"
+    path: "/StatisticSearch"
+
+  # 5. ECOS 일별(D) 파라미터 공통 템플릿
+  ecos_daily_params: &ecos_daily_params
+    cycle: "D"
+    start_date: "20240101"
+    end_date: "20241231"
+
+  # 6. ECOS 월별(M) 파라미터 공통 템플릿
+  ecos_monthly_params: &ecos_monthly_params
+    cycle: "M"
+    start_date: "202401"
+    end_date: "202412"
+
+  # 7. ECOS 분기별(Q) 파라미터 공통 템플릿
+  ecos_quarterly_params: &ecos_quarterly_params
+    cycle: "Q"
+    start_date: "2024Q1"
+    end_date: "2024Q4"
+
 policy:
   # ----------------------------------------------------------------------------
   # 한국투자증권 (KIS) : https://apiportal.koreainvestment.com/intro
@@ -468,6 +491,14 @@ policy:
     params:
       <<: *kis_domestic_params
       FID_INPUT_ISCD: "11045"
+
+  # ========== [S&P500 지수 일별 데이터 : 1개] ==========
+  kis_snp500_daily:
+    <<: *kis_overseas_base
+    description: "S&P500 일봉"
+    params:
+      <<: *kis_overseas_params
+      FID_INPUT_ISCD: "PSPX"
 
   # ========== [NASDAQ 지수 일별 데이터 : 13개] ==========
   kis_nasdaq_daily:
@@ -1180,3 +1211,232 @@ policy:
     params:
       series_id: "DGS30"
       frequency: "d"
+
+  # ----------------------------------------------------------------------------
+  # ECOS (한국은행 경제통계시스템) : https://ecos.bok.or.kr/api/
+  # ----------------------------------------------------------------------------
+
+  # ========== [시장금리 일별 데이터 : 28개] ==========
+  ecos_bok_base_rate_daily:
+    <<: *ecos_base
+    description: "한국은행 기준금리"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "722Y001"
+      item_code1: "0101000"
+
+  ecos_call_1d_all_daily:
+    <<: *ecos_base
+    description: "콜금리(1일, 전체거래)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010101000"
+
+  ecos_call_1d_broker_daily:
+    <<: *ecos_base
+    description: "콜금리(1일, 중개회사거래)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010102000"
+
+  ecos_call_1d_bank_sec_daily:
+    <<: *ecos_base
+    description: "콜금리(1일, 은행증권금융차입)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010103000"
+
+  ecos_kofr_daily:
+    <<: *ecos_base
+    description: "KOFR(공시RFR)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010901000"
+
+  ecos_koribor_3m_daily:
+    <<: *ecos_base
+    description: "KORIBOR(3개월)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010150000"
+
+  ecos_koribor_6m_daily:
+    <<: *ecos_base
+    description: "KORIBOR(6개월)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010151000"
+
+  ecos_koribor_12m_daily:
+    <<: *ecos_base
+    description: "KORIBOR(12개월)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010152000"
+
+  ecos_cd_91d_daily:
+    <<: *ecos_base
+    description: "CD(91일)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010502000"
+
+  ecos_cp_91d_daily:
+    <<: *ecos_base
+    description: "CP(91일)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010503000"
+
+  ecos_nhb_1_5y_daily:
+    <<: *ecos_base
+    description: "국민주택채권1종(5년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010503500"
+
+  ecos_ktb_1y_daily:
+    <<: *ecos_base
+    description: "국고채(1년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010190000"
+
+  ecos_ktb_2y_daily:
+    <<: *ecos_base
+    description: "국고채(2년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010195000"
+
+  ecos_ktb_3y_daily:
+    <<: *ecos_base
+    description: "국고채(3년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010200000"
+
+  ecos_ktb_5y_daily:
+    <<: *ecos_base
+    description: "국고채(5년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010200001"
+
+  ecos_ktb_10y_daily:
+    <<: *ecos_base
+    description: "국고채(10년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010210000"
+
+  ecos_ktb_20y_daily:
+    <<: *ecos_base
+    description: "국고채(20년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010220000"
+
+  ecos_ktb_30y_daily:
+    <<: *ecos_base
+    description: "국고채(30년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010230000"
+
+  ecos_ktb_50y_daily:
+    <<: *ecos_base
+    description: "국고채(50년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010240000"
+
+  ecos_msb_91d_daily:
+    <<: *ecos_base
+    description: "통안증권(91일)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010400000"
+
+  ecos_msb_1y_daily:
+    <<: *ecos_base
+    description: "통안증권(1년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010400001"
+
+  ecos_msb_2y_daily:
+    <<: *ecos_base
+    description: "통안증권(2년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010400002"
+
+  ecos_kdb_1y_daily:
+    <<: *ecos_base
+    description: "산금채(1년)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010260000"
+
+  ecos_cb_3y_aa_minus_daily:
+    <<: *ecos_base
+    description: "회사채(3년, AA-)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010300000"
+
+  ecos_cb_3y_bbb_minus_daily:
+    <<: *ecos_base
+    description: "회사채(3년, BBB-)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010320000"
+
+  ecos_cb_3y_aa_minus_minpyung_daily:
+    <<: *ecos_base
+    description: "회사채(3년, AA-, 민평)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010310000"
+
+  ecos_mmf_7d_daily:
+    <<: *ecos_base
+    description: "MMF(7일)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010501000"
+
+  ecos_cma_daily:
+    <<: *ecos_base
+    description: "CMA(수시형)"
+    params:
+      <<: *ecos_daily_params
+      stat_code: "817Y002"
+      item_code1: "010504000"

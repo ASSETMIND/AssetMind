@@ -77,6 +77,9 @@ tasks:
       # - "kis_kosdaq_mid_size_business_daily"
       # - "kis_kosdaq_tech_growth_daily"
 
+      # # ========== [S&P500 지수 일별 데이터 : 1개] ==========
+      # - "kis_snp500_daily"
+
       # # ========== [NASDAQ 지수 일별 데이터 : 13개] ==========
       # - "kis_nasdaq_daily"
       # - "kis_nasdaq_bank_daily"
@@ -199,8 +202,48 @@ tasks:
       # - "kis_commodity_dubai_daily"
       # - "kis_commodity_brent_daily"
 
-      # ========== [미국 국채 금리 일별 데이터 : 4개] ==========
-      - fred_us_treasury_2y_daily
-      - fred_us_treasury_5y_daily
-      - fred_us_treasury_10y_daily
-      - fred_us_treasury_30y_daily
+      # # ========== [미국 국채 금리 일별 데이터 : 4개] ==========
+      # - fred_us_treasury_2y_daily
+      # - fred_us_treasury_5y_daily
+      # - fred_us_treasury_10y_daily
+      # - fred_us_treasury_30y_daily
+
+      # ========== [시장금리 일별 데이터 : 8개] ==========
+      # - "ecos_base_rate_daily"
+      # - "ecos_call_rate_1d_daily"
+      # - "ecos_koribor_3m_daily"
+      # - "ecos_cd_91d_daily"
+      # - "ecos_msb_364d_daily"
+      # - "ecos_treasury_3y_daily"
+      # - "ecos_treasury_5y_daily"
+      # - "ecos_corporate_bond_3y_aa_minus_daily"
+
+      # ========== [시장금리 일별 데이터 : 28개] ==========
+      - "ecos_bok_base_rate_daily"
+      - "ecos_call_1d_all_daily"
+      - "ecos_call_1d_broker_daily"
+      - "ecos_call_1d_bank_sec_daily"
+      - "ecos_kofr_daily"
+      - "ecos_koribor_3m_daily"
+      - "ecos_koribor_6m_daily"
+      - "ecos_koribor_12m_daily"
+      - "ecos_cd_91d_daily"
+      - "ecos_cp_91d_daily"
+      - "ecos_nhb_1_5y_daily"
+      - "ecos_ktb_1y_daily"
+      - "ecos_ktb_2y_daily"
+      - "ecos_ktb_3y_daily"
+      - "ecos_ktb_5y_daily"
+      - "ecos_ktb_10y_daily"
+      - "ecos_ktb_20y_daily"
+      - "ecos_ktb_30y_daily"
+      - "ecos_ktb_50y_daily"
+      - "ecos_msb_91d_daily"
+      - "ecos_msb_1y_daily"
+      - "ecos_msb_2y_daily"
+      - "ecos_kdb_1y_daily"
+      - "ecos_cb_3y_aa_minus_daily"
+      - "ecos_cb_3y_bbb_minus_daily"
+      - "ecos_cb_3y_aa_minus_minpyung_daily"
+      - "ecos_mmf_7d_daily"
+      - "ecos_cma_daily"
