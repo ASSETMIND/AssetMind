@@ -72,6 +72,14 @@
     start_date: "2024Q1"
     end_date: "2024Q4"
 
+  # 8. UPBIT 일별 캔들 공통 템플릿 (ECOS, KIS와 동일한 날짜 인터페이스 적용)
+  upbit_daily_base: &upbit_daily_base
+    provider: "UPBIT"
+    path: "/v1/candles/days"
+  upbit_daily_params: &upbit_daily_params
+    start_date: "20240101"
+    end_date: "20241231"
+
 policy:
   # ----------------------------------------------------------------------------
   # 한국투자증권 (KIS) : https://apiportal.koreainvestment.com/intro
@@ -1440,3 +1448,39 @@ policy:
       <<: *ecos_daily_params
       stat_code: "817Y002"
       item_code1: "010504000"
+
+  # ========== [업비트 가상자산 일별 데이터 : 5개] ==========
+  upbit_krw_usdt_daily:
+    <<: *upbit_daily_base
+    description: "업비트 테더(USDT) 일봉 (크립토 달러 환율 및 김치 프리미엄 측정용)"
+    params:
+      <<: *upbit_daily_params
+      market: "KRW-USDT"
+
+  upbit_krw_btc_daily:
+    <<: *upbit_daily_base
+    description: "업비트 비트코인(BTC) 일봉 (글로벌 매크로 및 가상자산 베타 측정용)"
+    params:
+      <<: *upbit_daily_params
+      market: "KRW-BTC"
+
+  upbit_krw_eth_daily:
+    <<: *upbit_daily_base
+    description: "업비트 이더리움(ETH) 일봉 (글로벌 매크로 및 테크 인프라 베타 측정용)"
+    params:
+      <<: *upbit_daily_params
+      market: "KRW-ETH"
+
+  upbit_krw_sol_daily:
+    <<: *upbit_daily_base
+    description: "업비트 솔라나(SOL) 일봉 (글로벌 Risk-On 선호도 측정용)"
+    params:
+      <<: *upbit_daily_params
+      market: "KRW-SOL"
+
+  upbit_krw_xrp_daily:
+    <<: *upbit_daily_base
+    description: "업비트 리플(XRP) 일봉 (국내 리테일 투기성 및 유동성 과열 측정용)"
+    params:
+      <<: *upbit_daily_params
+      market: "KRW-XRP"
