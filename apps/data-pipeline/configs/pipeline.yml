@@ -11,7 +11,7 @@ tasks:
   # Task 1. 거시경제 및 주요 지수 배치 (매일 장 마감 후 실행 목적)
   # ----------------------------------------------------------------------------
   bronze_daily_batch:
-    description: "국내외 주요 증시 지수, 환율, 원자재 일일 수집"
+    description: "글로벌 거시경제 핵심 지표 일일 수집 배치"
     target_loader: "aws" # loader.yml의 최상위 노드 참조 (S3 적재)
     extract_jobs:
       # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
@@ -76,6 +76,9 @@ tasks:
       - "kis_kosdaq_venture_daily"
       - "kis_kosdaq_mid_size_business_daily"
       - "kis_kosdaq_tech_growth_daily"
+
+      # ========== [S&P500 지수 일별 데이터 : 1개] ==========
+      - "kis_snp500_daily"
 
       # ========== [NASDAQ 지수 일별 데이터 : 13개] ==========
       - "kis_nasdaq_daily"
@@ -198,3 +201,46 @@ tasks:
       - "kis_commodity_wti_daily"
       - "kis_commodity_dubai_daily"
       - "kis_commodity_brent_daily"
+
+      # ========== [미국 국채 금리 일별 데이터 : 4개] ==========
+      - fred_us_treasury_2y_daily
+      - fred_us_treasury_5y_daily
+      - fred_us_treasury_10y_daily
+      - fred_us_treasury_30y_daily
+
+      # ========== [시장금리 일별 데이터 : 28개] ==========
+      - "ecos_bok_base_rate_daily"
+      - "ecos_call_1d_all_daily"
+      - "ecos_call_1d_broker_daily"
+      - "ecos_call_1d_bank_sec_daily"
+      - "ecos_kofr_daily"
+      - "ecos_koribor_3m_daily"
+      - "ecos_koribor_6m_daily"
+      - "ecos_koribor_12m_daily"
+      - "ecos_cd_91d_daily"
+      - "ecos_cp_91d_daily"
+      - "ecos_nhb_1_5y_daily"
+      - "ecos_ktb_1y_daily"
+      - "ecos_ktb_2y_daily"
+      - "ecos_ktb_3y_daily"
+      - "ecos_ktb_5y_daily"
+      - "ecos_ktb_10y_daily"
+      - "ecos_ktb_20y_daily"
+      - "ecos_ktb_30y_daily"
+      - "ecos_ktb_50y_daily"
+      - "ecos_msb_91d_daily"
+      - "ecos_msb_1y_daily"
+      - "ecos_msb_2y_daily"
+      - "ecos_kdb_1y_daily"
+      - "ecos_cb_3y_aa_minus_daily"
+      - "ecos_cb_3y_bbb_minus_daily"
+      - "ecos_cb_3y_aa_minus_minpyung_daily"
+      - "ecos_mmf_7d_daily"
+      - "ecos_cma_daily"
+
+      # ========== [업비트 가상자산 일별 데이터 : 5개] ==========
+      - "upbit_krw_usdt_daily"
+      - "upbit_krw_btc_daily"
+      - "upbit_krw_eth_daily"
+      - "upbit_krw_sol_daily"
+      - "upbit_krw_xrp_daily"

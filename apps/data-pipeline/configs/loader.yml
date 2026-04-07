@@ -19,9 +19,9 @@ aws:
 
     # [참고] 멀티파트 업로드 임계값 및 스레드 튜닝 (현재는 코드에 상수로 있으나,
     # 향후 동적 설정이 필요할 경우를 대비한 예약 필드)
-    tuning:
-      multipart_threshold_mb: 10
-      max_concurrency: 10
+  tuning:
+    multipart_threshold_mb: 10
+    max_concurrency: 10
 
 # ------------------------------------------------------------------------------
 # [2] 관계형 DB 적재기 설정 (PostgreSQLLoader)
