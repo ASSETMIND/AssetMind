@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 10m
+
+scrape_configs:
+  # Auth 서버 수집 설정
+  - job_name: 'assetmind-auth-server'
+    metrics_path: '/manage/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+
+  # Stock 서버 수집 설정
+  - job_name: 'assetmind-stock-server'
+    metrics_path: '/manage/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:9091']
