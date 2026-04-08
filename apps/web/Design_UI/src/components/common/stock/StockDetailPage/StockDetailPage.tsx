@@ -310,10 +310,12 @@ export const StockDetailPage = ({
       style={{
         width: containerWidth,
         backgroundColor: "#131316",
-        minHeight: isMobile ? "852px" : "100vh",
+        height: isMobile ? "852px" : isTablet ? "1024px" : "auto",
+        minHeight: isMobile || isTablet ? undefined : "100vh",
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
+        overflow: isMobile || isTablet ? "hidden" : undefined,
       }}
     >
       {/* ── 헤더 ── */}
