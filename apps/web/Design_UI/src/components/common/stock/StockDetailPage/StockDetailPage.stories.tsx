@@ -6,14 +6,6 @@ import type { OrderbookRow, MarketInfo } from "../OrderbookTable/OrderbookTable"
 import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 import type { SparklineDataPoint } from "../AIPredictionPanel/SparklineChart";
 import type { AnalysisData } from "../AIPredictionPanel/PredictionAnalysisWidget";
-type AnalysisDataWithTabs = AnalysisData & {
-  tabs: string[];
-  activeTab: string;
-  items: {
-    type: "warning" | "neutral" | "positive";
-    text: string;
-  }[];
-};
 
 // ════════════════════════════════════════════════════════════════
 // Mock Data
@@ -137,24 +129,25 @@ const MOCK_AI_FORECAST: SparklineDataPoint[] = [
   { time: "2026-03-29", value: 80000 },
 ];
 
-const MOCK_AI_ANALYSIS: AnalysisDataWithTabs = {
+// AnalysisData 타입 그대로 사용 — 불필요한 tabs/activeTab/items 필드 제거
+const MOCK_AI_ANALYSIS: AnalysisData = {
   "기술적 지표": [
-    { type: "warning", text: "경고 또는 위험 신호가 있는 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
+    { type: "warning",  text: "경고 또는 위험 신호가 있는 내용" },
+    { type: "neutral",  text: "중립이거나 추가 확인이 필요한 내용" },
     { type: "positive", text: "긍정적 신호가 있는 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
+    { type: "neutral",  text: "중립이거나 추가 확인이 필요한 내용" },
+    { type: "neutral",  text: "중립이거나 추가 확인이 필요한 내용" },
   ],
-  "시장 심리": [],
-  "수급 동향": [],
-  tabs: ["기술적 지표", "시장 심리", "수급 동향"],
-  activeTab: "기술적 지표",
-  items: [
-    { type: "warning", text: "경고 또는 위험 신호가 있는 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
-    { type: "positive", text: "긍정적 신호가 있는 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
-    { type: "neutral", text: "중립이거나 추가 확인이 필요한 내용" },
+  "시장 심리": [
+    { type: "positive", text: "투자자 심리 지수 낙관 구간 진입" },
+    { type: "neutral",  text: "외국인 순매수 흐름 지속 중" },
+    { type: "warning",  text: "공매도 비율 단기 급등 감지" },
+  ],
+  "수급 동향": [
+    { type: "neutral",  text: "기관 순매수 전환 신호 감지" },
+    { type: "positive", text: "외국인 대규모 매수 유입" },
+    { type: "warning",  text: "개인 투자자 과매도 구간 진입" },
+    { type: "neutral",  text: "프로그램 매매 비중 중립" },
   ],
 };
 
@@ -186,7 +179,7 @@ const COMMON_ARGS = {
   aiPredictedPrice: 80000,
   aiPriceDiff: 17000,
   aiChangeRate: 26.98,
-  aiBaseDate: "2025년 03월 26일",
+  aiBaseDate: "2026년 03월 26일",
   aiUpProbability: 72,
   aiDownProbability: 28,
   aiAnalysisData: MOCK_AI_ANALYSIS,
@@ -236,7 +229,7 @@ const meta: Meta<typeof StockDetailPage> = {
     orderbookState: {
       control: "radio",
       options: ["default", "skeleton", "error", "empty"],
-      description: "호가창 패널 상태 (isMarketClosed=true 이면 empty 강제)",
+      description: "호가창 패널 상태 (isMarketClosed=true이면 empty 강제)",
     },
     aiState: {
       control: "radio",
