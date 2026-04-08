@@ -4,6 +4,7 @@ import { useWebSocket } from '../web-socket/use-web-socket';
 import { useStockStore } from '../../store/use-stock-store';
 import type { StockRankingDto } from '../../types/stock';
 import { STOCK_WS_URL, getStockRanking } from '../../api/stock';
+import { usePageVisibility } from '../common/use-page-visibility';
 
 export type RankingType = 'VALUE' | 'VOLUME';
 
@@ -20,18 +21,24 @@ const formatStockData = (item: any): StockRankingDto => ({
 
 /**
  * 주식 랭킹 데이터를 관리하는 훅 (최적화 버전)
+ * - Page Visibility API: 탭 비활성화 시 소켓 연결 해제 및 연산 중지
  * - Throttling & Batching: 300ms 주기로 일괄 업데이트하여 렌더링 부하 감소
- * - Zustand Store 연동: 전역 스토어를 업데이트하여 개별 아이템 지점 업데이트 지원
+ * - Resume Sync: 포그라운드 전환 시 최신 데이터 재조회
  */
 export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
-	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
+	const isVisible = usePageVisibility();
+
+	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL, {
+		autoDisconnectInBackground: true,
+	});
+
 	const { setInitialStocks, updateStocks } = useStockStore();
-	
+
 	const messageBuffer = useRef<StockRankingDto[]>([]);
 	const queryKey = ['stockRanking', type, limit];
 
 	// 초기 데이터 로드 (React Query)
-	const { isLoading } = useQuery<StockRankingDto[]>({
+	const { isLoading, refetch } = useQuery<StockRankingDto[]>({
 		queryKey,
 		queryFn: async () => {
 			const data = await getStockRanking(type, limit);
@@ -43,14 +50,23 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 		staleTime: 1000 * 60,
 	});
 
+	// 탭이 다시 활성화될 때 최신 데이터 동기화 (Resume logic)
 	useEffect(() => {
-		if (!isConnected) return;
+		if (isVisible) {
+			console.log('Tab visible: Refreshing stock ranking data...');
+			refetch();
+		}
+	}, [isVisible, refetch]);
+
+	useEffect(() => {
+		// 연결되지 않았거나 탭이 백그라운드면 실행하지 않음
+		if (!isConnected || !isVisible) return;
 
 		const topic = `/topic/ranking/${type.toLowerCase()}`;
 		const subscription = subscribe(topic, (data: any) => {
 			const rawList = Array.isArray(data) ? data : [data];
 			const parsedList = rawList.map(formatStockData);
-			
+
 			// 버퍼에 데이터 추가
 			messageBuffer.current.push(...parsedList);
 		});
@@ -62,8 +78,7 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 			const currentBuffer = [...messageBuffer.current];
 			messageBuffer.current = []; // 버퍼 비우기
 
-			// 전역 스토어에 일괄 업데이트 요청
-			// 이 시점에 스토어의 stockMap과 stockCodes가 갱신됩니다.
+			// 전역 스토어에 일괄 업데이트 요청 (Worker 연산 트리거)
 			updateStocks(currentBuffer, type, limit);
 		}, 300);
 
@@ -71,7 +86,7 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 			subscription?.unsubscribe();
 			clearInterval(batchInterval);
 		};
-	}, [isConnected, subscribe, limit, type, updateStocks]);
+	}, [isConnected, isVisible, subscribe, limit, type, updateStocks]);
 
 	return { isConnected, isLoading };
 };
