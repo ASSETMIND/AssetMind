@@ -19,10 +19,12 @@
     domain: "domestic-stock"
     path: "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
     tr_id: "FHKUP03500100"
+    chunk_size: 100
+    base_date: "19900101"
   kis_domestic_params: &kis_domestic_params
     FID_COND_MRKT_DIV_CODE: "U"
-    FID_INPUT_DATE_1: "20240101"
-    FID_INPUT_DATE_2: "20240131"
+    FID_INPUT_DATE_1: "$START_DATE"
+    FID_INPUT_DATE_2: "$END_DATE"
     FID_PERIOD_DIV_CODE: "D"
 
   # 2. KIS 해외 원자재 ETF 공통 템플릿
@@ -31,10 +33,12 @@
     domain: "overseas-price"
     path: "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
     tr_id: "FHKST03030100"
+    chunk_size: 100
+    base_date: "20000101"
   kis_overseas_params: &kis_overseas_params
     FID_COND_MRKT_DIV_CODE: "N"
-    FID_INPUT_DATE_1: "20240101"
-    FID_INPUT_DATE_2: "20240131"
+    FID_INPUT_DATE_1: "$START_DATE"
+    FID_INPUT_DATE_2: "$END_DATE"
     FID_PERIOD_DIV_CODE: "D"
 
   # 3. KIS 해외 환율 공통 템플릿
@@ -43,42 +47,59 @@
     domain: "overseas-price"
     path: "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
     tr_id: "FHKST03030100"
+    chunk_size: 100
+    base_date: "20030101"
   kis_fx_params: &kis_fx_params
     FID_COND_MRKT_DIV_CODE: "X"
-    FID_INPUT_DATE_1: "20240101"
-    FID_INPUT_DATE_2: "20240131"
+    FID_INPUT_DATE_1: "$START_DATE"
+    FID_INPUT_DATE_2: "$END_DATE"
     FID_PERIOD_DIV_CODE: "D"
 
-  # 4. ECOS 공통 베이스 템플릿
+  # 4. FRED 공통 베이스 템플릿
+  fred_base: &fred_base
+    provider: "FRED"
+    path: "/series/observations"
+    chunk_size: 3650
+    base_date: "19600101"
+  fred_params: &fred_params
+    frequency: "d"
+    observation_start: "$START_DATE_DASH"
+    observation_end: "$END_DATE_DASH"
+
+  # 5. ECOS 공통 베이스 템플릿
   ecos_base: &ecos_base
     provider: "ECOS"
     path: "/StatisticSearch"
+    chunk_size: 10000
+    base_date: "19990101"
 
-  # 5. ECOS 일별(D) 파라미터 공통 템플릿
+  # 6. ECOS 일별(D) 파라미터 공통 템플릿
   ecos_daily_params: &ecos_daily_params
     cycle: "D"
-    start_date: "20240101"
-    end_date: "20241231"
+    start_date: "$START_DATE"
+    end_date: "$END_DATE"
 
-  # 6. ECOS 월별(M) 파라미터 공통 템플릿
+  # 7. ECOS 월별(M) 파라미터 공통 템플릿
   ecos_monthly_params: &ecos_monthly_params
     cycle: "M"
-    start_date: "202401"
-    end_date: "202412"
+    start_date: "$START_DATE"
+    end_date: "$END_DATE"
 
-  # 7. ECOS 분기별(Q) 파라미터 공통 템플릿
+  # 8. ECOS 분기별(Q) 파라미터 공통 템플릿
   ecos_quarterly_params: &ecos_quarterly_params
     cycle: "Q"
-    start_date: "2024Q1"
-    end_date: "2024Q4"
+    start_date: "$START_DATE"
+    end_date: "$END_DATE"
 
-  # 8. UPBIT 일별 캔들 공통 템플릿 (ECOS, KIS와 동일한 날짜 인터페이스 적용)
+  # 9. UPBIT 일별 캔들 공통 템플릿
   upbit_daily_base: &upbit_daily_base
     provider: "UPBIT"
     path: "/v1/candles/days"
+    chunk_size: 200
+    base_date: "20170901"
   upbit_daily_params: &upbit_daily_params
-    start_date: "20240101"
-    end_date: "20241231"
+    start_date: "$START_DATE"
+    end_date: "$END_DATE"
 
 policy:
   # ----------------------------------------------------------------------------
@@ -1184,41 +1205,34 @@ policy:
   # FRED : https://fred.stlouisfed.org/categories
   # ----------------------------------------------------------------------------
 
-  # 미국 국채 2년물
+  # ========== [미국 국채 금리 일별 데이터 : 4개] ==========
   fred_us_treasury_2y_daily:
-    provider: "FRED"
+    <<: *fred_base
     description: "미국 국채 금리 2년물 (일별)"
-    path: "/series/observations"
     params:
+      <<: *fred_params
       series_id: "DGS2"
-      frequency: "d"
 
-  # 미국 국채 5년물
   fred_us_treasury_5y_daily:
-    provider: "FRED"
+    <<: *fred_base
     description: "미국 국채 금리 5년물 (일별)"
-    path: "/series/observations"
     params:
+      <<: *fred_params
       series_id: "DGS5"
-      frequency: "d"
 
-  # 미국 국채 10년물 (시장 벤치마크)
   fred_us_treasury_10y_daily:
-    provider: "FRED"
+    <<: *fred_base
     description: "미국 국채 금리 10년물 (일별)"
-    path: "/series/observations"
     params:
+      <<: *fred_params
       series_id: "DGS10"
-      frequency: "d"
 
-  # 미국 국채 30년물
   fred_us_treasury_30y_daily:
-    provider: "FRED"
+    <<: *fred_base
     description: "미국 국채 금리 30년물 (일별)"
-    path: "/series/observations"
     params:
+      <<: *fred_params
       series_id: "DGS30"
-      frequency: "d"
 
   # ----------------------------------------------------------------------------
   # ECOS (한국은행 경제통계시스템) : https://ecos.bok.or.kr/api/
