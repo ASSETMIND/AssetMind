@@ -84,7 +84,7 @@ class ExtractorService:
         # [설계 의도] 커넥션 풀(Connection Pool)은 비용이 큰 자원이므로 인스턴스 생성 시점이 아닌, 
         # 실제 I/O가 발생하는 시점(Context Entry)에 지연 초기화(Lazy Initialization)하여 불필요한 리소스 점유를 방지함.
         if self._http_client is None and self._owns_client:
-            self._http_client = AsyncHttpAdapter(timeout=30)
+            self._http_client = AsyncHttpAdapter()
             self._logger.info("ExtractorService 내부 HTTP 클라이언트를 초기화합니다.")
         return self
 
