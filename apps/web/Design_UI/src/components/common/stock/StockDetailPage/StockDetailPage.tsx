@@ -237,8 +237,12 @@ export const StockDetailPage = ({
     onTabChange?.(tab as DetailTab);
   };
 
-  const resolvedOrderbookStatus: "default" | "skeleton" | "error" | "empty" =
+  // isMarketClosed → 호가창·AI 패널 모두 empty 강제
+  const resolvedOrderbookStatus: PanelState =
     isMarketClosed ? "empty" : orderbookState;
+
+  const resolvedAIStatus: PanelState =
+    isMarketClosed ? "empty" : aiState;
 
   // ── 차트 패널 ─────────────────────────────────────────────
   const renderChart = (width: number, height: number) => (
@@ -280,10 +284,10 @@ export const StockDetailPage = ({
     />
   );
 
-  // ── AI 예측 패널 ──────────────────────────────────────────
+  // ── AI 예측 패널 — isMarketClosed 시 status="empty" 전달 ──
   const renderAI = () => (
     <AIPredictionPanel
-      status={aiState}
+      status={resolvedAIStatus}
       viewport={viewport}
       onRetry={onRetry}
       period={aiPeriod}
@@ -306,10 +310,12 @@ export const StockDetailPage = ({
       style={{
         width: containerWidth,
         backgroundColor: "#131316",
-        minHeight: "100vh",
+        height: isMobile ? "852px" : isTablet ? "1024px" : "auto",
+        minHeight: isMobile || isTablet ? undefined : "100vh",
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
+        overflow: isMobile || isTablet ? "hidden" : undefined,
       }}
     >
       {/* ── 헤더 ── */}
@@ -328,7 +334,7 @@ export const StockDetailPage = ({
 
       <div style={{ flex: 1 }}>
 
-        {/* ══ 차트·호가 탭 — 데스크톱 ════════════════════ */}
+        {/* ══ 차트·호가 탭 — 데스크톱 ══════════════════════════ */}
         {activeTab === "chart" && !isMobile && !isTablet && (
           <div
             style={{
@@ -356,7 +362,7 @@ export const StockDetailPage = ({
           </div>
         )}
 
-        {/* ══ 차트·호가 탭 — 태블릿 ══════════════════ */}
+        {/* ══ 차트·호가 탭 — 태블릿 ══════════════════════════ */}
         {activeTab === "chart" && isTablet && (
           <div
             style={{
@@ -377,7 +383,7 @@ export const StockDetailPage = ({
           </div>
         )}
 
-        {/* ══ 차트·호가 탭 — 모바일 ════════════════════*/}
+        {/* ══ 차트·호가 탭 — 모바일 ══════════════════════════ */}
         {activeTab === "chart" && isMobile && (
           <div
             style={{
@@ -427,7 +433,7 @@ export const StockDetailPage = ({
           <div style={{
             padding: "12px",
             display: "flex",
-            justifyContent: "center"
+            justifyContent: "center",
           }}>
             {renderAI()}
           </div>

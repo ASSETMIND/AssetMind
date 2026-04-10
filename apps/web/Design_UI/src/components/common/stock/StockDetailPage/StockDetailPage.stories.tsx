@@ -256,7 +256,7 @@ const tabletDec = (Story: React.ComponentType) => (
   <div style={{ width: "768px" }}><Story /></div>
 );
 const mobileDec = (Story: React.ComponentType) => (
-  <div style={{ width: "393px" }}><Story /></div>
+  <div style={{ width: "393px", height: "852px", overflow: "hidden" }}><Story /></div>
 );
 
 // ════════════════════════════════════════════════════════════════
