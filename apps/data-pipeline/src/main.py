@@ -41,7 +41,7 @@ load_dotenv()
 # ==============================================================================
 # [설계 의도] 실행할 기본 태스크 이름 지정. pipeline.yml 파일에 정의된 태스크 키와 
 # 정확히 일치해야 파이프라인이 구동됨. 향후 동적 실행 기능(argparse) 도입 시 기본값(Default)으로 활용 가능.
-TARGET_TASK: str = "daily_macro_batch"
+TARGET_TASK: str = "bronze_daily_batch"
 
 # ==============================================================================
 # Custom Exceptions
@@ -58,10 +58,10 @@ async def main() -> None:
     하위 네트워크 리소스(HTTP Session 등)가 누수 없이 안전하게 할당 및 해제되도록 보장합니다.
     """
     # [설계 의도] 기존 "pipeline"이라는 잘못된 범용 명칭 대신, 
-    # pipeline.yml에 실제로 존재하는 "daily_macro_batch"를 명시적으로 주입하여 
+    # pipeline.yml에 실제로 존재하는 "bronze_daily_batch"를 명시적으로 주입하여 
     # 초기화 시점의 설정 에러(ConfigurationError) 및 빈 작업(EMPTY_JOBS) 상태를 조기 방지함.
     async with PipelineService(TARGET_TASK) as pipeline:
-        result = await pipeline.run_batch()
+        result = await pipeline.run_batch(extract_mode="LEGACY") # extract_mode = ["TODAY", "LEGACY"] 중 선택 가능
         
         # [설계 의도] 내장 print() 함수 사용을 엄격히 금지하고 시스템 표준 로거(logging)를 활용.
         # 이를 통해 파이프라인의 최종 결과가 콘솔뿐만 아니라 ELK/Datadog 등의 중앙 로그 수집기에 정상 적재되도록 보장함.
