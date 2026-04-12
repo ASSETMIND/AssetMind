@@ -118,6 +118,8 @@ class JobPolicy(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict)
     tr_id: Optional[str] = None
     domain: Optional[str] = None
+    chunk_size: int
+    base_date: str
 
 class PipelineTask(BaseModel):
     """pipeline.yml에 정의된 개별 파이프라인 조립(Task) 스키마."""

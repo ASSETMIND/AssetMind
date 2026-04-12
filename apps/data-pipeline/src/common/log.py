@@ -39,6 +39,7 @@ Trade-off:
 import json
 import logging
 import os
+import re
 import socket
 import sys
 import threading
@@ -215,8 +216,33 @@ class ColorFormatter(logging.Formatter):
         
         # 5. 메시지 포매팅
         msg = record.getMessage()
+
+        # [설계 의도] 에러/경고 발생 시 Raw Dictionary 포맷의 노이즈를 제거하고 가독성을 극대화
+        if record.levelno >= logging.WARNING:
+            # 5-1. 딕셔너리 형태의 문자열(dict string) 클렌징
+            # 패턴: {'error_type': 'XXX', 'message': 'YYY', ...} -> [XXX] YYY
+            msg = re.sub(
+                r"\{'?error_type'?:\s*['\"]([^'\"]+)['\"],\s*'?message'?:\s*['\"]([^'\"]+)['\"].*?(?:\}|$)", 
+                r"[\1] \2", 
+                msg
+            )
+
+            # 5-2. log_decorator에서 주입한 상세 Details 파트 잘라내기
+            if " | Details: " in msg:
+                msg = msg.split(" | Details: ")[0]
+                
+            # 5-3. 콘솔 가독성을 위한 최종 길이 제한 (Fail-Safe)
+            if len(msg) > 100:
+                msg = msg[:100] + "..."
+                
+            # 5-4. 안내 문구 일괄 병합 (메시지 처리가 끝난 후 마지막에 한 번만 붙임)
+            msg += f" {self.DIM}(상세 내용은 JSON 파일 참조){self.RESET}"
+
+        # 6. 레벨별 하이라이팅 적용
         if record.levelno >= logging.ERROR:
             # 에러 발생 시 전체 붉은색 렌더링
+            msg = f"{color}{msg}{self.RESET}"
+        elif record.levelno == logging.WARNING:
             msg = f"{color}{msg}{self.RESET}"
         elif record.levelno == logging.INFO:
             # 전체 작업의 성공/실패 여부를 요약하는 핵심 지표(Summary) 메시지 강조

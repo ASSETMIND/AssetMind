@@ -14,12 +14,17 @@
 - Asynchronous I/O: aiohttp 기반의 논블로킹 네트워크 연산을 통한 고성능 동시성(Concurrency) 보장.
 - Resilience (회복 탄력성): `@retry` 데코레이터를 활용한 일시적 네트워크 장애(Timeout 등) 자동 복구 메커니즘.
 - Observability (가시성): `@log_decorator`를 통한 HTTP 요청/응답 페이로드 및 지연 시간(Latency) 추적.
-- Connection Pooling: 세션(ClientSession) 객체의 재사용을 통한 TCP Handshake 및 SSL/TLS Negotiation 오버헤드 최소화.
+- Connection Pooling: 세션(ClientSession) 객체의 재사용을 통한 TCP Handshake 및 SSL/TLS 최적화.
 
 Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약.
-- 장점: 비즈니스 로직(순수 데이터 수집)과 횡단 관심사(로깅, 재시도, 커넥션 관리)를 데코레이터와 어댑터 패턴으로 완벽히 분리하여 응집도를 극대화함. 외부 라이브러리 교체 시 도메인 코드 수정이 불필요함.
-- 단점: 데코레이터 체이닝 및 비동기 컨텍스트 스위칭으로 인해 호출 스택(Call Stack)이 깊어지고 미세한 Reflection 오버헤드가 발생함.
-- 근거: 외부 API(KIS, FRED 등) 통신 시 필연적으로 발생하는 네트워크 I/O 지연(수십~수백 ms)에 비하면 데코레이터 오버헤드(수 us)는 무시할 수 있는 수준임. 분산 파이프라인 환경에서는 미세한 성능 최적화보다 운영 안정성(Observability & Fault Tolerance) 확보가 압도적으로 중요함.
+1. aiohttp 클라이언트 캡슐화 (기존):
+   - 장점: 파이프라인 전역에서 외부 라이브러리(aiohttp)에 대한 강결합을 제거하여, 향후 httpx 등으로 교체 시 유지보수가 극도로 용이함.
+   - 단점: 단순 API 호출을 위해 어댑터 클래스를 한 번 더 거쳐야 하므로 미세한 함수 호출 오버헤드가 존재함.
+   - 근거: 대규모 데이터 파이프라인에서 인프라 교체 유연성과 공통 에러/로깅 규격 강제는 오버헤드를 감수할 만큼의 압도적인 이점을 제공함.
+2. TCPConnector Limit 상향 및 Global/Local Timeout 하이브리드 적용 (신규):
+   - 장점: 다수의 수집기가 동시에 요청을 보내도 소켓 큐잉 지연이 발생하지 않으며, 기존 메서드 시그니처(`timeout` 파라미터)를 유지하여 하위 모듈의 수정(산탄총 수술)을 완벽히 방지함.
+   - 단점: 커넥션 풀(Limit=100)을 넓게 유지하므로 OS 레벨의 파일 디스크립터(FD) 사용량이 일시적으로 상승함.
+   - 근거: 동시 실행(Concurrent Execution) 시 발생하는 Thundering Herd 병목을 해소하기 위해 파이프를 확장하는 것이며, 메서드 레벨의 timeout 파라미터를 보존하여 하위 호환성을 100% 보장하는 것이 객체지향 원칙에 부합함.
 """
 
 import asyncio
@@ -33,6 +38,14 @@ from src.common.exceptions import NetworkConnectionError
 from src.common.interfaces import IHttpClient
 from src.common.log import LogManager
 
+# ==============================================================================
+# Constants & Configuration
+# ==============================================================================
+# [설계 의도] 다중 API 동시 수집 시의 네트워크 병목을 해소하기 위한 명시적 자원 할당량
+MAX_CONNECTION_LIMIT = 100
+DNS_CACHE_TTL = 300
+TOTAL_TIMEOUT_SECONDS = 30.0
+CONNECT_TIMEOUT_SECONDS = 10.0
 
 # ==============================================================================
 # [Main Class] AsyncHttpAdapter
@@ -48,15 +61,13 @@ class AsyncHttpAdapter(IHttpClient):
         _session (Optional[aiohttp.ClientSession]): 재사용 가능한 HTTP 커넥션 세션 풀.
     """
 
-    def __init__(self, timeout: int = 30) -> None:
+    def __init__(self) -> None:
         """AsyncHttpAdapter 인스턴스를 초기화합니다.
 
         Args:
             timeout (int, optional): 전체 요청 타임아웃 시간(초). Defaults to 30.
         """
         # [설계 의도] 대용량 데이터 수집이나 외부 API의 일시적 지연을 고려하여 
-        # 넉넉한 타임아웃(기본 30초)을 설정함으로써 불필요한 실패를 방지함.
-        self.timeout: aiohttp.ClientTimeout = aiohttp.ClientTimeout(total=timeout)
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def __aenter__(self) -> "AsyncHttpAdapter":
@@ -86,15 +97,29 @@ class AsyncHttpAdapter(IHttpClient):
         await self.close()
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """현재 활성화된 커넥션 세션을 반환하거나, 없을 경우 새로 생성합니다.
-        
-        Returns:
-            aiohttp.ClientSession: 초기화 및 연결 대기 중인 HTTP 세션.
-        """
-        # [설계 의도] 매 요청마다 새로운 세션을 만들면 TCP Handshake 비용이 심각하게 발생함.
-        # 인스턴스 내에서 Singleton-like하게 연결 풀을 유지(Keep-Alive)하여 성능을 극대화함.
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self.timeout)
+        """싱글톤 패턴 기반의 aiohttp 클라이언트 세션을 초기화하고 반환합니다."""
+        if self._session is None:
+            # 1. Connection Pool & DNS Cache 최적화
+            # [설계 의도] SSL/TLS 핸드셰이크와 DNS 룩업은 초기 비동기 통신에서 가장 큰 병목입니다.
+            # Limit을 넉넉히 열어 대기열 지연을 없애고, DNS 캐시를 활용하여 컨텍스트 스위칭 속도를 극대화합니다.
+            connector = aiohttp.TCPConnector(
+                limit=MAX_CONNECTION_LIMIT,
+                ttl_dns_cache=DNS_CACHE_TTL,
+                use_dns_cache=True
+            )
+            
+            # 2. Timeout Policy 강화
+            # [설계 의도] 특정 외부 API 서버가 일시적으로 먹통이 되었을 때 파이프라인 전체가 
+            # 멈춰버리는 것을 방지하기 위해 연결(10초) 및 전체 응답(30초) 데드라인을 강제합니다.
+            timeout = aiohttp.ClientTimeout(
+                total=TOTAL_TIMEOUT_SECONDS, 
+                connect=CONNECT_TIMEOUT_SECONDS
+            )
+            
+            self._session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout
+            )
         return self._session
 
     async def close(self) -> None:
@@ -108,7 +133,7 @@ class AsyncHttpAdapter(IHttpClient):
         self, 
         url: str, 
         headers: Optional[Dict[str, str]] = None, 
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """비동기 HTTP GET 요청을 수행합니다.
 

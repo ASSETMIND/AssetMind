@@ -37,15 +37,15 @@ except ImportError:
 
 
 # ==============================================================================
-# 3. Constants & Configuration
+# Constants & Configuration
 # ==============================================================================
 
 # 기본 최대 대기 허용 시간 (초)
-DEFAULT_MAX_WAIT_SECONDS: float = 30.0
+DEFAULT_MAX_WAIT_SECONDS: float = 120.0
 
 
 # ==============================================================================
-# [Inner Class] Rate Limit Bucket
+# Rate Limit Bucket
 # ==============================================================================
 
 class RateLimitBucket:
