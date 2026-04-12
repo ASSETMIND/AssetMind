@@ -3,10 +3,12 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '2m', target: 500}, // 1분동안 VU(가상 유저)를 0에서 50까지 점진적 증가
-    { duration: '5m', target: 500}, // 3분 동안 50명 유지
-    { duration: '10m', target: 1000}, // 100명으로 증가
-    { duration: '2m', target: 0}, // 종료
+    { duration: '1m', target: 50 },  // 1단계: 50명
+    { duration: '2m', target: 50 },  // 50명 유지
+    { duration: '1m', target: 200 }, // 2단계: 200명 (톰캣 기본 스레드 200개)
+    { duration: '2m', target: 200 }, // 200명 유지
+    { duration: '1m', target: 500 }, // 3단계: 500명
+    { duration: '1m', target: 0 },   // 쿨다운
   ],
   thresholds: {
     http_req_failed: ['rate<0.01'], // 에러율 1% 미만 유지
