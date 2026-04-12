@@ -45,7 +45,6 @@ export const MobileTabSwitcher = ({
     onChange?.(val);
   };
 
-  // Sticky 감지 — sentinel 요소가 뷰포트 아래로 사라지면 sticky 상태
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -75,7 +74,7 @@ export const MobileTabSwitcher = ({
         aria-orientation="horizontal"
       >
         {/* w-[393px] h-[64px], 좌우 패딩 40px, 상하 패딩 10px, 탭 간격 자동(justify-between) */}
-        <div className="w-[393px] h-[64px] flex items-center justify-between px-[40px] py-[10px]">
+        <div className="w-full h-[64px] flex items-center justify-between px-[40px] py-[10px]">
           {items.map((item) => {
             const isActive = activeValue === item.value;
             return (
