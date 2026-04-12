@@ -4,63 +4,294 @@ export const meta = {
 
 # AssetMind Design System
 
-Welcome to AssetMind's design system documentation.
+AssetMind 주식 정보 서비스의 디자인 시스템 Storybook입니다.
+컴포넌트 탐색, 상태별 시나리오 검증, Mock 데이터 교체까지 이 페이지 하나로 시작하세요.
 
 ---
 
-## Overview
+## 빠른 시작
 
-This design system provides a comprehensive set of design tokens, components, and guidelines for building consistent user interfaces across AssetMind products.
-
----
-
-## What's Inside
-
-### Foundation
-
-Core design elements that form the basis of our design language:
-
-- **Design Tokens**: Colors, typography, spacing scales
-- **Typography**: Font styles and text formatting
-- **Colors**: Color palette and usage guidelines
-- **Spacing**: Layout and spacing system
-
-### Components
-
-Reusable UI components built with React and TypeScript:
-
-- Authentication components
-- Common UI elements
-- Form controls
-- Navigation components
-- Feedback components
+```bash
+cd apps/web/Design_UI
+npm run storybook
+# → http://localhost:6006
+```
 
 ---
 
-## Getting Started
+## 사이드바 구조
 
-1. **Explore Design Tokens**: Start with our Foundation section to understand core design elements
-2. **Browse Components**: Check out the Components section for ready-to-use UI elements
-3. **Follow Guidelines**: Each component includes usage examples and best practices
+사이드바는 **Getting Started → Foundation → Components → Docs** 순으로 구성됩니다.
+
+### Components / Stock — 페이지 단위 Story
+
+실제 서비스 페이지 수준의 통합 Story입니다. 여기서 시작하세요.
+
+<table>
+  <thead>
+    <tr>
+      <th>경로</th>
+      <th>설명</th>
+      <th>주요 확인 항목</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Components / Stock / StockDataPage</code></td>
+      <td>주가 데이터 페이지</td>
+      <td>7가지 pageState, 3종 viewport</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / StockDetailPage</code></td>
+      <td>종목 세부 페이지</td>
+      <td>탭 전환, 패널별 독립 상태, 휴장 처리</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / AIPredictionPanel</code></td>
+      <td>AI 예측 패널</td>
+      <td>스파크라인·확률바·분석 위젯 통합</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / OrderbookTable</code></td>
+      <td>호가창</td>
+      <td>desktop/mobile 10행 레이아웃</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / StockTable</code></td>
+      <td>주가 테이블</td>
+      <td>3종 viewport 컬럼 자동 조정</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / TradingViewWrapper</code></td>
+      <td>캔들스틱 차트</td>
+      <td>기간 탭, 거래량 히스토그램, 휴장 뱃지</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / TradeTickerList</code></td>
+      <td>실시간 체결 내역</td>
+      <td>신규 체결 슬라이드인 애니메이션</td>
+    </tr>
+    <tr>
+      <td><code>Components / Stock / LinearGauge</code></td>
+      <td>매수/매도 비율 바</td>
+      <td>극단값(99:1, 1:99) 최소 너비 4px 보장</td>
+    </tr>
+  </tbody>
+</table>
+
+### Components / Common — 공통 UI 컴포넌트
+
+<table>
+  <thead>
+    <tr>
+      <th>경로</th>
+      <th>설명</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Components / Common / Skeleton</code></td>
+      <td>로딩 애니메이션 (chart / table-row / card / orderbook / spinner)</td>
+    </tr>
+    <tr>
+      <td><code>Components / Common / GlobalEmptyState</code></td>
+      <td>빈 데이터 · 휴장 상태 (inline / badge)</td>
+    </tr>
+    <tr>
+      <td><code>Components / Common / LocalError</code></td>
+      <td>API 오류 + 재시도 버튼</td>
+    </tr>
+    <tr>
+      <td><code>Components / Common / Tab</code></td>
+      <td>필터·기간 탭</td>
+    </tr>
+    <tr>
+      <td><code>Components / Common / MobileTabSwitcher</code></td>
+      <td>모바일 하단 고정 탭 바</td>
+    </tr>
+    <tr>
+      <td><code>Components / Common / PriceChangeToken</code></td>
+      <td>등락률 색상 토큰</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
-## Design Principles
+## 역할별 사용 가이드
 
-- **Consistency**: Unified visual language across all products
-- **Accessibility**: WCAG 2.1 AA compliant components
-- **Performance**: Optimized for speed and efficiency
-- **Scalability**: Built to grow with your needs
+### Developer
+
+**Props 탐색**
+각 컴포넌트 Story의 **Docs 탭**을 열면 자동 생성된 Props 테이블(타입·기본값·설명)을 확인할 수 있습니다.
+
+**상태 재현**
+우측 **Controls 패널**에서 `pageState` / `status` / `viewport` / `isMarketClosed`를 실시간으로 전환하세요.
+
+**Mock 데이터 교체**
+각 `*.stories.tsx` 상단의 상수를 수정합니다.
+
+```ts
+// StockDataPage.stories.tsx
+const MOCK_ROWS: StockRow[] = [
+  { id: "1", rank: 1, name: "삼성전자", price: 75000,
+    changeRate: 2.35, tradeAmount: 980000, buyRatio: 62, isFavorite: true },
+  // ...
+];
+
+// StockDetailPage.stories.tsx
+const MOCK_STOCK = { ticker: "005930", name: "삼성전자",
+  price: 75000, changeFromYesterday: 1720, changeRate: 2.35 };
+```
+
+**반응형 확인**
+Storybook 상단 툴바의 뷰포트 아이콘 → `Mobile1 (393px)` / `Tablet (768px)` 전환
 
 ---
 
-## Resources
+### Design
 
-- [Figma Design Files](#)
-- [GitHub Repository](#)
-- [Component API Documentation](#)
+- **컴포넌트 모든 상태 확인**: Controls의 `status` = `skeleton` / `error` / `empty` 전환
+- **컬러 토큰 명도 대비**: `StockDataPage → QA — Color Contrast Check` Story
+- **레이아웃 비교**: `StockDetailPage → Desktop / Tablet / Mobile` 각 Story 나란히 확인
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: February 12, 2026
+### QA
+
+**StockDataPage 7가지 시나리오**
+
+<table>
+  <thead>
+    <tr>
+      <th>pageState</th>
+      <th>표시 내용</th>
+      <th>확인 포인트</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>default</code></td>
+      <td>주가 테이블 정상 표시</td>
+      <td>컬럼 정렬, 등락률 색상</td>
+    </tr>
+    <tr>
+      <td><code>skeleton</code></td>
+      <td>10행 로딩 애니메이션</td>
+      <td>pulse 400ms 딜레이 후 시작</td>
+    </tr>
+    <tr>
+      <td><code>realtime</code></td>
+      <td>실시간 가격 갱신</td>
+      <td>1.5~4.5초 주기 TickerAnimation</td>
+    </tr>
+    <tr>
+      <td><code>error</code></td>
+      <td>오류 메시지 + 재시도</td>
+      <td>버튼 클릭 콜백 동작</td>
+    </tr>
+    <tr>
+      <td><code>empty</code></td>
+      <td>조회 결과 없음</td>
+      <td>BoxIcon + 안내 텍스트</td>
+    </tr>
+    <tr>
+      <td><code>market-closed</code></td>
+      <td>시장 휴장 안내</td>
+      <td>MoonIcon + 안내 텍스트</td>
+    </tr>
+    <tr>
+      <td><code>extreme</code></td>
+      <td>극단값(99:1)</td>
+      <td>LinearGauge 최소 너비 4px</td>
+    </tr>
+  </tbody>
+</table>
+
+**isMarketClosed 전파 확인**
+`StockDetailPage → Desktop / Market Closed` Story에서 `isMarketClosed=true` 시 아래 3개 패널이 동시 전환되는지 확인하세요.
+- TradingViewWrapper → 우측 상단 휴장 시간 뱃지
+- OrderbookTable → 호가 데이터 숨김 + 뱃지
+- AIPredictionPanel → 매수하기 버튼 → 휴장 시간 뱃지
+
+**탭 전환 검증**
+`StockDetailPage → Desktop / Tab Switching Demo` 또는 `Mobile / Tab Switching Demo` Story에서 직접 탭을 클릭해 전환 동작을 확인하세요.
+
+---
+
+## 디자인 토큰 주요 색상
+
+<table>
+  <thead>
+    <tr>
+      <th>토큰</th>
+      <th>값</th>
+      <th>용도</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>background.primary</code></td>
+      <td><code>#131316</code></td>
+      <td>페이지 배경</td>
+    </tr>
+    <tr>
+      <td><code>background.surface</code></td>
+      <td><code>#1C1D21</code></td>
+      <td>카드·패널 배경</td>
+    </tr>
+    <tr>
+      <td><code>background.elevated</code></td>
+      <td><code>#21242C</code></td>
+      <td>인풋·태그 배경</td>
+    </tr>
+    <tr>
+      <td><code>background.hover</code></td>
+      <td><code>#2C2C30</code></td>
+      <td>호버·활성 탭 배경</td>
+    </tr>
+    <tr>
+      <td><code>status.rise</code></td>
+      <td><code>#EA580C</code></td>
+      <td>상승 (주황)</td>
+    </tr>
+    <tr>
+      <td><code>status.fall</code></td>
+      <td><code>#256AF4</code></td>
+      <td>하락 (파랑)</td>
+    </tr>
+    <tr>
+      <td><code>status.positive</code></td>
+      <td><code>#00C853</code></td>
+      <td>AI 예측 긍정 신호</td>
+    </tr>
+    <tr>
+      <td><code>status.forecast</code></td>
+      <td><code>#22C55E</code></td>
+      <td>SparklineChart 예측 라인</td>
+    </tr>
+    <tr>
+      <td><code>text.primary</code></td>
+      <td><code>#FFFFFF</code></td>
+      <td>본문 주요 텍스트</td>
+    </tr>
+    <tr>
+      <td><code>text.secondary</code></td>
+      <td><code>#9194A1</code></td>
+      <td>보조 텍스트</td>
+    </tr>
+    <tr>
+      <td><code>border.divider</code></td>
+      <td><code>#2F3037</code></td>
+      <td>구분선</td>
+    </tr>
+  </tbody>
+</table>
+
+전체 토큰은 `tailwind.config.ts`를 참고하세요.
+
+---
+
+**Version**: 2.0.0
+**Sprint**: 7 (2026-04-01 ~ 2026-04-12)
+**Last Updated**: April 12, 2026
