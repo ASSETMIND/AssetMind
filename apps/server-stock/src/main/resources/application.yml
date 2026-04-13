@@ -1,5 +1,8 @@
 server:
   port: 9090
+  tomcat:
+    mbeanregistry:
+      enabled: true # 톰캣 지표 (쓰레드, 커넥션 등) 수집 활성화
 
 spring:
   application:
@@ -41,6 +44,7 @@ spring:
         ddl-auto: validate
       properties:
         hibernate:
+          generate_statistics: true # DB 쿼리 실행 통계 활성화
           format_sql: true
           dialect: org.hibernate.dialect.PostgreSQLDialect
       database: postgresql

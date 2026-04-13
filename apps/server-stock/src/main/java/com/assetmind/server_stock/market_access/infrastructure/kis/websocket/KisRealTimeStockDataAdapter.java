@@ -108,24 +108,32 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
      */
     @EventListener
     public void handleWebSocketDisconnected(KisWebSocketDisconnectedEvent event) {
-        log.warn("[KIS Adapter] 웹소켓 끊김 이벤트 수신. 재연결 프로세스 시작 - Reconnect Task");
-        KisWebSocketHandler deadHandler = event.disconnectedHandler();
-        Account deadAccount = event.account();
-        List<String> failedChunk = event.disconnectedStocks();
+        log.warn("[KIS Adapter] 웹소켓 끊김 이벤트 수신. 기존 핸들러 제거 및 재연결 프로세스 시작");
 
-        // 연결이 끊긴 핸들러를 리스트에서 제거
-        boolean removed = activeHandlers.remove(deadHandler);
-        log.warn(">>> [Reconnect Task] 세션 끊어짐 감지. 기존 핸들러 제거({}), 3초 뒤 복구 시작", deadHandler);
+        activeHandlers.remove(event.disconnectedHandler());
 
-        // 3초 뒤에 새로운 핸들러 생성
-        Instant executionTime = Instant.now().plusSeconds(3);
+        // 최초 재연결 시도는 1회차(retryCount = 1)로 시작
+        scheduleReconnect(event.account(), event.disconnectedStocks(), 1);
+    }
+
+    /**
+     * 실패하면 스스로를 다시 호출하는 재연결 스케줄러
+     */
+    private void scheduleReconnect(Account account, List<String> chunk, int retryCount) {
+        // 재시도 횟수에 따라 대기 시간을 지수 단위로 늘림, 최대 60초
+        int delaySeconds = Math.min(3 * (int) Math.pow(2, retryCount - 1), 60);
+        Instant executionTime = Instant.now().plusSeconds(delaySeconds);
+
         taskScheduler.schedule(() -> {
-            log.info(">>> [Reconnect Task] 새로운 핸들러로 {}개 종목 재연결 시도", failedChunk.size());
+            log.info(">>> [Reconnect Task] {}개 종목 재연결 시도 ({}회차)", chunk.size(), retryCount);
 
             try {
-                establishSession(deadAccount, failedChunk);
+                establishSession(account, chunk);
+                log.info(">>> [Reconnect Task] 재연결 성공! ({}회차 만에 복구됨)", retryCount);
             } catch (Exception e) {
-                log.error(">>> [Reconnect Task] 재연결 실패", e);
+                log.error(">>> [Reconnect Task] 재연결 실패. {}초 뒤 다시 시도합니다.", delaySeconds, e);
+                // 실패했을 경우 retryCount를 올려서 다시 스케줄링!
+                scheduleReconnect(account, chunk, retryCount + 1);
             }
         }, executionTime);
     }
