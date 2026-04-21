@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.stock.application;
 
+import com.assetmind.server_stock.global.aspect.LogExecutionTime;
 import com.assetmind.server_stock.global.error.ErrorCode;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
@@ -24,6 +25,7 @@ public class ChartService {
     private final Ohlcv1mRepository ohlcv1mRepository;
     private final Ohlcv1dRepository ohlcv1dRepository;
 
+    @LogExecutionTime
     public ChartResponseDto getCandles(String stockCode, String timeframe, LocalDateTime endTime, int limit) {
         if (endTime == null) {
             endTime = LocalDateTime.now();

@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 
+import com.assetmind.server_stock.global.aspect.LogExecutionTime;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
@@ -69,6 +70,7 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
                 .toList();
     }
 
+    @LogExecutionTime
     @Override
     public List<OhlcvDto> findDynamicMinuteCandles(String stockCode, String intervalString,
             LocalDateTime endTime, int limit) {
