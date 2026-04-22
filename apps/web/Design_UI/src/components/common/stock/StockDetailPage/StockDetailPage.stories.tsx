@@ -6,6 +6,11 @@ import type { OrderbookRow, MarketInfo } from "../OrderbookTable/OrderbookTable"
 import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 import type { SparklineDataPoint } from "../AIPredictionPanel/SparklineChart";
 import type { AnalysisData } from "../AIPredictionPanel/PredictionAnalysisWidget";
+import type {
+  TrendDataPoint, TrendTableRow,
+  ProgramTradeRow, CreditTradeRow, LendingTradeRow,
+  ShortTradeRow, CfdTradeRow,
+} from "../InvestorTradePanel/InvestorTradePanel";
 
 // ════════════════════════════════════════════════════════════════
 // Mock Data
@@ -153,6 +158,111 @@ const MOCK_AI_ANALYSIS: AnalysisData = {
 
 // ─── 공통 args ────────────────────────────────────────────────
 
+const MOCK_BUY_LIST = [
+  { rank: 1, name: "미래에셋증권", quantity: 1240000 },
+  { rank: 2, name: "키움증권",     quantity: 980000  },
+  { rank: 3, name: "삼성증권",     quantity: 750000  },
+  { rank: 4, name: "NH투자증권",   quantity: 620000  },
+  { rank: 5, name: "한국투자증권", quantity: 430000  },
+];
+
+const MOCK_SELL_LIST = [
+  { rank: 1, name: "외국계A",      quantity: 1100000 },
+  { rank: 2, name: "외국계B",      quantity: 870000  },
+  { rank: 3, name: "KB증권",       quantity: 650000  },
+  { rank: 4, name: "신한투자증권", quantity: 490000  },
+  { rank: 5, name: "메리츠증권",   quantity: 310000  },
+];
+
+const MOCK_TREND_DATA: TrendDataPoint[] = [
+  { time: "2026-03-19", individual: -5200000,  foreign:  8100000,  institution:  2300000 },
+  { time: "2026-03-20", individual:  3100000,  foreign: -4200000,  institution:  1800000 },
+  { time: "2026-03-23", individual: -1800000,  foreign:  6500000,  institution: -3200000 },
+  { time: "2026-03-24", individual:  7400000,  foreign: -9800000,  institution:  4100000 },
+  { time: "2026-03-25", individual: -6300000,  foreign: 12000000,  institution: -2700000 },
+  { time: "2026-03-26", individual:  2900000,  foreign: -5600000,  institution:  3500000 },
+  { time: "2026-03-27", individual: -4100000,  foreign:  7300000,  institution: -1900000 },
+  { time: "2026-03-30", individual:  8200000,  foreign: -11000000, institution:  5600000 },
+  { time: "2026-03-31", individual: -3700000,  foreign:  9400000,  institution: -4300000 },
+  { time: "2026-04-01", individual:  5100000,  foreign: -6800000,  institution:  2100000 },
+];
+
+const MOCK_TRADE_TABLE: TrendTableRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  closePrice: 75000 + Math.floor((Math.random() - 0.5) * 3000),
+  changeRate: parseFloat(((Math.random() - 0.5) * 4).toFixed(2)),
+  changeAmount: Math.floor((Math.random() - 0.5) * 2000),
+  individualNet: Math.floor((Math.random() - 0.5) * 10000000),
+  foreignNet: Math.floor((Math.random() - 0.5) * 15000000),
+  foreignRatio: parseFloat((52 + (Math.random() - 0.5) * 2).toFixed(2)),
+  institutionNet: Math.floor((Math.random() - 0.5) * 8000000),
+}));
+
+const MOCK_PROGRAM_DATA: ProgramTradeRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  netBuyChange: Math.floor((Math.random() - 0.5) * 5000000),
+  netBuy: Math.floor((Math.random() - 0.5) * 20000000),
+  buy: Math.floor(Math.random() * 50000000 + 10000000),
+  sell: Math.floor(Math.random() * 50000000 + 10000000),
+  nonArbitrageNet: Math.floor((Math.random() - 0.5) * 15000000),
+}));
+
+const MOCK_CREDIT_DATA: CreditTradeRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  type: i % 2 === 0 ? "융자" : "대주",
+  changeQty: Math.floor((Math.random() - 0.5) * 100000),
+  newQty: Math.floor(Math.random() * 200000 + 50000),
+  repayQty: Math.floor(Math.random() * 150000 + 30000),
+  balanceQty: Math.floor(Math.random() * 5000000 + 1000000),
+  balanceRate: parseFloat((Math.random() * 5).toFixed(2)),
+}));
+
+const MOCK_LENDING_DATA: LendingTradeRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  changeQty: Math.floor((Math.random() - 0.5) * 50000),
+  newQty: Math.floor(Math.random() * 100000 + 20000),
+  repayQty: Math.floor(Math.random() * 80000 + 15000),
+  balanceQty: Math.floor(Math.random() * 2000000 + 500000),
+}));
+
+const MOCK_SHORT_DATA: ShortTradeRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  tradeAmountRatio: parseFloat((Math.random() * 8 + 1).toFixed(2)),
+  shortQty: Math.floor(Math.random() * 500000 + 100000),
+  shortAmount: Math.floor(Math.random() * 30000000000 + 5000000000),
+  shortAvgPrice: Math.floor(74000 + (Math.random() - 0.5) * 2000),
+  tradeAmount: Math.floor(Math.random() * 400000000000 + 50000000000),
+}));
+
+const MOCK_CFD_DATA: CfdTradeRow[] = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-04-${String(15 - i).padStart(2, "0")}`,
+  newBuyQty: Math.floor(Math.random() * 50000),
+  repayBuyQty: Math.floor(Math.random() * 40000),
+  balanceBuyQty: Math.floor(Math.random() * 200000 + 50000),
+  buyBalanceRate: parseFloat((Math.random() * 3).toFixed(2)),
+  newSellQty: Math.floor(Math.random() * 45000),
+  repaySellQty: Math.floor(Math.random() * 35000),
+  balanceSellQty: Math.floor(Math.random() * 180000 + 40000),
+  sellBalanceRate: parseFloat((Math.random() * 3).toFixed(2)),
+}));
+
+// 거래현황 공통 args
+const TRADE_ARGS = {
+  tradeState: "default" as const,
+  buyList: MOCK_BUY_LIST,
+  sellList: MOCK_SELL_LIST,
+  rankBaseDateTime: "2026.04.20 15:30",
+  trendData: MOCK_TREND_DATA,
+  trendBaseDateTime: "2026.04.20 15:30",
+  tradeTableData: MOCK_TRADE_TABLE,
+  programData: MOCK_PROGRAM_DATA,
+  creditData: MOCK_CREDIT_DATA,
+  lendingData: MOCK_LENDING_DATA,
+  shortData: MOCK_SHORT_DATA,
+  cfdData: MOCK_CFD_DATA,
+  onViewNetBuy: () => alert("투자자별 순매수 보기"),
+};
+
 const COMMON_ARGS = {
   stock: MOCK_STOCK,
   chartData: MOCK_CHART_DATA,
@@ -183,6 +293,9 @@ const COMMON_ARGS = {
   aiUpProbability: 72,
   aiDownProbability: 28,
   aiAnalysisData: MOCK_AI_ANALYSIS,
+
+  // 거래현황 데이터
+  ...TRADE_ARGS,
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -235,6 +348,11 @@ const meta: Meta<typeof StockDetailPage> = {
       control: "radio",
       options: ["default", "skeleton", "error", "empty"],
       description: "AI 예측 패널 상태",
+    },
+    tradeState: {
+      control: "radio",
+      options: ["default", "skeleton", "error"],
+      description: "거래현황 패널 상태",
     },
     viewport: {
       control: "radio",
@@ -451,6 +569,80 @@ export const MobileTabSwitching: Story = {
           activeTab={tab}
           onTabChange={(t) => setTab(t as any)}
           viewport="mobile"
+        />
+      </div>
+    );
+  },
+};
+
+// ════════════════════════════════════════════════════════════════
+// 거래현황 탭 Stories
+// ════════════════════════════════════════════════════════════════
+
+export const DesktopTrade: Story = {
+  name: "Desktop / Trade Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "desktop" },
+  decorators: [desktopDec],
+};
+
+export const DesktopTradeSkeleton: Story = {
+  name: "Desktop / Trade Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "desktop", tradeState: "skeleton" },
+  decorators: [desktopDec],
+};
+
+export const DesktopTradeError: Story = {
+  name: "Desktop / Trade Tab — Error",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "desktop", tradeState: "error" },
+  decorators: [desktopDec],
+};
+
+export const TabletTrade: Story = {
+  name: "Tablet / Trade Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDec],
+};
+
+export const TabletTradeSkeleton: Story = {
+  name: "Tablet / Trade Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "tablet", tradeState: "skeleton" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDec],
+};
+
+export const MobileTrade: Story = {
+  name: "Mobile / Trade Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDec],
+};
+
+export const MobileTradeSkeleton: Story = {
+  name: "Mobile / Trade Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "trade", viewport: "mobile", tradeState: "skeleton" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDec],
+};
+
+export const DesktopTradeTabSwitching: Story = {
+  name: "Desktop / Trade Tab Switching Demo",
+  parameters: {
+    docs: {
+      description: {
+        story: "거래현황 탭 전환 인터랙션 데모. 탭 클릭으로 차트·거래현황 간 전환을 확인합니다.",
+      },
+    },
+  },
+  render: () => {
+    const [tab, setTab] = useState<"chart" | "orderbook" | "trade" | "ai">("trade");
+    return (
+      <div style={{ minWidth: "1440px" }}>
+        <StockDetailPage
+          {...COMMON_ARGS}
+          activeTab={tab}
+          onTabChange={(t) => setTab(t as any)}
+          viewport="desktop"
         />
       </div>
     );

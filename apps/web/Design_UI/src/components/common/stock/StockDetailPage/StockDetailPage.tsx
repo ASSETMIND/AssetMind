@@ -4,6 +4,7 @@ import { MobileTabSwitcher } from "../../../common/MobileTabSwitcher/MobileTabSw
 import { TradingViewWrapper } from "../TradingViewWrapper/TradingViewWrapper";
 import { OrderbookTable } from "../OrderbookTable/OrderbookTable";
 import { AIPredictionPanel } from "../AIPredictionPanel/AIPredictionPanel";
+import { InvestorTradePanel } from "../InvestorTradePanel/InvestorTradePanel";
 import { ChartIcon } from "../../../icons/ChartIcon";
 import { StockInfoIcon } from "../../../icons/StockInfoIcon";
 import { TradeStatusIcon } from "../../../icons/TradeStatusIcon";
@@ -14,6 +15,16 @@ import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 import type { Viewport } from "../StockTable/StockTable";
 import type { SparklineDataPoint } from "../AIPredictionPanel/SparklineChart";
 import type { AnalysisData } from "../AIPredictionPanel/PredictionAnalysisWidget";
+import type {
+  TraderRankItem,
+  TrendDataPoint,
+  TrendTableRow,
+  ProgramTradeRow,
+  CreditTradeRow,
+  LendingTradeRow,
+  ShortTradeRow,
+  CfdTradeRow,
+} from "../InvestorTradePanel/InvestorTradePanel";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -70,6 +81,21 @@ export interface StockDetailPageProps {
   aiUpProbability?: number;
   aiDownProbability?: number;
   aiAnalysisData?: AnalysisData;
+
+  // ── 거래현황 패널 ─────────────────────────────────────────
+  tradeState?: PanelState;
+  buyList?: TraderRankItem[];
+  sellList?: TraderRankItem[];
+  rankBaseDateTime?: string;
+  trendData?: TrendDataPoint[];
+  trendBaseDateTime?: string;
+  tradeTableData?: TrendTableRow[];
+  programData?: ProgramTradeRow[];
+  creditData?: CreditTradeRow[];
+  lendingData?: LendingTradeRow[];
+  shortData?: ShortTradeRow[];
+  cfdData?: CfdTradeRow[];
+  onViewNetBuy?: () => void;
 }
 
 // ─── 탭 정의 ──────────────────────────────────────────────────
@@ -225,6 +251,20 @@ export const StockDetailPage = ({
   aiUpProbability = 0,
   aiDownProbability = 0,
   aiAnalysisData,
+
+  tradeState = "default",
+  buyList = [],
+  sellList = [],
+  rankBaseDateTime = "",
+  trendData = [],
+  trendBaseDateTime = "",
+  tradeTableData = [],
+  programData = [],
+  creditData = [],
+  lendingData = [],
+  shortData = [],
+  cfdData = [],
+  onViewNetBuy,
 }: StockDetailPageProps) => {
   const [internalTab, setInternalTab] = useState<DetailTab>("chart");
   const activeTab = activeTabProp ?? internalTab;
@@ -304,6 +344,38 @@ export const StockDetailPage = ({
       analysisData={aiAnalysisData}
     />
   );
+
+  // ── 거래현황 패널 ─────────────────────────────────────────
+  // desktop: 1036x820 / tablet: 710x820 / mobile: 345x657
+  const TRADE_PANEL_SIZE: Record<Viewport, { width: number; height: number }> = {
+    desktop: { width: 1036, height: 820 },
+    tablet:  { width: 710,  height: 820 },
+    mobile:  { width: 345,  height: 657 },
+  };
+
+  const renderTrade = () => {
+    const { width, height } = TRADE_PANEL_SIZE[viewport];
+    return (
+      <InvestorTradePanel
+        status={tradeState === "skeleton" ? "skeleton" : tradeState === "error" ? "error" : "default"}
+        buyList={buyList}
+        sellList={sellList}
+        rankBaseDateTime={rankBaseDateTime}
+        trendData={trendData}
+        trendBaseDateTime={trendBaseDateTime}
+        tableData={tradeTableData}
+        programData={programData}
+        creditData={creditData}
+        lendingData={lendingData}
+        shortData={shortData}
+        cfdData={cfdData}
+        onRetry={onRetry}
+        onViewNetBuy={onViewNetBuy}
+        panelWidth={width}
+        panelHeight={height}
+      />
+    );
+  };
 
   return (
     <div
@@ -416,15 +488,8 @@ export const StockDetailPage = ({
 
         {/* ══ 거래현황 탭 ══════════════════════════════════════ */}
         {activeTab === "trade" && (
-          <div
-            style={{
-              padding: "40px 24px",
-              color: "#9194A1",
-              fontSize: "14px",
-              textAlign: "center",
-            }}
-          >
-            거래현황 탭 — InvestorTable 구현 예정 (이슈 6+)
+          <div style={{ padding: isMobile ? "12px" : "16px 24px", boxSizing: "border-box" }}>
+            {renderTrade()}
           </div>
         )}
 

@@ -102,6 +102,9 @@ export interface InvestorTradePanelProps {
   cfdData?: CfdTradeRow[];
   onRetry?: () => void;
   onViewNetBuy?: () => void;
+  // 패널 크기 (뷰포트별 override)
+  panelWidth?: number;
+  panelHeight?: number;
 }
 
 // ─── 색상 ─────────────────────────────────────────────────────
@@ -547,6 +550,8 @@ export const InvestorTradePanel: React.FC<InvestorTradePanelProps> = ({
   cfdData = [],
   onRetry,
   onViewNetBuy,
+  panelWidth = 1036,
+  panelHeight = 820,
 }) => {
   const [period, setPeriod] = useState<TrendPeriod>("daily");
   const [activeTab, setActiveTab] = useState<InvestorType>("program");
@@ -562,27 +567,18 @@ export const InvestorTradePanel: React.FC<InvestorTradePanelProps> = ({
     { label: "CFD",          value: "cfd"     },
   ];
 
-  // 공통 섹션 카드 스타일
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: "#1C1D21",
-    borderRadius: "12px",
-    padding: "24px",
-    boxSizing: "border-box",
-    width: "100%",
-  };
-
   return (
-    // 외부 프레임: 1036x820, 좌우 패딩 30px, 내부 스크롤
+    // 외부 프레임: 뷰포트별 크기, 좌우 패딩 30px, 내부 스크롤
     <div
       style={{
-        width: "1036px",
-        height: "820px",
+        width: `${panelWidth}px`,
+        height: `${panelHeight}px`,
         backgroundColor: "#1C1D21",
         borderRadius: "12px",
-        padding: "24px 30px",
+        padding: "24px 16px",
         boxSizing: "border-box",
         overflowY: "auto",
-        overflowX: "hidden",
+        overflowX: panelWidth <= 345 ? "auto" : "hidden",
         scrollbarWidth: "none",
         display: "flex",
         flexDirection: "column",
@@ -614,7 +610,12 @@ export const InvestorTradePanel: React.FC<InvestorTradePanelProps> = ({
         )}
         {status === "error" && <ErrorBlock onRetry={onRetry} />}
         {status === "default" && (
-          <div style={{ display: "flex", gap: "40px" }}>
+          /* 모바일(345px): 매수/매도 상하 배치 / 그 외: 좌우 배치 */
+          <div style={{
+            display: "flex",
+            flexDirection: panelWidth <= 345 ? "column" : "row",
+            gap: panelWidth <= 345 ? "24px" : "40px",
+          }}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
               <span style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>매수 상위 5</span>
               {buyList.map((item) => (
