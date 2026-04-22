@@ -15,7 +15,7 @@ aws:
   region: "ap-northeast-2" # AWS 기본 리전 (서울)
   s3:
     # 환경(dev/stg/prd)에 따라 분리된 원천 데이터 전용 데이터 레이크 버킷
-    bucket_name: "toss-datalake-raw-zone-prd"
+    bucket_name: "data-pipeline-bronze"
 
     # [참고] 멀티파트 업로드 임계값 및 스레드 튜닝 (현재는 코드에 상수로 있으나,
     # 향후 동적 설정이 필요할 경우를 대비한 예약 필드)
