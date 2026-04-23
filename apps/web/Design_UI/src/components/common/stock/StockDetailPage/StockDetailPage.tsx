@@ -5,6 +5,7 @@ import { TradingViewWrapper } from "../TradingViewWrapper/TradingViewWrapper";
 import { OrderbookTable } from "../OrderbookTable/OrderbookTable";
 import { AIPredictionPanel } from "../AIPredictionPanel/AIPredictionPanel";
 import { InvestorTradePanel } from "../InvestorTradePanel/InvestorTradePanel";
+import { StockInfoPanel } from "../StockInfoPanel/StockInfoPanel";
 import { ChartIcon } from "../../../icons/ChartIcon";
 import { StockInfoIcon } from "../../../icons/StockInfoIcon";
 import { TradeStatusIcon } from "../../../icons/TradeStatusIcon";
@@ -15,6 +16,8 @@ import type { TradeTickRow } from "../TradeTickerList/TradeTickerList";
 import type { Viewport } from "../StockTable/StockTable";
 import type { SparklineDataPoint } from "../AIPredictionPanel/SparklineChart";
 import type { AnalysisData } from "../AIPredictionPanel/PredictionAnalysisWidget";
+import type { CompanyInfo, BusinessItem } from "../StockInfoPanel/StockInfoPanel";
+import type { DonutSlice } from "../DonutChart/DonutChart";
 import type {
   TraderRankItem,
   TrendDataPoint,
@@ -96,6 +99,15 @@ export interface StockDetailPageProps {
   shortData?: ShortTradeRow[];
   cfdData?: CfdTradeRow[];
   onViewNetBuy?: () => void;
+
+  // ── 종목정보 패널 ─────────────────────────────────────────
+  stockInfoState?: PanelState;
+  company?: CompanyInfo;
+  donutSlices?: DonutSlice[];
+  donutBaseDate?: string;
+  donutNote?: string;
+  mainBusinesses?: BusinessItem[];
+  otherBusinesses?: BusinessItem[];
 }
 
 // ─── 탭 정의 ──────────────────────────────────────────────────
@@ -265,6 +277,14 @@ export const StockDetailPage = ({
   shortData = [],
   cfdData = [],
   onViewNetBuy,
+
+  stockInfoState = "default",
+  company,
+  donutSlices = [],
+  donutBaseDate = "",
+  donutNote = "",
+  mainBusinesses = [],
+  otherBusinesses = [],
 }: StockDetailPageProps) => {
   const [internalTab, setInternalTab] = useState<DetailTab>("chart");
   const activeTab = activeTabProp ?? internalTab;
@@ -377,6 +397,20 @@ export const StockDetailPage = ({
     );
   };
 
+  // ── 종목정보 패널 ─────────────────────────────────────────
+  const renderStockInfo = () => (
+    <StockInfoPanel
+      status={stockInfoState === "skeleton" ? "skeleton" : stockInfoState === "error" ? "error" : "default"}
+      company={company}
+      donutSlices={donutSlices}
+      donutBaseDate={donutBaseDate}
+      donutNote={donutNote}
+      mainBusinesses={mainBusinesses}
+      otherBusinesses={otherBusinesses}
+      onRetry={onRetry}
+    />
+  );
+
   return (
     <div
       style={{
@@ -474,15 +508,8 @@ export const StockDetailPage = ({
 
         {/* ══ 종목정보 탭 ══════════════════════════════════════ */}
         {activeTab === "orderbook" && (
-          <div
-            style={{
-              padding: "40px 24px",
-              color: "#9194A1",
-              fontSize: "14px",
-              textAlign: "center",
-            }}
-          >
-            종목정보 탭 — 추후 구현 예정
+          <div style={{ padding: isMobile ? "12px" : "16px 24px", boxSizing: "border-box" }}>
+            {renderStockInfo()}
           </div>
         )}
 

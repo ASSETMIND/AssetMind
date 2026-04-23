@@ -11,6 +11,8 @@ import type {
   ProgramTradeRow, CreditTradeRow, LendingTradeRow,
   ShortTradeRow, CfdTradeRow,
 } from "../InvestorTradePanel/InvestorTradePanel";
+import type { CompanyInfo, BusinessItem } from "../StockInfoPanel/StockInfoPanel";
+import type { DonutSlice } from "../DonutChart/DonutChart";
 
 // ════════════════════════════════════════════════════════════════
 // Mock Data
@@ -296,6 +298,50 @@ const COMMON_ARGS = {
 
   // 거래현황 데이터
   ...TRADE_ARGS,
+
+  // 종목정보 데이터
+  stockInfoState: "default" as const,
+  company: {
+    name: "삼성전자",
+    market: "국내",
+    ticker: "005930",
+    exchange: "코스피",
+    homepageUrl: "https://www.samsung.com/sec",
+    source: "",
+    description: "동사는 1969년 설립되어 수원시 영통구에 본사를 두고 있으며, 3개의 생산기지와 2개의 연구개발법인, 다수의 해외 판매법인을 운영하는 글로벌 전자 기업입니다.",
+    marketCap: "400조 8000억 원",
+    enterpriseValue: "380조 1000억 원",
+    companyName: "Samsung Electronics Co., Ltd.",
+    ceo: "한종희, 경계현",
+    listingDate: "1975년 06월 11일",
+    listingDateSub: "1975년 06월 11일 기준",
+    shares: "5,969,782,550주",
+    sharesSub: "2026년 04월 15일 기준",
+  } as CompanyInfo,
+  donutSlices: [
+    { label: "TV, 모니터, 냉장고, 세탁기, 에어컨, 스마트폰 등", value: 45.32, color: "#4FA3B8" },
+    { label: "스마트폰용 OLED패널 등",                          value: 28.17, color: "#8A6BBE" },
+    { label: "범례 3",                                          value: 16.45, color: "#C9A24D" },
+    { label: "범례 4",                                          value: 10.06, color: "#73B959" },
+  ] as DonutSlice[],
+  donutBaseDate: "2025년 12월 기준",
+  donutNote: "마이너스 매출비중 : 계열사간 내부거래 등에 따른 조정",
+  mainBusinesses: [
+    { id: "b1", name: "사업명 1", marketCap: "0위", modalProps: { categoryName: "사업명 1", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [{ label: "어제보다", value: "-0.00%", isRise: false }, { label: "1개월 전보다", value: "+0.00%", isRise: true }, { label: "3개월 전보다", value: "+0.00%", isRise: true }, { label: "1년 전보다", value: "-0.00%", isRise: false }], stockList: [], etfList: [] } },
+    { id: "b2", name: "사업명 2", marketCap: "0위", modalProps: { categoryName: "사업명 2", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [], stockList: [], etfList: [] } },
+    { id: "b3", name: "사업명 3", marketCap: "0위", modalProps: { categoryName: "사업명 3", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [], stockList: [], etfList: [] } },
+    { id: "b4", name: "사업명 4", marketCap: "0위", modalProps: { categoryName: "사업명 4", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [], stockList: [], etfList: [] } },
+    { id: "b5", name: "사업명 5", marketCap: "0위", modalProps: { categoryName: "사업명 5", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [], stockList: [], etfList: [] } },
+    { id: "b6", name: "사업명 6", marketCap: "0위", modalProps: { categoryName: "사업명 6", categorySubtitle: "0개 회사 · 0개 ETF", returnCards: [], stockList: [], etfList: [] } },
+  ] as BusinessItem[],
+  otherBusinesses: [
+    { id: "o1", name: "사업명 1", marketCap: "0위" },
+    { id: "o2", name: "사업명 2", marketCap: "0위" },
+    { id: "o3", name: "사업명 3", marketCap: "0위" },
+    { id: "o4", name: "사업명 4", marketCap: "0위" },
+    { id: "o5", name: "사업명 5", marketCap: "0위" },
+    { id: "o6", name: "사업명 6", marketCap: "0위" },
+  ] as BusinessItem[],
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -353,6 +399,11 @@ const meta: Meta<typeof StockDetailPage> = {
       control: "radio",
       options: ["default", "skeleton", "error"],
       description: "거래현황 패널 상태",
+    },
+    stockInfoState: {
+      control: "radio",
+      options: ["default", "skeleton", "error"],
+      description: "종목정보 패널 상태",
     },
     viewport: {
       control: "radio",
@@ -480,7 +531,7 @@ export const DesktopAllError: Story = {
   decorators: [desktopDec],
 };
 
-export const DesktopStockInfo: Story = {
+export const DesktopStockInfoPlaceholder: Story = {
   name: "Desktop / Stock Info Tab — Placeholder",
   args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop" },
   decorators: [desktopDec],
@@ -636,6 +687,52 @@ export const DesktopTradeTabSwitching: Story = {
   },
   render: () => {
     const [tab, setTab] = useState<"chart" | "orderbook" | "trade" | "ai">("trade");
+    return (
+      <div style={{ minWidth: "1440px" }}>
+        <StockDetailPage
+          {...COMMON_ARGS}
+          activeTab={tab}
+          onTabChange={(t) => setTab(t as any)}
+          viewport="desktop"
+        />
+      </div>
+    );
+  },
+};
+
+// ════════════════════════════════════════════════════════════════
+// 종목정보 탭 Stories
+// ════════════════════════════════════════════════════════════════
+
+export const DesktopStockInfo: Story = {
+  name: "Desktop / Stock Info Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop" },
+  decorators: [desktopDec],
+};
+
+export const DesktopStockInfoSkeleton: Story = {
+  name: "Desktop / Stock Info Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop", stockInfoState: "skeleton" },
+  decorators: [desktopDec],
+};
+
+export const DesktopStockInfoError: Story = {
+  name: "Desktop / Stock Info Tab — Error",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop", stockInfoState: "error" },
+  decorators: [desktopDec],
+};
+
+export const DesktopStockInfoTabSwitching: Story = {
+  name: "Desktop / Stock Info Tab Switching Demo",
+  parameters: {
+    docs: {
+      description: {
+        story: "종목정보 탭 전환 인터랙션 데모. 주요 사업 클릭 시 CategoryModal이 열립니다.",
+      },
+    },
+  },
+  render: () => {
+    const [tab, setTab] = useState<"chart" | "orderbook" | "trade" | "ai">("orderbook");
     return (
       <div style={{ minWidth: "1440px" }}>
         <StockDetailPage

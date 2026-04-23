@@ -31,22 +31,53 @@ const MOCK_DONUT_SLICES: DonutSlice[] = [
   { label: "범례 4",                                          value: 10.06, color: "#73B959" },
 ];
 
+// CategoryModal에 전달할 공통 Mock 데이터
+const MOCK_MODAL_STOCK_LIST = [
+  { id: "s1", name: "종목명", chartData: [{ value: 100 }, { value: 98 }, { value: 95 }, { value: 93 }, { value: 91 }], currentPrice: "0,000원", changeRate: "0.00%",  isRise: null  },
+  { id: "s2", name: "종목명", chartData: [{ value: 100 }, { value: 99 }, { value: 97 }, { value: 96 }, { value: 94 }], currentPrice: "0,000원", changeRate: "0.00%",  isRise: null  },
+  { id: "s3", name: "종목명", chartData: [{ value: 100 }, { value: 102 }, { value: 104 }, { value: 103 }, { value: 105 }], currentPrice: "0,000원", changeRate: "+0.00%", isRise: true  },
+  { id: "s4", name: "종목명", chartData: [{ value: 100 }, { value: 99 }, { value: 97 }, { value: 95 }, { value: 93 }], currentPrice: "0,000원", changeRate: "-0.00%", isRise: false },
+];
+
+const MOCK_MODAL_ETF_LIST = [
+  { id: "e1", name: "종목명", currentPrice: "0,000원", changeRate: "0.00%",  isRise: null  },
+  { id: "e2", name: "종목명", currentPrice: "0,000원", changeRate: "0.00%",  isRise: null  },
+  { id: "e3", name: "종목명", currentPrice: "0,000원", changeRate: "+0.00%", isRise: true  },
+  { id: "e4", name: "종목명", currentPrice: "0,000원", changeRate: "-0.00%", isRise: false },
+];
+
+const MOCK_RETURN_CARDS = [
+  { label: "어제보다",    value: "-0.00%", isRise: false },
+  { label: "1개월 전보다", value: "+0.00%", isRise: true  },
+  { label: "3개월 전보다", value: "+0.00%", isRise: true  },
+  { label: "1년 전보다",  value: "-0.00%", isRise: false },
+];
+
+const MOCK_MODAL_PROPS = {
+  categoryName: "카테고리명",
+  categorySubtitle: "0개 회사 · 0개 ETF",
+  returnCards: MOCK_RETURN_CARDS,
+  returnBaseLabel: "기준 : 전일 종가",
+  stockList: MOCK_MODAL_STOCK_LIST,
+  etfList: MOCK_MODAL_ETF_LIST,
+};
+
 const MOCK_MAIN_BUSINESSES: BusinessItem[] = [
-  { id: "b1", name: "사업명 1", marketCap: "0위" },
-  { id: "b2", name: "사업명 2", marketCap: "0위" },
-  { id: "b3", name: "사업명 3", marketCap: "0위" },
-  { id: "b4", name: "사업명 4", marketCap: "0위" },
-  { id: "b5", name: "사업명 5", marketCap: "0위" },
-  { id: "b6", name: "사업명 6", marketCap: "0위" },
+  { id: "b1", name: "사업명 1", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 1" } },
+  { id: "b2", name: "사업명 2", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 2" } },
+  { id: "b3", name: "사업명 3", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 3" } },
+  { id: "b4", name: "사업명 4", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 4" } },
+  { id: "b5", name: "사업명 5", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 5" } },
+  { id: "b6", name: "사업명 6", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 6" } },
 ];
 
 const MOCK_OTHER_BUSINESSES: BusinessItem[] = [
-  { id: "o1", name: "사업명 1", marketCap: "0위" },
-  { id: "o2", name: "사업명 2", marketCap: "0위" },
-  { id: "o3", name: "사업명 3", marketCap: "0위" },
-  { id: "o4", name: "사업명 4", marketCap: "0위" },
-  { id: "o5", name: "사업명 5", marketCap: "0위" },
-  { id: "o6", name: "사업명 6", marketCap: "0위" },
+  { id: "o1", name: "사업명 1", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 1" } },
+  { id: "o2", name: "사업명 2", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 2" } },
+  { id: "o3", name: "사업명 3", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 3" } },
+  { id: "o4", name: "사업명 4", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 4" } },
+  { id: "o5", name: "사업명 5", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 5" } },
+  { id: "o6", name: "사업명 6", marketCap: "0위", modalProps: { ...MOCK_MODAL_PROPS, categoryName: "사업명 6" } },
 ];
 
 const DEFAULT_ARGS = {
