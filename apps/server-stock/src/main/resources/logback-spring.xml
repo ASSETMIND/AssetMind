@@ -28,6 +28,19 @@
     <encoder><pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern></encoder>
   </appender>
 
+  <appender name="FILE_PERF" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/performance.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>logs/performance.%d{yyyy-MM-dd}.gz</fileNamePattern>
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+    <encoder><pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern></encoder>
+  </appender>
+
+  <logger name="com.assetmind.server_stock.global.aspect.ExecutionTimeAspect" level="INFO" additivity="false">
+    <appender-ref ref="FILE_PERF" />
+  </logger>
+
   <root level="INFO">
     <appender-ref ref="CONSOLE" />
     <appender-ref ref="FILE_GENERAL" />
