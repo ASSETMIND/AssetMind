@@ -97,6 +97,19 @@ class ContextFilter(logging.Filter):
         dt_kst = datetime.fromtimestamp(record.created, tz=KST_TIMEZONE)
         record.korean_time = dt_kst.strftime("%Y-%m-%d %H:%M:%S")
         return True
+    
+class ConsoleNoiseFilter(logging.Filter):
+    """콘솔 출력 시 불필요한 생명주기(START/END) 로그를 제거하여 가독성을 높이는 필터.
+    JSON 파일에는 전체 추적 로그를 남기되, 
+    인간이 읽는 터미널 출력에서는 노이즈를 제거하여 요약/에러 로그의 시인성을 극대화함.
+    """
+    def filter(self, record: logging.LogRecord) -> bool:
+        # INFO 레벨의 로그 중, log_decorator가 생성하는 패턴만 식별하여 차단 (False 반환)
+        if record.levelno == logging.INFO:
+            msg = record.getMessage()
+            if msg.endswith("] START") or "] END | Time:" in msg:
+                return False
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -314,9 +327,14 @@ class LogManager:
                 console_handler = logging.StreamHandler(sys.stdout)
                 console_handler.setFormatter(ColorFormatter())
                 console_handler.addFilter(ctx_filter)
+                
+                #  콘솔 전용 노이즈 제거 필터 부착
+                console_handler.addFilter(ConsoleNoiseFilter()) 
+                
                 self.logger.addHandler(console_handler)
 
-                # 2. 파일(File) 핸들러 세팅: 기계가 파싱하기 편한 JSON 포맷
+                # 2. 파일(File) 핸들러 세팅: 기계가 파싱하기 편한 JSON 포맷 
+                # (이곳에는 ConsoleNoiseFilter를 붙이지 않으므로 START/END가 파일에 모두 저장됨)
                 self._setup_file_handler(JsonFormatter(), ctx_filter)
 
             self._initialized = True
