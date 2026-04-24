@@ -154,7 +154,8 @@ class ECOSExtractor(AbstractExtractor):
             ExtractedDTO: 원본 데이터와 필수 메타데이터가 병합된 표준 결과 객체.
 
         Raises:
-            ExtractorError: HTTP 200 OK로 응답이 왔으나, 내부 RESULT.CODE가 'INFO-000'(정상)이 아닌 경우.
+            ExtractorError: HTTP 200 OK로 응답이 왔으나, 내부 RESULT.CODE가 정상(INFO-000)이거나 
+                            데이터 없음(INFO-200)이 아닌 치명적 에러인 경우.
         """
         # [설계 의도] 방어적 프로그래밍. 병렬 호출 결과가 비어있을 경우 무의미한 로직 실행 방지.
         if not raw_data_list:
@@ -168,10 +169,16 @@ class ECOSExtractor(AbstractExtractor):
         base_response = None
 
         for idx, raw_data in enumerate(raw_data_list):
-            # 1. 에러 응답 처리 (Root에 RESULT가 바로 오는 경우 - 인증 에러 등)
+            # 1. 에러 및 예외 응답 처리 (Root에 RESULT가 바로 오는 경우)
             if "RESULT" in raw_data:
                 code = raw_data["RESULT"].get("CODE")
                 msg = raw_data["RESULT"].get("MESSAGE")
+                
+                # 금융 데이터의 지연 고시(T+1) 특성으로 인해 발생한 '데이터 없음(INFO-200)'을
+                # 치명적 파이프라인 예외가 아닌, 0건의 데이터 추출 성공(정상 비즈니스 상태)으로 수용합니다.
+                if code == "INFO-200":
+                    continue
+                    
                 if code != "INFO-000":
                      raise ExtractorError(f"ECOS API 부분 실패 (Chunk {idx+1}/{len(raw_data_list)}): {msg} (Code: {code})")
 
@@ -179,10 +186,14 @@ class ECOSExtractor(AbstractExtractor):
             if policy_path in raw_data:
                 result_body = raw_data[policy_path]
                 
-                # [설계 의도] 데이터가 0건이거나 파라미터가 잘못된 경우 'row' 없이 'RESULT' 객체만 반환될 수 있음
+                # 데이터가 0건이거나 파라미터가 잘못된 경우 'row' 없이 'RESULT' 객체만 반환될 수 있음
                 if "RESULT" in result_body:
                     code = result_body["RESULT"].get("CODE")
                     msg = result_body["RESULT"].get("MESSAGE")
+                    
+                    if code == "INFO-200":
+                        continue
+                        
                     if code != "INFO-000":
                         raise ExtractorError(f"ECOS API 부분 실패 (Chunk {idx+1}/{len(raw_data_list)}): {msg} (Code: {code})")
 
@@ -199,7 +210,7 @@ class ECOSExtractor(AbstractExtractor):
                 # 4. 두 번째 응답부터는 row 배열만 찾아 이어붙임(Extend)
                 current_rows = result_body.get("row", [])
                 
-                # [개선] 빈 리스트([])인 경우 무시하여 메모리와 스토리지 낭비 방지 (비용/효익 최적화)
+                # 빈 리스트([])인 경우 무시하여 메모리와 스토리지 낭비 방지 (비용/효익 최적화)
                 if not current_rows:
                     continue
                     
@@ -208,9 +219,17 @@ class ECOSExtractor(AbstractExtractor):
             else:
                 raise ExtractorError(f"ECOS API 알 수 없는 응답 구조: '{policy_path}' 키를 찾을 수 없습니다.")
 
-        # 5. 총 건수 메타데이터 보정
-        # [설계 의도] 병합된 총 데이터 길이를 원래 ECOS의 list_total_count 속성에 반영하여 정합성 보장
-        if base_response and policy_path in merged_data:
+        # 5. 빈 응답 조립 및 총 건수 메타데이터 보정
+        # 조회된 모든 청크가 INFO-200을 반환하여 base_response가 초기화되지 않은 경우,
+        # 다운스트림 계층(Loader)이 에러 없이 0건 적재를 수행할 수 있도록 표준 규격의 빈 딕셔너리를 생성합니다.
+        if base_response is None:
+            merged_data = {
+                policy_path: {
+                    "list_total_count": 0,
+                    "row": []
+                }
+            }
+        elif policy_path in merged_data:
             merged_data[policy_path]["list_total_count"] = len(merged_data[policy_path].get("row", []))
 
         return ExtractedDTO(
@@ -219,7 +238,7 @@ class ECOSExtractor(AbstractExtractor):
                 "source": "ECOS",
                 "job_id": job_id,
                 "extracted_at": datetime.now().isoformat(),
-                "status_code": "INFO-000",
+                "status_code": "INFO-000", 
                 "chunks_merged": len(raw_data_list)
             }
         )
