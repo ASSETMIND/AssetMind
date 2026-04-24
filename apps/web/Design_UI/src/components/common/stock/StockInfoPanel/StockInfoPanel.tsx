@@ -42,6 +42,8 @@ export interface StockInfoPanelProps {
   mainBusinesses?: BusinessItem[];
   otherBusinesses?: BusinessItem[];
   onRetry?: () => void;
+  panelWidth?: number;
+  panelHeight?: number;
 }
 
 // ─── 색상 ─────────────────────────────────────────────────────
@@ -214,7 +216,11 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
   mainBusinesses = [],
   otherBusinesses = [],
   onRetry,
+  panelWidth = 1036,
+  panelHeight = 820,
 }) => {
+  const isMobile = panelWidth <= 345;
+  const isTablet = panelWidth <= 710 && !isMobile;
   const [activeTab, setActiveTab] = useState("main");
   const [showAll, setShowAll] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -255,20 +261,22 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
   return (
     <div
       style={{
-        width: "1036px",
-        height: "820px",
+        width: `${panelWidth}px`,
+        height: `${panelHeight}px`,
         backgroundColor: PANEL_BG,
         borderRadius: "12px",
         display: "flex",
+        flexDirection: isMobile ? "column" : "row",
         overflow: "hidden",
         boxSizing: "border-box",
       }}
     >
-      {/* ── 좌측 탭 ── */}
+      {/* ── 좌측 탭 — 모바일에서는 상단 수평 탭으로 전환 ── */}
+      {!isMobile && (
       <div
         style={{
           width: "250px",
-          height: "820px",
+          height: `${panelHeight}px`,
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
@@ -301,6 +309,7 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
           </button>
         ))}
       </div>
+      )}
 
       {/* ── 우측 콘텐츠 ── */}
       {status === "error" && <ErrorBlock onRetry={onRetry} />}

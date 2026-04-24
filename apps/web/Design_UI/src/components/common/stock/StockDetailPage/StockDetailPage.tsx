@@ -398,18 +398,30 @@ export const StockDetailPage = ({
   };
 
   // ── 종목정보 패널 ─────────────────────────────────────────
-  const renderStockInfo = () => (
-    <StockInfoPanel
-      status={stockInfoState === "skeleton" ? "skeleton" : stockInfoState === "error" ? "error" : "default"}
-      company={company}
-      donutSlices={donutSlices}
-      donutBaseDate={donutBaseDate}
-      donutNote={donutNote}
-      mainBusinesses={mainBusinesses}
-      otherBusinesses={otherBusinesses}
-      onRetry={onRetry}
-    />
-  );
+  // desktop: 1036x820 / tablet: 710x820 / mobile: 345x657
+  const STOCK_INFO_PANEL_SIZE: Record<Viewport, { width: number; height: number }> = {
+    desktop: { width: 1036, height: 820 },
+    tablet:  { width: 710,  height: 820 },
+    mobile:  { width: 345,  height: 657 },
+  };
+
+  const renderStockInfo = () => {
+    const { width, height } = STOCK_INFO_PANEL_SIZE[viewport];
+    return (
+      <StockInfoPanel
+        status={stockInfoState === "skeleton" ? "skeleton" : stockInfoState === "error" ? "error" : "default"}
+        company={company}
+        donutSlices={donutSlices}
+        donutBaseDate={donutBaseDate}
+        donutNote={donutNote}
+        mainBusinesses={mainBusinesses}
+        otherBusinesses={otherBusinesses}
+        onRetry={onRetry}
+        panelWidth={width}
+        panelHeight={height}
+      />
+    );
+  };
 
   return (
     <div
