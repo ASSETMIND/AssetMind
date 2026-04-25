@@ -41,6 +41,15 @@ from src.common.decorators.log_decorator import log_decorator
 from src.extractor.adapters.http_client import AsyncHttpAdapter
 from src.extractor.extractor_factory import ExtractorFactory
 
+# ==============================================================================
+# [Configuration] Constants
+# ==============================================================================
+# 단일 시점에 외부 서버로 향하는 병렬 커넥션의 최대 허용 개수. 엄격한 TPS 제한을 방어하기 위해 10개로 묶어둠.
+MAX_CONCURRENT_REQUESTS: int = 10
+
+# ==============================================================================
+# [Main Class]
+# ==============================================================================
 
 class ExtractorService:
     """수집 계층(Extractor Layer)의 진입점(Entry Point) 역할을 수행하는 서비스 클래스.
@@ -236,27 +245,34 @@ class ExtractorService:
             List[Union[RequestDTO, Exception]]: 병렬 수집 결과 목록.
                 성공한 작업은 반환 객체가, 실패한 작업은 Exception 객체가 리스트에 포함되어 반환됨 (부분 성공 보장).
         """
+        # 런타임에 동시성 캡(MAX_CONCURRENT_REQUESTS)을 씌워 안전한 병목(Bottleneck) 구간 형성
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+
+        async def _extract_with_semaphore(req: Union[str, Tuple[str, Dict[str, Any]]]):
+            """세마포어 컨텍스트 내에서 단일 작업을 안전하게 래핑하여 실행하는 내부 코루틴"""
+            async with semaphore:
+                if isinstance(req, str):
+                    return await self.extract_job(req)
+                elif isinstance(req, tuple):
+                    return await self.extract_job(req[0], req[1])
+                else:
+                    self._logger.warning(f"잘못된 배치 요청 형식: {req}")
+                    return None
+
         tasks = []
         
         # 1. Task Preparation
         for req in job_requests:
-            if isinstance(req, str):
-                tasks.append(self.extract_job(req))
-            elif isinstance(req, tuple):
-                tasks.append(self.extract_job(req[0], req[1]))
-            else:
-                self._logger.warning(f"잘못된 배치 요청 형식: {req}")
+            tasks.append(_extract_with_semaphore(req))
         
         if not tasks:
             return []
 
         # 2. Parallel Execution
-        # [설계 의도] return_exceptions=True 플래그를 사용하여 특정 수집 타스크의 네트워크 실패나 파싱 예외가 
-        # 전체 배치 루프를 크래시(Crash)시키지 않도록 태스크 간 격리(Isolation) 환경을 구성함.
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # 3. Summary Logging
-        success_count = sum(1 for r in results if not isinstance(r, Exception))
-        self._logger.info(f"배치 수집 요약 지표 - 총 {len(tasks)}건 중 {success_count}건 성공")
-        
+
+        # 3. Log Summary (기존 기능 완벽 복구)
+        success_count = sum(1 for r in results if not isinstance(r, Exception) and r is not None)
+        self._logger.info(f"배치 수집 요약 지표 - 총 {len(job_requests)}건 중 {success_count}건 성공")
+
         return results
