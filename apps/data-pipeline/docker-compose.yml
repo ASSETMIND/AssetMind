@@ -1,7 +1,28 @@
+x-airflow-common: &airflow-common
+  build: .
+  env_file: .env
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./src:/opt/airflow/src # 기존 작업된 파이썬 로직 마운트
+    - ./configs:/opt/airflow/configs # 기존 작업된 YAML 설정 마운트
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    localstack:
+      condition: service_healthy
+
 services:
   # 1. 메인 스토리지 컨테이너 (LocalStack)
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.4.0
     container_name: local_s3_mock
     ports:
       - "4566:4566"
@@ -33,3 +54,71 @@ services:
       # [수정 완료] 언더스코어(_)로 통일된 정확한 경로 매핑
       - ./scripts/init_aws.sh:/tmp/init_aws.sh
     entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
+
+  # 1. Metadata DB
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  # 3. Airflow Webserver
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      # Rationale: DB 초기화 스크립트가 완벽히 종료된 후에만 웹서버를 기동하여 Race Condition 원천 차단
+      airflow-init:
+        condition: service_completed_successfully
+
+  # 4. Airflow Scheduler (LocalExecutor에서는 작업 실행 병행)
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      # Rationale: 동일하게 초기화 완료 후 스케줄러 기동
+      airflow-init:
+        condition: service_completed_successfully
+
+  # 5. Initialization (1회성 실행)
+  airflow-init:
+    <<: *airflow-common
+    # Rationale: 외부 .sh 파일을 사용하지 않고, Compose 단계에서 직접 Bash 명령어를 주입하여 파일 파싱/권한 에러(Exit 2, 4) 원천 차단
+    command:
+      - bash
+      - -c
+      - |
+        echo "Starting Airflow Initialization..."
+        airflow db migrate
+        airflow users create \
+          --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
+          --firstname "Admin" \
+          --lastname "User" \
+          --role Admin \
+          --email "${_AIRFLOW_WWW_USER_EMAIL:-admin@example.com}" \
+          --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" || true
+        echo "Airflow Initialization Completed Successfully."
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-db-volume:
