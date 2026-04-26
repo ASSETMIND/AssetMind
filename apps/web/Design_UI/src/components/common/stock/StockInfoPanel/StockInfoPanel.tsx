@@ -1,17 +1,19 @@
 import React, { useRef, useState } from "react";
 import { DonutChart } from "../DonutChart/DonutChart";
 import type { DonutSlice } from "../DonutChart/DonutChart";
+import { CategoryModal } from "../CategoryModal/CategoryModal";
+import type { CategoryModalProps } from "../CategoryModal/CategoryModal";
 
 // ─── Types ────────────────────────────────────────────────────
 
 export interface CompanyInfo {
   name: string;
-  market: string;       // 예: "국내"
-  ticker: string;       // 예: "000000"
-  exchange: string;     // 예: "코스피"
+  market: string;
+  ticker: string;
+  exchange: string;
   homepageUrl?: string;
-  source?: string;      // 출처
-  description?: string; // 기업 소개
+  source?: string;
+  description?: string;
   marketCap: string;
   enterpriseValue: string;
   companyName: string;
@@ -27,14 +29,16 @@ export interface BusinessItem {
   name: string;
   marketCap: string;
   logoUrl?: string;
+  // CategoryModal에 전달할 데이터
+  modalProps?: Omit<CategoryModalProps, "isOpen" | "onClose">;
 }
 
 export interface StockInfoPanelProps {
   status?: "default" | "skeleton" | "error";
   company?: CompanyInfo;
   donutSlices?: DonutSlice[];
-  donutBaseDate?: string;       // "0000년 00월 기준"
-  donutNote?: string;           // 하단 주석
+  donutBaseDate?: string;
+  donutNote?: string;
   mainBusinesses?: BusinessItem[];
   otherBusinesses?: BusinessItem[];
   onRetry?: () => void;
@@ -213,6 +217,15 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState("main");
   const [showAll, setShowAll] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<BusinessItem | null>(null);
+
+  const handleBusinessClick = (item: BusinessItem) => {
+    if (item.modalProps) {
+      setSelectedBusiness(item);
+      setModalOpen(true);
+    }
+  };
 
   // 각 섹션 ref (스크롤 책갈피)
   const sectionRefs: Record<string, React.RefObject<HTMLDivElement>> = {
@@ -400,13 +413,13 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
           {/* ── 주요 사업 섹션 ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <span style={{ fontSize: "18px", fontWeight: 700, color: "#FFFFFF" }}>주요 사업</span>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "0px",
-            }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0px" }}>
               {displayedMain.map((item) => (
-                <BusinessItemCard key={item.id} item={item} />
+                <BusinessItemCard
+                  key={item.id}
+                  item={item}
+                  onClick={() => handleBusinessClick(item)}
+                />
               ))}
             </div>
 
@@ -416,7 +429,11 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
                 <span style={{ fontSize: "18px", fontWeight: 700, color: "#FFFFFF", marginTop: "8px" }}>그 외 사업</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0px" }}>
                   {otherBusinesses.map((item) => (
-                    <BusinessItemCard key={item.id} item={item} />
+                    <BusinessItemCard
+                      key={item.id}
+                      item={item}
+                      onClick={() => handleBusinessClick(item)}
+                    />
                   ))}
                 </div>
               </>
@@ -436,6 +453,15 @@ export const StockInfoPanel: React.FC<StockInfoPanelProps> = ({
               </button>
             </div>
           </div>
+
+          {/* ── CategoryModal ── */}
+          {selectedBusiness?.modalProps && (
+            <CategoryModal
+              isOpen={modalOpen}
+              onClose={() => { setModalOpen(false); setSelectedBusiness(null); }}
+              {...selectedBusiness.modalProps}
+            />
+          )}
 
           {/* ── 재무 섹션 placeholder ── */}
           <div ref={sectionRefs.finance} style={{ paddingTop: "8px" }}>
