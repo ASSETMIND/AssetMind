@@ -87,7 +87,7 @@ export const Default: Story = {
 };
 
 export const Open: Story = {
-  name: "Open (항상 열린 상태)",
+  name: "Open — Always Visible",
   render: () => (
     <div style={{ backgroundColor: "#131316", minHeight: "100vh", position: "relative" }}>
       <CategoryModal
