@@ -2,10 +2,12 @@ x-airflow-common: &airflow-common
   build: .
   env_file: .env
   environment: &airflow-common-env
+    PYTHONPATH: /opt/airflow
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@airflow-postgres/${AIRFLOW_POSTGRES_DB}
     AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW_CONN_POSTGRES_CONN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -14,9 +16,11 @@ x-airflow-common: &airflow-common
     - ./configs:/opt/airflow/configs # 기존 작업된 YAML 설정 마운트
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
-    postgres:
+    airflow-postgres:
       condition: service_healthy
     localstack:
+      condition: service_healthy
+    postgres:
       condition: service_healthy
 
 services:
@@ -56,14 +60,22 @@ services:
     entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
 
   # 1. Metadata DB
-  postgres:
+  airflow-postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${AIRFLOW_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_POSTGRES_DB}
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "${AIRFLOW_POSTGRES_USER}",
+          "-d",
+          "${AIRFLOW_POSTGRES_DB}",
+        ]
       interval: 5s
       retries: 5
     restart: always
@@ -76,7 +88,7 @@ services:
       - "8080:8080"
     restart: always
     depends_on:
-      postgres:
+      airflow-postgres:
         condition: service_healthy
       localstack:
         condition: service_healthy
@@ -90,7 +102,7 @@ services:
     command: scheduler
     restart: always
     depends_on:
-      postgres:
+      airflow-postgres:
         condition: service_healthy
       localstack:
         condition: service_healthy
@@ -117,8 +129,27 @@ services:
           --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" || true
         echo "Airflow Initialization Completed Successfully."
     depends_on:
-      postgres:
+      airflow-postgres:
         condition: service_healthy
 
+  # 3. 통합 데이터 저장소
+  postgres:
+    image: postgres:16
+    ports:
+      - "5433:5432" # 외부 클라이언트 접속용 포트 (5433)
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+    restart: always
+
 volumes:
-  postgres-db-volume:
+  airflow-db-volume: # Airflow 메타데이터용 볼륨
+  postgres-db-volume: # 통합 데이터 저장소용 볼륨
