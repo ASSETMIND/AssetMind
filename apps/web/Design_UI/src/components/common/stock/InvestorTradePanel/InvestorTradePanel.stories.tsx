@@ -157,13 +157,13 @@ type Story = StoryObj<typeof InvestorTradePanel>;
 
 export const Default: Story = {
   name: "Default",
-  args: { ...ALL_ARGS, status: "default" },
+  args: { ...ALL_ARGS, status: "default", panelWidth: 1036, panelHeight: 820 },
   decorators: [(Story) => <div style={{ backgroundColor: "#131316", padding: "24px", display: "inline-block" }}><Story /></div>],
 };
 
 export const Skeleton: Story = {
   name: "Skeleton",
-  args: { status: "skeleton" },
+  args: { status: "skeleton", panelWidth: 1036, panelHeight: 820 },
   parameters: {
     docs: { description: { story: "API 호출 중 Skeleton 애니메이션 표시 상태입니다." } },
   },
@@ -172,12 +172,26 @@ export const Skeleton: Story = {
 
 export const Error: Story = {
   name: "Error",
-  args: { status: "error", onRetry: () => alert("Retry") },
+  args: { status: "error", onRetry: () => alert("Retry"), panelWidth: 1036, panelHeight: 820 },
+  decorators: [(Story) => <div style={{ backgroundColor: "#131316", padding: "24px", display: "inline-block" }}><Story /></div>],
+};
+
+export const Tablet: Story = {
+  name: "Tablet — Default",
+  args: { ...ALL_ARGS, status: "default", panelWidth: 710, panelHeight: 820 },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [(Story) => <div style={{ backgroundColor: "#131316", padding: "24px", display: "inline-block" }}><Story /></div>],
+};
+
+export const Mobile: Story = {
+  name: "Mobile — Default",
+  args: { ...ALL_ARGS, status: "default", panelWidth: 345, panelHeight: 657 },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
   decorators: [(Story) => <div style={{ backgroundColor: "#131316", padding: "24px", display: "inline-block" }}><Story /></div>],
 };
 
 export const Playground: Story = {
   name: "Playground",
-  args: { ...ALL_ARGS, status: "default" },
+  args: { ...ALL_ARGS, status: "default", panelWidth: 1036, panelHeight: 820 },
   decorators: [(Story) => <div style={{ backgroundColor: "#131316", padding: "24px", display: "inline-block" }}><Story /></div>],
 };
