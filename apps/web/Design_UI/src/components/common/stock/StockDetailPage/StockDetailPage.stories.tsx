@@ -531,11 +531,6 @@ export const DesktopAllError: Story = {
   decorators: [desktopDec],
 };
 
-export const DesktopStockInfoPlaceholder: Story = {
-  name: "Desktop / Stock Info Tab — Placeholder",
-  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop" },
-  decorators: [desktopDec],
-};
 
 // ════════════════════════════════════════════════════════════════
 // Tablet Stories
@@ -720,6 +715,34 @@ export const DesktopStockInfoError: Story = {
   name: "Desktop / Stock Info Tab — Error",
   args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "desktop", stockInfoState: "error" },
   decorators: [desktopDec],
+};
+
+export const TabletStockInfo: Story = {
+  name: "Tablet / Stock Info Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "tablet" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDec],
+};
+
+export const TabletStockInfoSkeleton: Story = {
+  name: "Tablet / Stock Info Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "tablet", stockInfoState: "skeleton" },
+  parameters: { viewport: { defaultViewport: "tablet" } },
+  decorators: [tabletDec],
+};
+
+export const MobileStockInfo: Story = {
+  name: "Mobile / Stock Info Tab — Default",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "mobile" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDec],
+};
+
+export const MobileStockInfoSkeleton: Story = {
+  name: "Mobile / Stock Info Tab — Skeleton",
+  args: { ...COMMON_ARGS, activeTab: "orderbook", viewport: "mobile", stockInfoState: "skeleton" },
+  parameters: { viewport: { defaultViewport: "mobile1" } },
+  decorators: [mobileDec],
 };
 
 export const DesktopStockInfoTabSwitching: Story = {
