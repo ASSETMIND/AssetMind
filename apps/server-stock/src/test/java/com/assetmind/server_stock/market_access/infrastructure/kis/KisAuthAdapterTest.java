@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
 import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import java.io.IOException;
+import java.util.List;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -24,6 +27,7 @@ class KisAuthAdapterTest {
 
     private MockWebServer mockWebServer;
     private KisAuthAdapter kisAuthAdapter;
+    private KisProperties kisProperties;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -35,12 +39,14 @@ class KisAuthAdapterTest {
         String baseUrl = String.format("http://localhost:%s", mockWebServer.getPort());
         WebClient.Builder webClientBuilder = WebClient.builder();
 
-        kisAuthAdapter = new KisAuthAdapter(webClientBuilder);
+        kisProperties = new KisProperties();
+        kisProperties.setBaseUrl(baseUrl);
+        kisProperties.setAccounts(List.of(
+                new Account("test-app-key-1", "test-app-secret-1"),
+                new Account("test-app-key-2", "test-app-secret-2")
+        ));
 
-        // 테스트 상황에서는 @Value가 동작하지 않으므로 @Value로 주입받는 private 필드들은 ReflectionTestUtils로 값을 주입
-        ReflectionTestUtils.setField(kisAuthAdapter, "baseUrl", baseUrl);
-        ReflectionTestUtils.setField(kisAuthAdapter, "appKey", "test-app-key");
-        ReflectionTestUtils.setField(kisAuthAdapter, "appSecret", "test-app-secret");
+        kisAuthAdapter = new KisAuthAdapter(webClientBuilder, kisProperties);
     }
 
     @AfterEach
@@ -64,44 +70,38 @@ class KisAuthAdapterTest {
         assertThat(accessToken.tokenValue()).isEqualTo("fake-jwt-token");
         assertThat(accessToken.expiresIn()).isEqualTo(86400);
 
-        // 요청 데이터 검증
+        // 요청 데이터 검증 (대표 계좌인 1번 키가 잘 들어갔는지 확인)
         RecordedRequest recordedRequest = mockWebServer.takeRequest();
         assertThat(recordedRequest.getMethod()).isEqualTo("POST"); // HTTP 메서드 확인
         assertThat(recordedRequest.getPath()).isEqualTo("/oauth2/tokenP"); // 요청 경로 확인
         assertThat(recordedRequest.getHeader("Content-type")).contains("application/json"); // 헤더 확인
 
         String body = recordedRequest.getBody().readUtf8();
-        assertThat(body).isEqualTo("{\"grant_type\":\"client_credentials\",\"appkey\":\"test-app-key\",\"appsecret\":\"test-app-secret\"}");
+        assertThat(body).isEqualTo("{\"grant_type\":\"client_credentials\",\"appkey\":\"test-app-key-1\",\"appsecret\":\"test-app-secret-1\"}");
     }
 
     @Test
     @DisplayName("KIS 접근토큰발급 API 호출 시 API 응답이 4xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
     void whenFetchTokenFail400_thenThrowMarketAccessFailedException() {
         // 가짜 응답 데이터 설정
-        mockWebServer.enqueue(new MockResponse()
-                .setResponseCode(400)
-                .setBody("{\"error_description\": \"유효하지 않은 AppKey입니다.\", \"error_code\": \"E1234\"}")
-                .addHeader("Content-type", "application/json"));
+        enqueueErrorResponse(4, 400, "{\"error_description\": \"유효하지 않은 AppKey입니다.\", \"error_code\": \"E1234\"}");
 
         // when & then
         assertThatThrownBy(() -> kisAuthAdapter.fetchToken())
                 .isInstanceOf(MarketAccessFailedException.class)
-                .hasMessageContaining("KIS API Error");
+                .hasMessageContaining("KIS 서버 연결 불가");
     }
 
     @Test
     @DisplayName("KIS 접근토큰발급 API 호출 시 API 응답이 5xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
     void whenFetchTokenFail500_thenThrowMarketAccessFailedException() {
         // 가짜 응답 데이터 설정
-        mockWebServer.enqueue(new MockResponse()
-                .setResponseCode(500)
-                .setBody("{\"error_description\": \"서버 내부에서 에러가 발생했습니다.\", \"error_code\": \"E1234\"}")
-                .addHeader("Content-type", "application/json"));
+        enqueueErrorResponse(4, 500, "{\"error_description\": \"서버 내부에서 에러가 발생했습니다.\", \"error_code\": \"E1234\"}");
 
         // when & then
         assertThatThrownBy(() -> kisAuthAdapter.fetchToken())
                 .isInstanceOf(MarketAccessFailedException.class)
-                .hasMessageContaining("KIS API Error");
+                .hasMessageContaining("KIS 서버 연결 불가");
     }
 
     @Test
@@ -122,8 +122,11 @@ class KisAuthAdapterTest {
     void givenNetworkProblem_whenFetchToken_thenThrowMarketAccessFailedException() {
         // given
         // 소켓 정책 설정을 연결 시작하자마자 끊어버리게 만들어서 네트워크 문제를 연출
-        mockWebServer.enqueue(new MockResponse()
-                .setSocketPolicy(SocketPolicy.DISCONNECT_AT_START));
+        // 재시도 3회 정책 포함해서 총 4회의 에러 응답을 반환하도록 연출
+        for (int i = 0; i < 4; i++) {
+            mockWebServer.enqueue(new MockResponse()
+                    .setSocketPolicy(SocketPolicy.DISCONNECT_AT_START));
+        }
 
         // when & then
         assertThatThrownBy(() -> kisAuthAdapter.fetchToken())
@@ -140,7 +143,9 @@ class KisAuthAdapterTest {
                 .setHeader("Content-type", "application/json"));
 
         // when
-        ApiApprovalKey approvalKey = kisAuthAdapter.fetchApprovalKey();
+        String targetAppKey = "target-ws-key";
+        String targetAppSecret = "target-ws-secret";
+        ApiApprovalKey approvalKey = kisAuthAdapter.fetchApprovalKey(targetAppKey, targetAppSecret);
 
         // then
         // 응답 데이터 검증
@@ -154,36 +159,43 @@ class KisAuthAdapterTest {
         assertThat(recordedRequest.getHeader("Content-type")).contains("application/json"); // 헤더 확인
 
         String body = recordedRequest.getBody().readUtf8();
-        assertThat(body).isEqualTo("{\"grant_type\":\"client_credentials\",\"appkey\":\"test-app-key\",\"secretkey\":\"test-app-secret\"}");
+        assertThat(body).contains("\"appkey\":\"" + targetAppKey + "\"");
+        assertThat(body).contains("\"secretkey\":\"" + targetAppSecret + "\"");
     }
 
     @Test
     @DisplayName("KIS 접속키(Approval Key) 발급 API 호출 시 API 응답이 4xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
     void whenFetchApprovalKey400_thenThrowMarketAccessFailedException() {
         // 가짜 응답 데이터 설정
-        mockWebServer.enqueue(new MockResponse()
-                .setResponseCode(400)
-                .setBody("{\"error_description\": \"유효하지 않은 AppKey입니다.\", \"error_code\": \"E1234\"}")
-                .addHeader("Content-type", "application/json"));
+        enqueueErrorResponse(4, 400, "{\"error_description\": \"유효하지 않은 AppKey입니다.\", \"error_code\": \"E1234\"}");
 
         // when & then
-        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey())
+        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey("dummy", "dummy"))
                 .isInstanceOf(MarketAccessFailedException.class)
-                .hasMessageContaining("KIS WebSocket API Error");
+                .hasMessageContaining("KIS 서버 연결 불가");
     }
 
     @Test
     @DisplayName("KIS 접속키(Approval Key) 발급 API 호출 시 API 응답이 5xx 에러일 경우 MarketAccessFailedException 예외를 던져야 한다.")
     void whenFetchApprovalKey500_thenThrowMarketAccessFailedException() {
         // 가짜 응답 데이터 설정
-        mockWebServer.enqueue(new MockResponse()
-                .setResponseCode(500)
-                .setBody("{\"error_description\": \"서버 내부에서 에러가 발생했습니다.\", \"error_code\": \"E1234\"}")
-                .addHeader("Content-type", "application/json"));
+        enqueueErrorResponse(4, 500, "{\"error_description\": \"서버 내부에서 에러가 발생했습니다.\", \"error_code\": \"E1234\"}");
 
         // when & then
-        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey())
+        assertThatThrownBy(() -> kisAuthAdapter.fetchApprovalKey("dummy", "dummy"))
                 .isInstanceOf(MarketAccessFailedException.class)
-                .hasMessageContaining("KIS WebSocket API Error");
+                .hasMessageContaining("KIS 서버 연결 불가");
+    }
+
+    /**
+     * 파라미터로 지정도니 횟수 만큼 MockWebServer에 에러 응답을 채워 넣는다.
+     */
+    private void enqueueErrorResponse(int count, int statusCode, String body) {
+        for (int i = 0; i < count; i++) {
+            mockWebServer.enqueue(new MockResponse()
+                    .setResponseCode(statusCode)
+                    .setBody(body)
+                    .addHeader("Content-type", "application/json"));
+        }
     }
 }

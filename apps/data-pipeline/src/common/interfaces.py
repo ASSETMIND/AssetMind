@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+
+import pandas as pd
+
 from src.common.dtos import RequestDTO, ExtractedDTO
 
 class IHttpClient(ABC):
@@ -78,5 +81,51 @@ class IExtractor(ABC):
             
         Raises:
             ExtractorError: 추출 과정에서 발생한 모든 예외.
+        """
+        pass
+
+class ITransformer(ABC):
+    """모든 데이터 변환기가 반드시 구현해야 하는 최상위 인터페이스.
+    
+    Strategy Pattern의 기반이 되며, 외부 시스템(TransformerService)은
+    오직 이 인터페이스에만 의존하여 데이터 변환 작업을 수행합니다.
+    """
+
+    @abstractmethod
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
+        """데이터 변환 작업을 수행합니다.
+        
+        결측치 처리, 스케일링, 병합 등의 전처리 과정을 수행하고 변환된 데이터프레임을 반환합니다.
+
+        Args:
+            data (pd.DataFrame): 변환 로직을 수행할 대상 입력 데이터프레임.
+
+        Returns:
+            pd.DataFrame: 변환 로직이 모두 적용된 결과 데이터프레임.
+            
+        Raises:
+            TransformerError: 데이터 변환 과정에서 발생한 모든 예외.
+        """
+        pass
+
+class ILoader(ABC):
+    """모든 데이터 적재기가 반드시 구현해야 하는 최상위 인터페이스.
+    
+    Service Layer(예: LoaderService)는 외부 인프라에 종속되지 않도록
+    오직 이 인터페이스에만 의존하여 다형성을 확보합니다.
+    """
+
+    @abstractmethod
+    def load(self, dto: ExtractedDTO) -> bool:
+        """데이터 적재 작업을 수행합니다.
+        
+        Args:
+            dto (ExtractedDTO): 이전 단계(Transform)에서 전달된 정제된 데이터 전송 객체.
+
+        Returns:
+            bool: 적재 성공 여부.
+            
+        Raises:
+            LoaderError: 적재 과정에서 발생한 모든 예외.
         """
         pass

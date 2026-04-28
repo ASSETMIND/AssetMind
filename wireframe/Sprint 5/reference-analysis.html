@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>레퍼런스 분석 리포트 — 종목 세부 정보 페이지</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #1a1d25;
+    --border: #252830;
+    --border2: #2e3240;
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --text3: #555a68;
+    --accent: #4f7cff;
+    --accent2: #7b9fff;
+    --green: #26d07c;
+    --red: #ff4d6d;
+    --yellow: #ffd166;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Noto Sans KR', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 32px 0 24px;
+    position: sticky;
+    top: 0;
+    background: rgba(10,12,16,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .doc-meta { display: flex; align-items: center; gap: 12px; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .tag.green { background: var(--green); color: #000; }
+  .tag.yellow { background: var(--yellow); color: #000; }
+  .doc-title { font-size: 15px; font-weight: 500; color: var(--text2); }
+  .date { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  /* LAYOUT */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+  .page-title-section {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  h1 span { color: var(--accent2); }
+  .subtitle { color: var(--text2); font-size: 15px; max-width: 560px; line-height: 1.7; }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    margin: 40px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--bg2);
+    padding: 24px;
+    text-align: center;
+  }
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--accent2);
+    line-height: 1;
+  }
+  .stat-label { font-size: 12px; color: var(--text3); margin-top: 6px; }
+
+  /* SECTION */
+  section { padding: 56px 0; border-bottom: 1px solid var(--border); }
+  .section-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 32px; }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+  }
+  h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  p { color: var(--text2); line-height: 1.75; margin-bottom: 12px; }
+
+  /* ANALYSIS GRID */
+  .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border2); }
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .card ul { list-style: none; }
+  .card ul li {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card ul li:last-child { border-bottom: none; }
+  .card ul li::before {
+    content: '→';
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  .card.full { grid-column: span 2; }
+  .card.accent-card { border-color: rgba(79,124,255,0.3); background: rgba(79,124,255,0.05); }
+
+  /* COLOR PALETTE */
+  .palette { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .swatch {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 3px;
+    font-family: var(--mono); font-size: 8px; color: rgba(255,255,255,0.5);
+  }
+
+  /* COMPONENT TABLE */
+  .comp-table { width: 100%; border-collapse: collapse; }
+  .comp-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .comp-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text2);
+    vertical-align: top;
+  }
+  .comp-table tr:hover td { background: var(--bg3); }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px;
+  }
+  .badge.hi  { background: rgba(255,77,109,0.15); color: #ff6b85; border: 1px solid rgba(255,77,109,0.3); }
+  .badge.med { background: rgba(255,209,102,0.1); color: #ffd166; border: 1px solid rgba(255,209,102,0.3); }
+  .badge.lo  { background: rgba(38,208,124,0.1);  color: #26d07c; border: 1px solid rgba(38,208,124,0.3); }
+  .badge.new { background: rgba(79,124,255,0.15); color: #7b9fff; border: 1px solid rgba(79,124,255,0.3); }
+
+  /* UX FINDINGS */
+  .findings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .finding-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .finding-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 14px;
+  }
+  .finding-card h3 { font-size: 14px; margin-bottom: 8px; }
+  .finding-card p { font-size: 13px; color: var(--text3); line-height: 1.6; margin: 0; }
+
+  /* INSIGHT BOX */
+  .insight {
+    background: rgba(79,124,255,0.07);
+    border: 1px solid rgba(79,124,255,0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .insight-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .insight p { color: var(--text); font-size: 13px; line-height: 1.7; margin: 0; }
+
+  /* LAYOUT ANATOMY */
+  .anatomy {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .anatomy-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .anatomy-row:last-child { border-bottom: none; }
+  .anatomy-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    width: 24px;
+    flex-shrink: 0;
+  }
+  .anatomy-zone {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    width: 180px;
+    flex-shrink: 0;
+  }
+  .anatomy-zone.highlight {
+    border-color: rgba(79,124,255,0.5);
+    color: var(--accent2);
+  }
+  .anatomy-desc { font-size: 13px; color: var(--text2); }
+
+  /* TAB DEMO */
+  .tab-demo {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border2);
+    margin: 16px 0;
+  }
+  .demo-tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text3);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .demo-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--text);
+    font-weight: 600;
+  }
+
+  /* PANEL SPLIT DEMO */
+  .panel-split {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+  .panel-block {
+    background: var(--bg3);
+    padding: 18px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .panel-block-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .panel-block.highlight-block {
+    background: rgba(79,124,255,0.06);
+    border-left: 2px solid var(--accent);
+  }
+
+  /* FILTER TAG ROW */
+  .filter-demo { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .filter-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* CANDLE MINI */
+  .candle-demo {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 48px;
+    padding: 4px 0;
+  }
+  .candle {
+    width: 8px;
+    border-radius: 1px;
+  }
+
+  /* FOOTER */
+  footer {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    h1 { font-size: 26px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .analysis-grid { grid-template-columns: 1fr; }
+    .card.full { grid-column: span 1; }
+    .findings-grid { grid-template-columns: 1fr; }
+    .anatomy-zone { width: 120px; }
+    .panel-split { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="doc-meta">
+      <span class="tag">RESEARCH</span>
+      <span class="doc-title">토스증권 종목 세부 정보 UI 레퍼런스 분석</span>
+    </div>
+    <span class="date">2026-03-05 · 김성연</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="page-title-section">
+    <div class="eyebrow">Reference Analysis Report — Sprint #5</div>
+    <h1>종목 세부 정보 페이지<br><span>UI 레퍼런스 분석</span></h1>
+    <p class="subtitle">토스증권의 종목 세부 정보 화면(차트·호가 / 종목정보 / 거래현황 탭)을 분석하여 레이아웃 구조, 컴포넌트 패턴, UX 원칙을 도출합니다. 우측 주문 영역을 AI 예측 패널로 대체하는 설계 방향의 근거로 활용합니다.</p>
+
+    <div class="stats-row">
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">메인 탭 구조</div></div>
+      <div class="stat"><div class="stat-num">18</div><div class="stat-label">식별된 컴포넌트</div></div>
+      <div class="stat"><div class="stat-num">2</div><div class="stat-label">패널 분할 (좌·우)</div></div>
+      <div class="stat"><div class="stat-num">5</div><div class="stat-label">종목정보 서브 섹션</div></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────
+       SECTION 1: 화면 구조 분석
+  ───────────────────────────────────────── -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>화면 구조 분석 (Layout Anatomy)</h2>
+    </div>
+
+    <p>종목 세부 정보 페이지는 <strong>수직 고정 헤더 + 탭 내비게이션 + 좌우 2단 본문</strong>으로 구성됩니다. 좌측은 콘텐츠 탭 영역, 우측은 주문하기 패널(310px 고정)이 항상 노출되는 레이아웃입니다. 탭을 전환해도 우측 패널은 교체되지 않습니다.</p>
+
+    <div class="anatomy" style="margin: 24px 0;">
+      <div class="anatomy-row">
+        <span class="anatomy-num">01</span>
+        <div class="anatomy-zone">글로벌 네비게이션</div>
+        <span class="anatomy-desc">홈·피드·주식 골라보기·내 계좌 탭 + 검색 + 로그인 버튼 — 전 페이지 공통 고정 헤더</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">02</span>
+        <div class="anatomy-zone">종목 헤더</div>
+        <span class="anatomy-desc">종목 로고 + 이름 + 코드 + 현재가 + 전일비 + 52주 최고/최저 — 탭 전환 시에도 고정 노출</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">03</span>
+        <div class="anatomy-zone">메인 탭 바</div>
+        <span class="anatomy-desc">차트·호가 / 종목정보 / 뉴스·공시 / 거래현황 / 커뮤니티 — 언더라인 스타일 탭</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">04</span>
+        <div class="anatomy-zone highlight">콘텐츠 탭 영역</div>
+        <span class="anatomy-desc">탭에 따라 교체되는 메인 콘텐츠 — 차트·호가·종목정보·거래현황 각각 고유 레이아웃 보유</span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">05</span>
+        <div class="anatomy-zone highlight">우측 고정 패널</div>
+        <span class="anatomy-desc">주문하기 패널 (310px 고정) — 탭 전환에 무관하게 항상 노출. <strong>→ Assetmind에서 AI 예측 패널로 대체</strong></span>
+      </div>
+      <div class="anatomy-row">
+        <span class="anatomy-num">06</span>
+        <div class="anatomy-zone">하단 시세 Ticker</div>
+        <span class="anatomy-desc">코스피·코스닥·나스닥 등 주요 지수 실시간 스크롤 바 — 페이지 하단 고정</span>
+      </div>
+    </div>
+
+    <div class="insight">
+      <div class="insight-label">레이아웃 핵심 관찰</div>
+      <p>우측 고정 패널은 토스증권의 수익화 핵심 영역(주문 전환)이지만, Assetmind의 AI 예측 서비스 관점에서는 동일한 위치와 고정 너비(310px)를 활용하여 AI 가격 예측 패널을 배치하는 것이 자연스러운 대안입니다. 사용자 시선이 이미 이 위치에 주목하도록 학습되어 있습니다.</p>
+    </div>
+
+    <p style="margin-top:24px">좌우 2단 레이아웃의 너비 비율 및 구조는 다음과 같습니다.</p>
+    <div class="panel-split">
+      <div class="panel-block">
+        <div class="panel-block-title">콘텐츠 영역 (Fluid)</div>
+        차트·호가·종목정보·거래현황 탭 콘텐츠<br>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">너비: 나머지 전체 (calc(100% - 310px))</span>
+      </div>
+      <div class="panel-block highlight-block">
+        <div class="panel-block-title">우측 고정 패널 (Fixed 310px)</div>
+        주문하기 / <strong style="color:var(--accent2)">→ AI 예측 패널</strong><br>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">탭 전환 시에도 상시 노출</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────
+       SECTION 2: 탭별 컴포넌트 분석
+  ───────────────────────────────────────── -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>탭별 컴포넌트 상세 분석</h2>
+    </div>
+
+    <!-- 2-1. 차트·호가 -->
+    <h3 style="margin-bottom:16px;">2-1. 차트·호가 탭</h3>
+    <div class="analysis-grid" style="margin-bottom:40px;">
+
+      <div class="card">
+        <div class="card-label">Candlestick Chart</div>
+        <h3>캔들스틱 차트 영역</h3>
+        <div class="candle-demo">
+          <div class="candle" style="height:28px;background:#ff4d6d;"></div>
+          <div class="candle" style="height:36px;background:#4f7cff;"></div>
+          <div class="candle" style="height:22px;background:#ff4d6d;"></div>
+          <div class="candle" style="height:40px;background:#4f7cff;"></div>
+          <div class="candle" style="height:44px;background:#4f7cff;"></div>
+          <div class="candle" style="height:32px;background:#ff4d6d;"></div>
+          <div class="candle" style="height:38px;background:#4f7cff;"></div>
+        </div>
+        <ul>
+          <li>기간 선택 탭: 1분 / 일 / 주 / 월 / 년 (Pill 스타일)</li>
+          <li>이동평균선 오버레이 (MA 5·20·60·120)</li>
+          <li>거래량 바 차트 하단 독립 영역으로 분리</li>
+          <li>크로스헤어 + OHLCV 툴팁 (hover 인터랙션)</li>
+          <li>TradingView 위젯 내장 추정 (로고 워터마크 확인)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Order Book</div>
+        <h3>호가창 컴포넌트</h3>
+        <table class="comp-table">
+          <thead>
+            <tr><th>구성 요소</th><th>상세</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>매도 잔량</td><td>파란색 텍스트 + 배경 바</td></tr>
+            <tr><td>가격 컬럼</td><td>중앙 정렬, 매도=파랑·매수=빨강</td></tr>
+            <tr><td>매수 잔량</td><td>빨간색 텍스트 + 배경 바</td></tr>
+            <tr><td>현재가 행</td><td>배경 강조 + 굵은 폰트</td></tr>
+          </tbody>
+        </table>
+        <ul style="margin-top:12px">
+          <li>호가 10단계 표시 (매도 10 + 매수 10)</li>
+          <li>잔량 비율을 배경 바로 시각화 (투명도 처리)</li>
+        </ul>
+      </div>
+
+      <div class="card full">
+        <div class="card-label">Realtime Ticker Strip</div>
+        <h3>체결 내역 실시간 Ticker</h3>
+        <table class="comp-table">
+          <thead>
+            <tr><th>컬럼</th><th>내용</th><th>비고</th><th>중요도</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>체결가</td>
+              <td>X,XXX원 단위 표기</td>
+              <td>상승=빨강, 하락=파랑 색상 코딩</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>체결량(주)</td>
+              <td>정수형 주식 수량</td>
+              <td>우측 정렬</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+            <tr>
+              <td>등락률</td>
+              <td>전일 대비 % 변화</td>
+              <td>+/- 부호 명시</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>거래량(주)</td>
+              <td>누적 거래량</td>
+              <td>천 단위 쉼표</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+            <tr>
+              <td>시간</td>
+              <td>HH:MM:SS</td>
+              <td>초 단위 실시간 갱신</td>
+              <td><span class="badge lo">낮음</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="insight" style="margin-top:16px">
+          <div class="insight-label">인터랙션 관찰</div>
+          <p>체결 내역은 새 체결 발생 시 상단에 행이 삽입되며 아래로 밀리는 애니메이션으로 실시간성을 강조합니다. 빠른 갱신 주기로 사용자에게 시장 활성도를 직관적으로 전달합니다.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2-2. 종목정보 -->
+    <h3 style="margin-bottom:16px;">2-2. 종목정보 탭</h3>
+    <div class="analysis-grid" style="margin-bottom:40px;">
+
+      <div class="card">
+        <div class="card-label">Side Navigation</div>
+        <h3>좌측 섹션 네비게이션</h3>
+        <ul>
+          <li>주요 정보 / 재무 / 실적 / 배당 / 동종 업계 비교 / 애널리스트 분석 — 세로 메뉴</li>
+          <li>활성 항목: 좌측 컬러 바 + 배경 강조</li>
+          <li>콘텐츠는 우측 영역에서 교체 — SPA 방식</li>
+          <li>고정 너비 약 160px, 콘텐츠 영역 Fluid</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Key Information</div>
+        <h3>주요 정보 카드 구조</h3>
+        <ul>
+          <li>기업 설명 텍스트 블록 (출처: FnGuide)</li>
+          <li>시가총액·기업가치·대표이사 등 KV 그리드 레이아웃</li>
+          <li>매출·산업 구성: 도넛 차트 + 우측 범례 목록</li>
+          <li>홈페이지 외부 링크 버튼 (↗ 아이콘 포함)</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- 2-3. 거래현황 -->
+    <h3 style="margin-bottom:16px;">2-3. 거래현황 탭</h3>
+    <div class="analysis-grid">
+
+      <div class="card">
+        <div class="card-label">Broker Ranking</div>
+        <h3>거래원 매매 상위</h3>
+        <ul>
+          <li>매수/매도 각 상위 5개 증권사 나열</li>
+          <li>수량 기반 수평 바 차트로 비율 시각화</li>
+          <li>매수=빨간 계열, 매도=파란 계열</li>
+          <li>실시간 타임스탬프 (기준: MM.DD HH:MM)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Investor Trend</div>
+        <h3>투자자별 매매 동향</h3>
+        <ul>
+          <li>개인·외국인·기관 3선 라인 차트</li>
+          <li>기간 선택: 일별 / 1주일 / 1개월 드롭다운</li>
+          <li>Zero 기준선(점선) 표시로 매수/매도 구분</li>
+          <li>차트 하단 일자 레이블 — X축 레이블</li>
+          <li>투자자별 순매수 보기 전환 버튼</li>
+        </ul>
+      </div>
+
+      <div class="card full">
+        <div class="card-label">Investor Net Buy Table</div>
+        <h3>투자자 순매수 현황 테이블</h3>
+        <table class="comp-table">
+          <thead>
+            <tr><th>컬럼</th><th>내용</th><th>색상 규칙</th><th>중요도</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>일자</td>
+              <td>YY.MM.DD 형식</td>
+              <td>회색 (보조 정보)</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+            <tr>
+              <td>개인</td>
+              <td>순매수량 (주)</td>
+              <td>양수=빨강, 음수=파랑</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>외국인</td>
+              <td>순매수량 (주) + 장외거래 포함</td>
+              <td>양수=빨강, 음수=파랑</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>기관</td>
+              <td>순매수량 (주)</td>
+              <td>양수=빨강, 음수=파랑</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────
+       SECTION 3: UX 패턴 분석
+  ───────────────────────────────────────── -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>UX 패턴 및 디자인 원칙</h2>
+    </div>
+
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(79,124,255,0.1);">📐</div>
+        <h3>고정 우측 패널 전략</h3>
+        <p>주문 패널은 탭 전환에 무관하게 항상 노출됩니다. 사용자의 매매 전환을 위한 의도적 고정 설계로, AI 예측 패널에도 동일하게 적용 가능한 패턴입니다.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(38,208,124,0.1);">🔁</div>
+        <h3>탭 내 서브 탭 계층</h3>
+        <p>차트·호가 탭 내부에서 다시 차트/호가 서브 탭이 존재합니다. 정보 계층을 2단으로 분리하여 콘텐츠 밀도를 높이면서도 화면을 단순하게 유지합니다.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(255,209,102,0.1);">⏱</div>
+        <h3>실시간성의 다층 표현</h3>
+        <p>체결 Ticker 애니메이션, 호가 실시간 갱신, 투자자 동향 타임스탬프 등 다양한 방식으로 실시간성을 시각적으로 전달합니다.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(255,77,109,0.1);">🇰🇷</div>
+        <h3>한국 금융 색상 관행</h3>
+        <p>파랑=상승·매수, 빨강=하락·매도 원칙이 차트·호가·테이블 전반에 일관되게 적용됩니다. 글로벌 관행과 반대이므로 프로젝트 전체에서 통일 필요합니다.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(79,124,255,0.1);">🗂</div>
+        <h3>종목정보의 SPA 패턴</h3>
+        <p>좌측 메뉴 클릭 시 우측 콘텐츠만 교체되는 SPA 방식으로 전체 페이지 리로드 없이 섹션 이동이 가능합니다. 페이지 전환 이질감 최소화 전략입니다.</p>
+      </div>
+      <div class="finding-card">
+        <div class="finding-icon" style="background:rgba(38,208,124,0.1);">📊</div>
+        <h3>데이터 시각화 다양성</h3>
+        <p>캔들·라인 차트·도넛 차트·수평 바·수직 바·테이블 등 다양한 시각화 방식을 한 페이지에 혼합합니다. 정보 유형에 맞는 최적 시각화를 선택합니다.</p>
+      </div>
+    </div>
+
+    <div class="insight" style="margin-top:32px">
+      <div class="insight-label">핵심 인사이트</div>
+      <p>토스증권 종목 세부 페이지의 핵심은 <strong>탭 구조로 복잡한 정보를 계층화</strong>하면서도 <strong>우측 패널은 항상 고정</strong>하여 핵심 행동(주문)에 대한 접근성을 유지하는 것입니다. Assetmind에서는 이 고정 패널을 AI 예측 패널로 전환함으로써, 사용자의 주의가 이미 집중된 위치에 AI 인사이트를 자연스럽게 노출하는 전략이 가능합니다.</p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────
+       SECTION 4: 설계 적용 제안
+  ───────────────────────────────────────── -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>설계 적용 제안</h2>
+    </div>
+    <p>레퍼런스 분석을 바탕으로 Assetmind 종목 세부 정보 페이지에 적용할 핵심 설계 방향을 도출했습니다.</p>
+
+    <div class="analysis-grid">
+      <div class="card accent-card">
+        <div class="card-label">Keep (유지)</div>
+        <h3>그대로 채택할 패턴</h3>
+        <ul>
+          <li>차트·호가 / 종목정보 / 거래현황 3탭 구조</li>
+          <li>언더라인 스타일 메인 탭 + 서브 탭 2단 계층</li>
+          <li>기간 선택 Pill 탭 (1분·일·주·월·년)</li>
+          <li>호가창 배경 바 잔량 시각화</li>
+          <li>종목정보 좌측 섹션 네비게이션 + 우측 콘텐츠</li>
+          <li>거래원 매매 상위 수평 바 차트</li>
+          <li>투자자별 3선 라인 차트 + 순매수 테이블</li>
+          <li>하단 실시간 지수 Ticker 스트립</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-label">Replace & Add (교체·추가)</div>
+        <h3>Assetmind 고유 변경 사항</h3>
+        <ul>
+          <li><span class="badge new">교체</span> 우측 주문 패널 → AI 가격 예측 패널</li>
+          <li><span class="badge new">추가</span> AI 예측 목표가 + 상승/하락 확률 게이지</li>
+          <li><span class="badge new">추가</span> AI 분석 근거 카드 (기술적·감성·수급 탭)</span></li>
+          <li><span class="badge new">추가</span> 관련 종목 추천 카드 컴포넌트</li>
+          <li><span class="badge new">추가</span> 매수/매도 비율 Linear Gauge</li>
+          <li><span class="badge new">추가</span> Skeleton / 에러 상태 UI</li>
+        </ul>
+      </div>
+      <div class="card full">
+        <div class="card-label">Improve (개선)</div>
+        <h3>레퍼런스 대비 개선 포인트</h3>
+        <table class="comp-table">
+          <thead>
+            <tr><th>항목</th><th>레퍼런스 현황</th><th>Assetmind 개선 방향</th><th>우선순위</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>차트 툴팁</td>
+              <td>기본 OHLCV 텍스트</td>
+              <td>크로스헤어 + 카드형 툴팁 (날짜·OHLCV·거래량)</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>로딩 상태</td>
+              <td>빈 화면 노출</td>
+              <td>Skeleton UI로 레이아웃 선점 표시</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>에러 상태</td>
+              <td>별도 처리 미확인</td>
+              <td>데이터 미수신·시장 휴장 케이스 UI 명시</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>모바일 AI 패널</td>
+              <td>해당 없음</td>
+              <td>하단 고정 탭바 + 바텀 시트 패턴 적용</td>
+              <td><span class="badge hi">높음</span></td>
+            </tr>
+            <tr>
+              <td>명도 대비</td>
+              <td>일부 텍스트 대비 낮음</td>
+              <td>WCAG AA 기준(4.5:1) 이상 확보</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+            <tr>
+              <td>체결 Ticker</td>
+              <td>정적 테이블 방식</td>
+              <td>수평 자동 스크롤 애니메이션 + hover 일시정지</td>
+              <td><span class="badge med">중간</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="container">
+    레퍼런스 분석 리포트 · Sprint #5 · 2026.03.05 · 김성연
+  </div>
+</footer>
+
+</body>
+</html>

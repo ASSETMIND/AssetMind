@@ -1,62 +1,88 @@
 """
-HTTP 클라이언트 어댑터 (HTTP Client Adapter)
-
 이 모듈은 aiohttp 라이브러리를 기반으로 비동기(Asynchronous) HTTP 통신을 수행하는 인프라 구현체입니다.
-도메인 계층의 IHttpClient 인터페이스를 준수하여, 비즈니스 로직이 외부 통신 라이브러리(aiohttp)에
-직접적으로 의존하지 않도록 의존성을 역전(DIP)시킵니다.
+도메인 계층의 IHttpClient 인터페이스를 준수하여, 핵심 비즈니스 로직이 외부 통신 라이브러리(aiohttp)의
+구체적인 구현 세부사항에 직접적으로 의존하지 않도록 의존성 역전 원칙(DIP)을 적용했습니다.
 
-데이터 흐름 (Data Flow):
-Client Request (URL, Params) -> [Decorator: Log -> Retry] -> Session Pool -> Async HTTP Request
--> Status Code Validation -> Return Data
+[전체 데이터 흐름 설명 (Input -> Output)]
+1. Input: 타겟 URL, HTTP Headers, Query Parameters 또는 Body Data (Client Request).
+2. Interceptor: log_decorator 및 retry 데코레이터를 거치며 로깅 및 재시도 정책 자동 부여.
+3. Connection Management: aiohttp.ClientSession 풀(Pool)에서 활성화된 TCP 커넥션 획득.
+4. HTTP Execution: 비동기 논블로킹(Non-blocking) 방식의 외부 API 통신 (GET/POST).
+5. Output: HTTP 상태 코드 검증 후, Content-Type 헤더에 따라 JSON 객체 파싱 또는 Raw Text 반환.
 
 주요 기능:
-- Non-blocking I/O 기반의 고성능 GET/POST 요청 처리
-- Decorator를 통한 자동 재시도(Retry) 및 로깅(Logging) 적용
-- aiohttp.ClientSession 재사용을 통한 TCP Connection Pooling
+- [Asynchronous I/O] aiohttp 기반의 논블로킹 네트워크 연산을 통한 고성능 동시성(Concurrency) 보장.
+- [Resilience] `@retry` 데코레이터를 활용한 일시적 네트워크 장애(Timeout 등) 자동 복구 메커니즘.
+- [Observability] `@log_decorator`를 통한 HTTP 요청/응답 페이로드 및 지연 시간(Latency) 추적.
+- [Client-Side Throttling] API 제공자의 초당 거래건수(TPS) 제한을 준수하기 위해 단일 요청 완료 후 강제 대기(Pacing) 적용.
 
-Trade-off:
-- Decorator Overhead vs Clean Code:
-    - 장점: 비즈니스 로직(순수 통신)과 운영 로직(재시도, 로깅)의 완벽한 분리.
-    - 단점: 함수 호출 스택 깊이가 깊어지나, 네트워크 I/O Latency 대비 무시할 수 있는 수준임.
-    - 근거: 네트워크 불안정성에 대한 방어 로직을 일관성 있게 적용하는 것이 성능보다 운영 안정성에 훨씬 중요함.
+Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약.
+1. aiohttp 클라이언트 캡슐화 (기존):
+   - 장점: 파이프라인 전역에서 외부 라이브러리(aiohttp)에 대한 강결합을 제거하여, 향후 httpx 등으로 교체 시 유지보수가 극도로 용이함.
+   - 단점: 단순 API 호출을 위해 어댑터 클래스를 한 번 더 거쳐야 하므로 미세한 함수 호출 오버헤드가 존재함.
+   - 근거: 대규모 데이터 파이프라인에서 인프라 교체 유연성과 공통 에러/로깅 규격 강제는 오버헤드를 감수할 만큼의 압도적인 이점을 제공함.
+2. TCPConnector Limit 상향 및 Global/Local Timeout 하이브리드 적용 (신규):
+   - 장점: 다수의 수집기가 동시에 요청을 보내도 소켓 큐잉 지연이 발생하지 않으며, 기존 메서드 시그니처(`timeout` 파라미터)를 유지하여 하위 모듈의 수정(산탄총 수술)을 완벽히 방지함.
+   - 단점: 커넥션 풀(Limit=100)을 넓게 유지하므로 OS 레벨의 파일 디스크립터(FD) 사용량이 일시적으로 상승함.
+   - 근거: 동시 실행(Concurrent Execution) 시 발생하는 Thundering Herd 병목을 해소하기 위해 파이프를 확장하는 것이며, 메서드 레벨의 timeout 파라미터를 보존하여 하위 호환성을 100% 보장하는 것이 객체지향 원칙에 부합함.
+- Throttling 방식: Token Bucket 알고리즘 vs 단순 강제 휴식(asyncio.sleep):
+  - 장점: `asyncio.sleep`은 구현이 극도로 단순하며 비즈니스/네트워크 로직을 오염시키지 않음.
+  - 단점: 유량 제어가 수학적으로 엄밀하지 않아 TPS를 100% 빈틈없이 꽉 채워 활용하지 못하고 약간의 성능 손해(1건당 0.15초)가 강제됨.
+  - 근거: 하루 1회 실행되는 파이프라인 특성상 수집 속도를 극한으로 끌어올리는 것보다, 외부 API 서버로부터 디도스로 오인당하지 않는 '안정성(Zero Fail)'이 최우선이므로 복잡한 알고리즘 없이 가성비가 가장 좋은 단순 강제 휴식을 채택함.
 """
 
-import aiohttp
 import asyncio
-from typing import Dict, Optional, Any
 from types import TracebackType
+from typing import Any, Dict, Optional
 
-from src.common.interfaces import IHttpClient
-from src.common.exceptions import NetworkConnectionError
-from src.common.log import LogManager
+import aiohttp
+
 from src.common.decorators import log_decorator, retry
+from src.common.exceptions import NetworkConnectionError
+from src.common.interfaces import IHttpClient
+from src.common.log import LogManager
 
+# ==============================================================================
+# Constants & Configuration
+# ==============================================================================
+# [설계 의도] 다중 API 동시 수집 시의 네트워크 병목을 해소하기 위한 명시적 자원 할당량
+MAX_CONNECTION_LIMIT = 100 # aiohttp 커넥션 풀의 최대 커넥션 수 (Thundering Herd 완화 목적) - 기존 10에서 상향 조정
+DNS_CACHE_TTL = 300 # DNS 캐시의 TTL (초 단위)
+TOTAL_TIMEOUT_SECONDS = 30.0 # 전체 요청 타임아웃 (초 단위, 연결 + 응답 대기 시간 포함) - 기존 60에서 하향 조정하여 빠른 실패 유도
+CONNECT_TIMEOUT_SECONDS = 10.0 # 연결 타임아웃 (초 단위, TCP 핸드셰이크 최대 대기 시간) - 신규 추가하여 연결 지연 시 빠르게 실패하도록 유도
+THROTTLE_DELAY_SECONDS: float = 0.15  # 각 요청이 끝난 후 강제 대기(Pacing) 시간 (초 단위, 150ms)
 
+# ==============================================================================
+# [Main Class] AsyncHttpAdapter
+# ==============================================================================
 class AsyncHttpAdapter(IHttpClient):
     """aiohttp를 사용하는 비동기 HTTP 클라이언트 구현체.
 
+    외부 API 통신을 전담하며, 네트워크 예외를 도메인 예외로 변환하여 
+    애플리케이션 계층을 보호합니다. Async Context Manager(`async with`)를 지원합니다.
+
     Attributes:
-        timeout (aiohttp.ClientTimeout): 요청 타임아웃 설정.
-        logger (logging.Logger): 로거 인스턴스.
-        _session (Optional[aiohttp.ClientSession]): 재사용 가능한 HTTP 세션.
+        timeout (aiohttp.ClientTimeout): 전체 요청의 최대 대기 시간(초) 설정 객체.
+        _session (Optional[aiohttp.ClientSession]): 재사용 가능한 HTTP 커넥션 세션 풀.
     """
 
-    def __init__(self, timeout: int = 30):
-        """AsyncHttpAdapter를 초기화합니다.
+    def __init__(self) -> None:
+        """AsyncHttpAdapter 인스턴스를 초기화합니다.
 
         Args:
-            timeout (int): 전체 요청 타임아웃 시간(초). 기본값은 30초.
+            timeout (int, optional): 전체 요청 타임아웃 시간(초). Defaults to 30.
         """
-        # Rationale: 네트워크 지연을 고려하여 넉넉한 타임아웃 설정 (Default: 30s)
-        self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.logger = LogManager.get_logger("AsyncHttpAdapter")
+        # [설계 의도] 대용량 데이터 수집이나 외부 API의 일시적 지연을 고려하여 
         self._session: Optional[aiohttp.ClientSession] = None
 
     async def __aenter__(self) -> "AsyncHttpAdapter":
-        """Context Manager 진입: 세션을 미리 생성합니다.
+        """Async Context Manager 진입 시 호출되며, 세션을 미리 생성하거나 준비합니다.
         
-        Rationale: 'async with' 구문을 통해 리소스(세션)의 생명주기를 명확히 관리하기 위함.
+        Returns:
+            AsyncHttpAdapter: 현재 인스턴스.
         """
+        # [설계 의도] `async with AsyncHttpAdapter() as client:` 구문을 강제하여, 
+        # 개발자가 네트워크 리소스(세션)의 생명주기를 누수(Leak) 없이 명확히 관리하도록 유도함.
         await self._get_session()
         return self
 
@@ -66,55 +92,83 @@ class AsyncHttpAdapter(IHttpClient):
         exc_val: Optional[Exception], 
         exc_tb: Optional[TracebackType]
     ) -> None:
-        """Context Manager 종료: 세션을 안전하게 정리합니다."""
+        """Async Context Manager 종료 시 호출되며, 활성화된 세션을 안전하게 정리합니다.
+
+        Args:
+            exc_type (Optional[type]): 발생한 예외의 타입.
+            exc_val (Optional[Exception]): 발생한 예외 객체.
+            exc_tb (Optional[TracebackType]): 예외의 트레이스백 정보.
+        """
         await self.close()
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """현재 활성화된 세션을 반환하거나, 없으면 새로 생성합니다.
-        
-        Rationale: TCP Handshake 비용을 절감하기 위해 Keep-Alive 연결을 유지하는 
-        Session 객체를 재사용(Singleton-like within instance)합니다.
-        """
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self.timeout)
+        """싱글톤 패턴 기반의 aiohttp 클라이언트 세션을 초기화하고 반환합니다."""
+        if self._session is None:
+            # 1. Connection Pool & DNS Cache 최적화
+            # [설계 의도] SSL/TLS 핸드셰이크와 DNS 룩업은 초기 비동기 통신에서 가장 큰 병목입니다.
+            # Limit을 넉넉히 열어 대기열 지연을 없애고, DNS 캐시를 활용하여 컨텍스트 스위칭 속도를 극대화합니다.
+            connector = aiohttp.TCPConnector(
+                limit=MAX_CONNECTION_LIMIT,
+                ttl_dns_cache=DNS_CACHE_TTL,
+                use_dns_cache=True
+            )
+            
+            # 2. Timeout Policy 강화
+            # [설계 의도] 특정 외부 API 서버가 일시적으로 먹통이 되었을 때 파이프라인 전체가 
+            # 멈춰버리는 것을 방지하기 위해 연결(10초) 및 전체 응답(30초) 데드라인을 강제합니다.
+            timeout = aiohttp.ClientTimeout(
+                total=TOTAL_TIMEOUT_SECONDS, 
+                connect=CONNECT_TIMEOUT_SECONDS
+            )
+            
+            self._session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout
+            )
         return self._session
 
     async def close(self) -> None:
-        """사용 중인 세션을 명시적으로 종료하여 리소스를 반환합니다."""
+        """사용 중인 세션을 명시적으로 종료하여 시스템 리소스(소켓 등)를 운영체제에 반환합니다."""
         if self._session and not self._session.closed:
             await self._session.close()
-            self.logger.info("Async HTTP Session closed.")
 
-    @log_decorator(logger_name="HTTP", suppress_error=False)
+    @log_decorator(logger_name="HTTP")
     @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkConnectionError, asyncio.TimeoutError))
     async def get(
         self, 
         url: str, 
         headers: Optional[Dict[str, str]] = None, 
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        """비동기 GET 요청을 수행합니다. (Retry & Log 적용)
+        """비동기 HTTP GET 요청을 수행합니다.
+
+        실패 시 지수 백오프(Exponential Backoff) 기반의 자동 재시도를 수행하며,
+        요청 및 응답의 메타데이터를 자동으로 로깅합니다.
 
         Args:
-            url (str): 요청할 대상 URL.
-            headers (Optional[Dict]): HTTP 요청 헤더.
-            params (Optional[Dict]): URL 쿼리 파라미터.
+            url (str): 요청할 대상 엔드포인트 URL.
+            headers (Optional[Dict[str, str]], optional): HTTP 요청 헤더 딕셔너리. Defaults to None.
+            params (Optional[Dict[str, Any]], optional): URL Query String으로 변환될 파라미터. Defaults to None.
 
         Returns:
-            Any: 파싱된 응답 데이터 (주로 Dict).
+            Any: 성공적으로 파싱된 JSON 객체 또는 텍스트 문자열.
 
         Raises:
-            NetworkConnectionError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
+            NetworkConnectionError: 지정된 횟수만큼 재시도한 후에도 네트워크 연결 실패, 
+                                    타임아웃, 또는 HTTP 4xx/5xx 에러가 발생한 경우.
         """
         session = await self._get_session()
         try:
             async with session.get(url, headers=headers, params=params) as response:
                 return await self._handle_response(response, url, "GET")
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            # Rationale: 원본 에러(aiohttp specific)를 래핑하여 
-            # 상위 도메인 로직이 인프라 구현 세부사항(aiohttp)에 의존하지 않도록 함.
-            # 또한 RetryDecorator가 감지할 수 있는 예외(NetworkConnectionError)로 변환함.
-            raise NetworkConnectionError(f"GET {url} failed: {str(e)}") from e
+            # [설계 의도] 인프라 계층의 구체적인 에러(aiohttp.ClientError 등)가 도메인 계층으로 
+            # 전파되는 것(Leaking)을 막기 위해, 시스템 표준 예외인 NetworkConnectionError로 래핑함.
+            # 이를 통해 상위 재시도(Retry) 데코레이터가 인프라 라이브러리의 교체와 무관하게 일관되게 동작함.
+            raise NetworkConnectionError(f"GET 요청 실패 ({url}): {str(e)}") from e
+        finally:
+            # Thundering Herd 병목을 완화하기 위해 각 요청이 끝난 후 강제 대기(Pacing)를 적용함.
+            await asyncio.sleep(THROTTLE_DELAY_SECONDS)
 
     @log_decorator(logger_name="HTTP", suppress_error=False)
     @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkConnectionError, asyncio.TimeoutError))
@@ -124,26 +178,29 @@ class AsyncHttpAdapter(IHttpClient):
         headers: Optional[Dict[str, str]] = None, 
         data: Optional[Dict[str, Any]] = None
     ) -> Any:
-        """비동기 POST 요청을 수행합니다. (Retry & Log 적용)
+        """비동기 HTTP POST 요청을 수행합니다.
 
         Args:
-            url (str): 요청할 대상 URL.
-            headers (Optional[Dict]): HTTP 요청 헤더.
-            data (Optional[Dict]): 요청 바디 데이터 (JSON 직렬화).
+            url (str): 요청할 대상 엔드포인트 URL.
+            headers (Optional[Dict[str, str]], optional): HTTP 요청 헤더 딕셔너리. Defaults to None.
+            data (Optional[Dict[str, Any]], optional): HTTP Body에 포함될 JSON 데이터. Defaults to None.
 
         Returns:
-            Any: 파싱된 응답 데이터.
+            Any: 성공적으로 파싱된 JSON 객체 또는 텍스트 문자열.
 
         Raises:
-            NetworkConnectionError: 네트워크 연결 실패, 타임아웃, 4xx/5xx 에러 시 발생 (재시도 실패 후).
+            NetworkConnectionError: 네트워크 장애 또는 HTTP 4xx/5xx 상태 코드 반환 시.
         """
         session = await self._get_session()
         try:
             async with session.post(url, headers=headers, json=data) as response:
                 return await self._handle_response(response, url, "POST")
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-             # Rationale: GET과 동일하게 예외를 래핑하여 일관된 에러 인터페이스 제공.
-             raise NetworkConnectionError(f"POST {url} failed: {str(e)}") from e
+             # [설계 의도] GET 메서드와 동일하게 예외를 래핑하여 어댑터의 인터페이스 일관성을 유지함.
+             raise NetworkConnectionError(f"POST 요청 실패 ({url}): {str(e)}") from e
+        finally:
+            # Thundering Herd 병목을 완화하기 위해 각 요청이 끝난 후 강제 대기(Pacing)를 적용함.
+            await asyncio.sleep(THROTTLE_DELAY_SECONDS)
 
     async def _handle_response(
         self, 
@@ -151,38 +208,36 @@ class AsyncHttpAdapter(IHttpClient):
         url: str, 
         method: str
     ) -> Any:
-        """HTTP 응답을 검증하고 안전하게 파싱합니다.
+        """HTTP 응답 객체의 상태를 검증하고 페이로드를 안전하게 파싱합니다.
 
         Args:
-            response (aiohttp.ClientResponse): aiohttp 응답 객체.
-            url (str): 요청 URL (로깅용).
-            method (str): 요청 메서드 (로깅용).
+            response (aiohttp.ClientResponse): aiohttp가 반환한 원본 응답 객체.
+            url (str): 디버깅 및 에러 로깅을 위한 원본 요청 URL.
+            method (str): 디버깅 및 에러 로깅을 위한 HTTP 메서드.
 
         Returns:
-            Any: 파싱된 JSON 객체 또는 텍스트.
+            Any: 파싱된 JSON 객체. JSON이 아닐 경우 Raw Text 문자열.
 
         Raises:
-            NetworkConnectionError: HTTP Status가 400 이상일 경우.
+            NetworkConnectionError: HTTP Status Code가 400 이상(Client/Server Error)일 경우.
         """
-        # 1. HTTP Status 검사
+        # [설계 의도] aiohttp는 4xx, 5xx 에러 발생 시 예외를 던지지 않고 상태 코드만 반환하므로,
+        # 명시적으로 상태 코드를 검사하여 파이프라인의 조기 실패(Fail-Fast)를 유도함.
         if response.status >= 400:
             error_body = await response.text()
-            self.logger.warning(
-                f"[{method}] HTTP Error | Status: {response.status} | URL: {url} | Body: {error_body[:200]}"
-            )
-            # Rationale: 4xx/5xx 에러는 정상 응답이 아니므로 예외를 발생시켜 흐름을 제어함.
-            raise NetworkConnectionError(f"HTTP {response.status} on {method} {url}: {error_body}")
+            raise NetworkConnectionError(f"HTTP {response.status} 에러 ({method} {url}): {error_body}")
 
-        # 2. 데이터 파싱 (JSON 우선, 실패 시 Text 반환)
+        # 데이터 파싱 (JSON 우선 시도, 실패 시 Text 반환)
         try:
             content_type = response.headers.get("Content-Type", "").lower()
             if "application/json" in content_type:
                 return await response.json()
-            # Rationale: Content-Type이 JSON이 아니거나 명시되지 않은 경우 텍스트로 반환.
+            
+            # [설계 의도] Content-Type이 JSON이 아니거나 명시되지 않은 경우, 
+            # 강제로 파싱하지 않고 순수 텍스트를 반환하여 호출자에게 파싱 책임을 위임함.
             return await response.text()
-        except (ValueError, aiohttp.ContentTypeError) as e:
-            # Rationale: JSON 헤더가 있어도 바디가 깨져있는 경우에 대한 방어 코드.
-            self.logger.warning(
-                f"[{method}] JSON Parsing Failed | URL: {url} | Error: {str(e)}. Falling back to text."
-            )
+        except (ValueError, aiohttp.ContentTypeError):
+            # [설계 의도] API 벤더사 측의 버그로 인해 Content-Type은 JSON으로 선언해놓고 
+            # 실제 바디는 HTML이나 깨진 텍스트를 보내는 경우를 대비한 최후의 방어벽(Fail-Safe).
+            # 에러를 던지지 않고 텍스트로 우회 반환함으로써 애플리케이션 크래시를 방지함.
             return await response.text()

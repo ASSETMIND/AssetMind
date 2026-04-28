@@ -1,8 +1,12 @@
 package com.assetmind.server_stock.stock.application.mapper;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,6 +17,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class StockMapper {
+
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HHmmss");
 
     public StockPriceRedisEntity toRedisEntity(RealTimeStockTradeEvent event, String stockName) {
         return StockPriceRedisEntity.builder()
@@ -28,20 +34,16 @@ public class StockMapper {
                 .build();
     }
 
-    public StockDataEntity toJpaEntity(RealTimeStockTradeEvent event) {
-        return StockDataEntity.builder()
+    public RawTickJpaEntity toJpaEntity(RealTimeStockTradeEvent event) {
+
+        LocalTime parsedTime = LocalTime.parse(event.time(), TIME_FORMATTER);
+
+        return RawTickJpaEntity.builder()
                 .stockCode(event.stockCode())
-                .currentPrice(event.currentPrice())
-                .openPrice(event.openPrice())
-                .highPrice(event.highPrice())
-                .lowPrice(event.lowPrice())
-                .priceChange(event.priceChange())
-                .changeRate(event.changeRate())
-                .executionVolume(event.executionVolume())
-                .tradingVolume(event.cumulativeVolume())
-                .tradingAmount(event.cumulativeAmount())
-                .time(event.time())
-                .createdAt(event.eventTimeStamp())
+                .tradeTimestamp(LocalDateTime.of(LocalDate.now(), parsedTime))
+                .currentPrice(Double.valueOf(String.valueOf(event.currentPrice())))
+                .priceChange(Double.valueOf(String.valueOf(event.priceChange())))
+                .volume(event.executionVolume())
                 .build();
     }
 }

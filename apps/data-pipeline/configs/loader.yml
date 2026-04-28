@@ -1,0 +1,60 @@
+# ==============================================================================
+# 통합 데이터 적재 정책 (Unified Load Policy)
+#
+# 구조:
+#   데이터 파이프라인의 종착지인 스토리지(S3) 및 데이터베이스(PostgreSQL)의
+#   물리적 연결 정보와 인프라 환경 변수를 정의합니다.
+#   ConfigManager를 통해 S3Loader 및 PostgreSQLLoader 객체 초기화 시 주입됩니다.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# [1] S3 적재기 설정 (S3Loader)
+# 용도: 금융 원천 데이터(Raw Data)의 zstd 스트리밍 적재 및 보관
+# ------------------------------------------------------------------------------
+aws:
+  region: "ap-northeast-2" # AWS 기본 리전 (서울)
+  s3:
+    # 환경(dev/stg/prd)에 따라 분리된 원천 데이터 전용 데이터 레이크 버킷
+    bucket_name: "data-pipeline-bronze"
+
+    # [참고] 멀티파트 업로드 임계값 및 스레드 튜닝 (현재는 코드에 상수로 있으나,
+    # 향후 동적 설정이 필요할 경우를 대비한 예약 필드)
+  tuning:
+    multipart_threshold_mb: 10
+    max_concurrency: 10
+
+# ------------------------------------------------------------------------------
+# [2] 관계형 DB 적재기 설정 (PostgreSQLLoader)
+# 용도: 정제된 데이터(Silver/Gold)의 Bulk Insert 전용
+# ------------------------------------------------------------------------------
+postgres:
+  # 커넥션 정보 (Write 전용 Master DB 엔드포인트)
+  host: "finance-dw-master.cluster-internal.toss.local"
+  port: 5432
+  database: "finance_data_warehouse"
+  user: "etl_pipeline_role"
+
+  # [보안 원칙] password는 YAML에 하드코딩하지 않습니다.
+  # ConfigManager가 초기화될 때 os.environ.get('DB_PASSWORD') 또는
+  # AWS Secrets Manager에서 가져와 런타임에 병합(Merge)하도록 설계해야 합니다.
+
+  # 커넥션 풀 및 성능 튜닝
+  pool:
+    min_size: 5
+    max_size: 20
+    timeout_sec: 30
+
+  # 기본 적재 타겟 스키마
+  default_schema: "silver_layer"
+
+# ------------------------------------------------------------------------------
+# [3] 로더 전역 공통 설정 (Global Loader Settings)
+# 용도: AbstractLoader 등에서 공통적으로 참조하는 파이프라인 제어 변수
+# ------------------------------------------------------------------------------
+global_loader:
+  # 네트워크/DB I/O 작업의 글로벌 타임아웃
+  timeout_sec: 300
+
+  # 치명적인 에러(권한 문제 등)가 아닐 경우의 최대 재시도 횟수
+  max_retries: 3
+  retry_backoff_factor: 2.0

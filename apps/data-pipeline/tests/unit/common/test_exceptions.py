@@ -6,12 +6,19 @@ from src.common.exceptions import (
     ETLError,
     ConfigurationError,
     ExtractorError,
+    LoaderValidationError,
+    S3UploadError,
     TransformerError,
     LoaderError,
     NetworkConnectionError,
     HttpError,
     RateLimitError,
-    AuthError
+    AuthError,
+    MergeKeyNotFoundError,
+    MergeColumnCollisionError,
+    MergeCardinalityError,
+    MergeExecutionError,
+    ZstdCompressionError
 )
 
 # ========================================================================================
@@ -205,3 +212,156 @@ def test_hier_01_auth_inheritance():
     
     # AuthError는 재시도하지 않음 (401/403은 영구적 오류로 취급)
     assert error.should_retry is False
+
+# ========================================================================================
+# 4. 변환 계층 예외 테스트 (Transformer Exceptions)
+# ========================================================================================
+
+def test_trf_01_merge_key_not_found():
+    """[TRF-01] [Property] MergeKeyNotFoundError 생성 시 missing_keys 보존 및 재시도 불가 강제 검증"""
+    # Given
+    missing = ["user_id", "product_id"]
+    target_name = "df_sales"
+    
+    # When
+    error = MergeKeyNotFoundError(
+        message="Join keys are missing.", 
+        missing_keys=missing, 
+        target_df_name=target_name
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["missing_keys"] == missing
+    assert result["details"]["target_df_name"] == target_name
+    assert result["should_retry"] is False
+
+def test_trf_02_merge_column_collision():
+    """[TRF-02] [Property] MergeColumnCollisionError 생성 시 colliding_columns 보존 및 재시도 불가 강제 검증"""
+    # Given
+    colliding = ["status", "created_at"]
+    
+    # When
+    error = MergeColumnCollisionError(
+        message="Column collision detected.", 
+        colliding_columns=colliding
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["colliding_columns"] == colliding
+    assert result["should_retry"] is False
+
+def test_trf_03_merge_cardinality():
+    """[TRF-03] [Property] MergeCardinalityError 생성 시 shape 튜플 보존 및 재시도 불가 강제 검증"""
+    # Given
+    left = (100, 5)
+    right = (200, 6)
+    relation = "1:1"
+    
+    # When
+    error = MergeCardinalityError(
+        message="Cardinality explosion detected.", 
+        expected_relation=relation, 
+        left_shape=left, 
+        right_shape=right
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["expected_relation"] == relation
+    assert result["details"]["left_shape"] == left
+    assert result["details"]["right_shape"] == right
+    assert result["should_retry"] is False
+
+def test_trf_04_merge_execution_chaining():
+    """[TRF-04] [Chaining] MergeExecutionError 생성 시 join_type 보존 및 원본 런타임 예외 체이닝 검증"""
+    # Given
+    original = MemoryError("Out of memory during pandas merge")
+    join_type = "left"
+    
+    # When
+    error = MergeExecutionError(
+        message="Pandas merge failed unexpectedly.", 
+        join_type=join_type, 
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["join_type"] == join_type
+    assert result["cause"] == "Out of memory during pandas merge"
+    assert result["should_retry"] is False
+
+# ========================================================================================
+# 5. 적재 계층 예외 테스트 (Loader Exceptions)
+# ========================================================================================
+
+def test_ldr_01_validation_error():
+    """[LDR-01] [Property] LoaderValidationError 생성 시 invalid_fields 및 dto_name 보존, 재시도 불가 검증"""
+    # Given
+    invalid_fields = ["user_id", "transaction_amount"]
+    dto_name = "FinanceDTO"
+    
+    # When
+    error = LoaderValidationError(
+        message="Required fields are missing.",
+        invalid_fields=invalid_fields,
+        dto_name=dto_name
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["invalid_fields"] == invalid_fields
+    assert result["details"]["dto_name"] == dto_name
+    assert result["should_retry"] is False
+
+
+def test_ldr_02_compression_error():
+    """[LDR-02] [Chaining] ZstdCompressionError 생성 시 data_size 보존, 원본 예외 체이닝 및 재시도 불가 검증"""
+    # Given
+    data_size = 1024 * 1024  # 1MB
+    original = MemoryError("Out of memory during zstd compression")
+    
+    # When
+    error = ZstdCompressionError(
+        message="Compression failed.",
+        data_size_bytes=data_size,
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["data_size_bytes"] == data_size
+    assert result["cause"] == "Out of memory during zstd compression"
+    assert error.original_exception is original
+    assert result["should_retry"] is False
+
+
+def test_ldr_03_s3_upload_error():
+    """[LDR-03] [Property] S3UploadError 생성 시 업로드 메타데이터 보존, 원본 예외 체이닝 및 재시도 강제 검증"""
+    # Given
+    bucket = "test-data-bucket"
+    key = "etl/2026/data.csv.zst"
+    upload_id = "abc123_multipart_id"
+    original = ConnectionError("Read timeout on endpoint URL")
+    
+    # When
+    error = S3UploadError(
+        message="S3 multipart upload failed.",
+        bucket_name=bucket,
+        s3_key=key,
+        upload_id=upload_id,
+        is_multipart=True,
+        original_exception=original
+    )
+    result = error.to_dict()
+    
+    # Then
+    assert result["details"]["bucket_name"] == bucket
+    assert result["details"]["s3_key"] == key
+    assert result["details"]["upload_id"] == upload_id
+    assert result["details"]["is_multipart"] is True
+    assert result["cause"] == "Read timeout on endpoint URL"
+    assert error.original_exception is original
+    assert result["should_retry"] is True

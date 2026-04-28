@@ -1,4 +1,4 @@
-import RankLayout from '../components/stock/rank-layout';
+import RankLayout from '../components/stock-main/rank-layout';
 
 export default function MainPage() {
 	return (

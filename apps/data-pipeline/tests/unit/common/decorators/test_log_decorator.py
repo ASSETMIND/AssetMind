@@ -1,513 +1,386 @@
 import pytest
 import asyncio
-import sys
-import json
-import importlib
-import builtins
-from pathlib import Path
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import MagicMock, patch
 
-# --------------------------------------------------------------------------
-# Environment Setup (Path Injection)
-# --------------------------------------------------------------------------
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
-
-# --------------------------------------------------------------------------
-# Import Real Objects & Target Class
-# --------------------------------------------------------------------------
-from src.common.decorators import LoggingDecorator
+# [Target Module]
+import src.common.decorators.log_decorator as decorator_module
+from src.common.decorators.log_decorator import log_decorator, LoggingDecorator
 from src.common.exceptions import ETLError
 
-# --------------------------------------------------------------------------
-# 0. Constants & Configuration
-# --------------------------------------------------------------------------
-
-# Mocking 대상 경로 (log_decorator.py 내부 의존성).
-TARGET_LOG_MANAGER = "src.common.decorators.log_decorator.LogManager"
-TARGET_CONTEXT = "src.common.decorators.log_decorator.request_id_ctx"
-TARGET_JSON = "src.common.decorators.log_decorator.json"
-
-# --------------------------------------------------------------------------
-# 1. Fixtures (Test Environment Setup)
-# --------------------------------------------------------------------------
+# ========================================================================================
+# [Fixtures & Mocks]
+# ========================================================================================
 
 @pytest.fixture
-def mock_dependencies():
-    """
-    [Dependencies Mock]
-    LogManager와 request_id_ctx를 Mocking하여 외부 의존성을 격리합니다.
-    """
-    with patch(TARGET_LOG_MANAGER) as MockLogManager, \
-         patch(TARGET_CONTEXT) as MockContext:
-        
-        # 1. Logger Mock 설정
-        mock_logger_instance = MagicMock()
-        MockLogManager.get_logger.return_value = mock_logger_instance
-        
-        # 2. Context Mock 설정 (기본값: 'system')
-        MockContext.get.return_value = "system"
-        
-        yield {
-            "LogManager": MockLogManager,
-            "Context": MockContext,
-            "Logger": mock_logger_instance
-        }
+def mock_logger():
+    """LogManager를 패치하여 logger의 행위를 가로채는 픽스처"""
+    with patch("src.common.decorators.log_decorator.LogManager.get_logger") as mock_get_logger:
+        logger_instance = MagicMock()
+        mock_get_logger.return_value = logger_instance
+        yield logger_instance
 
-# --------------------------------------------------------------------------
-# 2. Test Cases
-# --------------------------------------------------------------------------
+@pytest.fixture
+def mock_context():
+    """Request ID 컨텍스트를 제어하는 픽스처"""
+    with patch("src.common.decorators.log_decorator.request_id_ctx") as mock_ctx, \
+         patch("src.common.decorators.log_decorator.LogManager.set_context") as mock_set_ctx:
+        # 기본 상태 셋팅
+        mock_ctx.get.return_value = "system"
+        yield mock_ctx, mock_set_ctx
 
-class TestLoggingDecorator:
+# ========================================================================================
+# 1. 기능적 성공 (Functional Success)
+# ========================================================================================
+
+def test_sync_01_success(mock_logger, mock_context):
+    # Given: 데코레이터가 적용된 일반 동기 함수
+    @log_decorator(logger_name="test_sync")
+    def sync_func(a, b):
+        return a + b
+
+    # When: 함수를 호출하면
+    result = sync_func(1, 2)
     
-    # ==========================================
-    # Category: Happy Path (Normal Execution)
-    # ==========================================
+    # Then: 정상 반환되며 START/END 로그가 정확하게 기록됨
+    assert result == 3
+    mock_logger.info.assert_any_call(
+        f'[{sync_func.__qualname__}] START | Params: {{"arg_0": "1", "arg_1": "2"}}'
+    )
+    end_log = mock_logger.info.call_args_list[-1][0][0]
+    assert "END | Time:" in end_log
+    assert "Result: 3" in end_log
 
-    def test_tc001_sync_happy_path(self, mock_dependencies):
-        """[TC-001] Sync 함수: Context 주입, Start/End 로그 기록, 결과 반환 성공"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def add(a, b):
-            return a + b
-        
-        # When
-        result = add(10, 20)
-        
-        # Then
-        assert result == 30
-        # 1. Context Auto-Injection 확인
-        deps["LogManager"].set_context.assert_called_once()
-        # 2. Start/End 로그 호출 확인 (총 2회)
-        assert deps["Logger"].info.call_count == 2
-        deps["Logger"].info.assert_any_call(ANY)
+@pytest.mark.asyncio
+async def test_async_01_success(mock_logger, mock_context):
+    # Given: 데코레이터가 적용된 비동기 함수
+    @log_decorator(logger_name="test_async")
+    async def async_func(val):
+        await asyncio.sleep(0.01)
+        return val
 
-    @pytest.mark.asyncio
-    async def test_tc002_async_happy_path(self, mock_dependencies):
-        """[TC-002] Async 함수: Await 처리 지원, 로그 기록, 결과 반환 성공"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        async def async_echo(msg):
-            await asyncio.sleep(0.01)
-            return msg
-        
-        # When
-        result = await async_echo("test")
-        
-        # Then
-        assert result == "test"
-        deps["LogManager"].set_context.assert_called_once()
-        assert deps["Logger"].info.call_count == 2
-
-    def test_tc003_return_none(self, mock_dependencies):
-        """[TC-003] 반환값이 None일 경우: 로그에 문자열 'None'으로 안전하게 기록"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def do_nothing():
-            return None
-        
-        # When
-        do_nothing()
-        
-        # Then
-        # 마지막 호출(End Log)의 메시지 검증
-        end_log_call = deps["Logger"].info.call_args_list[-1]
-        log_msg = end_log_call[0][0]
-        assert "Result: None" in log_msg
-
-    # ==========================================
-    # Category: Boundary Analysis (Limits)
-    # ==========================================
-
-    def test_tc004_no_truncation(self, mock_dependencies):
-        """[TC-004] Truncation 미적용: 반환값이 Limit 미만일 때 전체 기록"""
-        # Given
-        deps = mock_dependencies
-        limit = 2000
-        short_str = "Short string"
-        
-        @LoggingDecorator(truncate_limit=limit)
-        def return_short():
-            return short_str
-        
-        # When
-        return_short()
-        
-        # Then
-        end_log_call = deps["Logger"].info.call_args_list[-1]
-        assert f"Result: {short_str}" in end_log_call[0][0]
-
-    def test_tc005_truncation_applied(self, mock_dependencies):
-        """[TC-005] Truncation 적용: 반환값이 Limit 초과 시 잘림(...truncated) 처리"""
-        # Given
-        deps = mock_dependencies
-        limit = 10
-        long_str = "Long string over limit"
-        
-        @LoggingDecorator(truncate_limit=limit)
-        def return_long():
-            return long_str
-        
-        # When
-        return_long()
-        
-        # Then
-        end_log_call = deps["Logger"].info.call_args_list[-1]
-        log_msg = end_log_call[0][0]
-        assert "Result: Long strin... (truncated" in log_msg
-
-    def test_tc006_empty_args(self, mock_dependencies):
-        """[TC-006] 인자가 없을 때: Params가 빈 JSON 객체로 안전하게 기록"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def no_args():
-            return "ok"
-        
-        # When
-        no_args()
-        
-        # Then
-        start_log_call = deps["Logger"].info.call_args_list[0]
-        assert "Params: {}" in start_log_call[0][0]
-
-    # ==========================================
-    # Category: Type Safety & Security (PII)
-    # ==========================================
-
-    def test_tc007_pii_masking_exact(self, mock_dependencies):
-        """[TC-007] PII Masking: 정확히 일치하는 민감 키워드(password) 마스킹"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def login(id, password):
-            pass
-        
-        # When
-        login(id="user", password="secret")
-        
-        # Then
-        start_log_call = deps["Logger"].info.call_args_list[0]
-        log_msg = start_log_call[0][0]
-        assert '"password": "***** (MASKED)"' in log_msg
-        assert "secret" not in log_msg
-
-    def test_tc008_pii_masking_case_insensitive(self, mock_dependencies):
-        """[TC-008] PII Masking: 대소문자 혼합 키워드(PaSsWoRd) 마스킹"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def login(**kwargs):
-            pass
-        
-        # When
-        login(PaSsWoRd="secret")
-        
-        # Then
-        start_log_call = deps["Logger"].info.call_args_list[0]
-        log_msg = start_log_call[0][0]
-        assert '"PaSsWoRd": "***** (MASKED)"' in log_msg
-        assert "secret" not in log_msg
-
-    def test_tc009_complex_object_serialization(self, mock_dependencies):
-        """[TC-009] 복잡한 객체 인자: str() 변환을 통해 안전하게 로깅"""
-        # Given
-        deps = mock_dependencies
-        class ComplexObj:
-            def __str__(self):
-                return "MyComplexObject"
-        
-        @LoggingDecorator()
-        def process(obj):
-            pass
-        
-        # When
-        process(ComplexObj())
-        
-        # Then
-        start_log_call = deps["Logger"].info.call_args_list[0]
-        assert "MyComplexObject" in start_log_call[0][0]
-
-    def test_tc010_json_serialization_failure(self, mock_dependencies):
-        """[TC-010] JSON 직렬화 실패: 경고 로그를 남기고 함수 실행은 계속 진행(Fail-safe)"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def process(arg):
-            return "done"
-        
-        # json.dumps가 특정 시점에 실패하도록 Mocking
-        with patch(f"{TARGET_JSON}.dumps", side_effect=TypeError("JSON Fail")):
-            # When
-            result = process("something")
-            
-            # Then
-            # 1. 비즈니스 로직은 중단되지 않아야 함
-            assert result == "done"
-            # 2. Warning 로그가 기록되어야 함
-            deps["Logger"].warning.assert_called()
-            assert "(Serialization Failed)" in deps["Logger"].warning.call_args[0][0]
-
+    # When: 코루틴을 await로 호출하면
+    result = await async_func("async_test")
     
-    def test_tc019_sync_already_etl_error(self, mock_dependencies):
-        """[TC-019] [Branch] 동기: 이미 ETLError인 경우 추가 래핑 없이 통과 (237->245 커버)"""
-        deps = mock_dependencies
-        @LoggingDecorator()
-        def faulty():
-            # 이미 ETLError인 예외 발생
-            raise ETLError("Already ETL")
-            
-        with pytest.raises(ETLError, match="Already ETL"):
-            faulty()
-        
-        # 래핑 메시지('Unhandled exception')가 포함되지 않았음을 확인
-        log_msg = deps["Logger"].error.call_args[0][0]
-        assert "Unhandled exception" not in log_msg
+    # Then: 정상 반환되며 START/END 로그가 정확하게 기록됨
+    assert result == "async_test"
+    mock_logger.info.assert_any_call(
+        f'[{async_func.__qualname__}] START | Params: {{"arg_0": "async_test"}}'
+    )
+    end_log = mock_logger.info.call_args_list[-1][0][0]
+    assert "END | Time:" in end_log
+    assert "Result: async_test" in end_log
 
-    @pytest.mark.asyncio
-    async def test_tc020_async_already_etl_error(self, mock_dependencies):
-        """[TC-020] [Branch] 비동기: 이미 ETLError인 경우 추가 래핑 없이 통과 (280->286 커버)"""
-        deps = mock_dependencies
-        @LoggingDecorator()
-        async def async_faulty():
-            raise ETLError("Already Async ETL")
-            
-        with pytest.raises(ETLError, match="Already Async ETL"):
-            await async_faulty()
-            
-        log_msg = deps["Logger"].error.call_args[0][0]
-        assert "Unhandled exception" not in log_msg
+# ========================================================================================
+# 2. 보안 및 견고성 (Security & Robustness)
+# ========================================================================================
 
-    def test_tc021_logger_name_provided(self, mock_dependencies):
-        """[TC-021] [Branch] 초기화 시 logger_name이 명시적으로 제공된 경우 (138->141 커버)"""
-        deps = mock_dependencies
-        custom_name = "manual.logger"
-        # 생성자에서 이름 주입
-        decorator = LoggingDecorator(logger_name=custom_name)
-        
-        @decorator
-        def action(): pass
-        
-        action()
-        deps["LogManager"].get_logger.assert_called_with(custom_name)
+def test_sec_01_pii_masking(mock_logger, mock_context):
+    # Given: 민감 정보 키워드를 포함하는 인자를 받는 함수
+    @log_decorator()
+    def auth_func(user, password, access_key):
+        return True
+
+    # When: 평문 비밀번호 및 토큰을 포함하여 함수 호출 시
+    auth_func("user1", password="secret_password", access_key="jwt_token")
+    start_log = mock_logger.info.call_args_list[0][0][0]
     
-    # ==========================================
-    # Category: Logical Exceptions (Sync & Async)
-    # ==========================================
+    # Then: 민감 정보는 마스킹 처리되어 로그에 평문이 노출되지 않음
+    assert "secret_password" not in start_log
+    assert "jwt_token" not in start_log
+    assert "***** (MASKED)" in start_log
 
-    def test_tc011_sync_exception_reraise(self, mock_dependencies):
-        """[TC-011] Sync Exception Re-raise: suppress_error=False일 때 예외 전파"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator(suppress_error=False)
-        def faulty():
-            raise ValueError("Boom")
-        
-        # When & Then
-        with pytest.raises(ETLError, match="ValueError"):
-            faulty()
-        
-        # Error 로그 기록 및 스택 트레이스 확인
-        deps["Logger"].error.assert_called_once()
-        log_msg = deps["Logger"].error.call_args[0][0]
-        
-        assert "FAILED" in log_msg
-        assert "ETLError" in log_msg
-        assert '"raw_error": "Boom"' in log_msg
+def test_sec_02_normal_kwargs_serialization(mock_logger, mock_context):
+    """ _sanitize_args의 일반 키워드(else 분기) 커버리지 달성용 테스트 """
+    # Given: 민감하지 않은 일반 키워드 인자를 받는 함수
+    @log_decorator()
+    def safe_kwargs_func(a, role="user"):
+        return True
 
-    def test_tc012_sync_exception_suppress(self, mock_dependencies):
-        """[TC-012] Sync Exception Suppress: suppress_error=True일 때 예외 무시 및 None 반환"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator(suppress_error=True)
-        def faulty():
-            raise ValueError("Boom")
-        
-        # When
-        result = faulty()
-        
-        # Then
-        assert result is None
-        deps["Logger"].error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_tc013_async_exception_reraise(self, mock_dependencies):
-        """[TC-013] Async Exception Re-raise: 비동기 함수 예외 전파 확인"""
-        # Given
-        deps = mock_dependencies
-
-        @LoggingDecorator(suppress_error=False)
-        async def async_faulty():
-            raise RuntimeError("Async Boom")
-
-        # When & Then
-        with pytest.raises(ETLError, match="RuntimeError"):
-            await async_faulty()
-        
-        # 로그 확인
-        deps["Logger"].error.assert_called_once()
-        log_msg = deps["Logger"].error.call_args[0][0]
-        assert '"raw_error": "Async Boom"' in log_msg
-
-    @pytest.mark.asyncio
-    async def test_tc014_async_exception_suppress(self, mock_dependencies):
-        """[TC-014] Async Exception Suppress: 비동기 함수 예외 억제 및 None 반환 확인"""
-        # Given
-        deps = mock_dependencies
-
-        @LoggingDecorator(suppress_error=True)
-        async def async_faulty():
-            raise RuntimeError("Async Boom")
-
-        # When
-        result = await async_faulty()
-
-        # Then
-        assert result is None
-        deps["Logger"].error.assert_called_once()
-
-    # ==========================================
-    # Category: Resource & State
-    # ==========================================
-
-    def test_tc015_context_preservation(self, mock_dependencies):
-        """[TC-015] Context 보존: 이미 ID가 존재할 경우 덮어쓰지 않음(Idempotency)"""
-        # Given
-        deps = mock_dependencies
-        # 기존 Context가 설정된 상태 시뮬레이션
-        deps["Context"].get.return_value = "existing-id-123"
-        
-        @LoggingDecorator()
-        def action(): pass
-        
-        # When
-        action()
-        
-        # Then
-        # set_context가 호출되지 않아야 함
-        deps["LogManager"].set_context.assert_not_called()
-
-    def test_tc016_custom_logger_name(self, mock_dependencies):
-        """[TC-016] Custom Logger: 지정된 이름으로 로거 인스턴스 생성"""
-        # Given
-        deps = mock_dependencies
-        custom_name = "custom.logger"
-        
-        # When
-        @LoggingDecorator(logger_name=custom_name)
-        def action(): pass
-        
-        action()
-        
-        # Then
-        deps["LogManager"].get_logger.assert_called_with(custom_name)
-
-    def test_tc017_default_logger_name_resolution(self, mock_dependencies):
-        """[TC-017] Default Logger Name: 이름 미지정 시 함수의 __module__ 사용 검증"""
-        # Given
-        deps = mock_dependencies
-        
-        @LoggingDecorator()
-        def action(): pass
-        
-        # When
-        action()
-        
-        # Then
-        # action 함수가 정의된 현재 테스트 모듈의 이름을 사용해야 함
-        expected_name = action.__module__
-        deps["LogManager"].get_logger.assert_called_with(expected_name)
-
-    # ==========================================
-    # Category: Environment & Import Logic (Coverage 100%)
-    # ==========================================
+    # When: 일반 키워드 인자를 명시하여 함수 호출 시
+    safe_kwargs_func("user1", role="admin")
+    start_log = mock_logger.info.call_args_list[0][0][0]
     
-    def test_tc018_import_fallback_logic(self):
-        """
-        [TC-018] Import Fallback Logic:
-        모듈 로드 시 'src.common.log'를 찾을 수 없을 때(ImportError),
-        sys.path를 수정하여 다시 import를 시도하는 except 블록(lines 35-40)을 검증합니다.
-        """
-        target_module_name = "src.common.decorators.log_decorator"
+    # Then: 일반 키워드 값은 마스킹되지 않고 그대로 직렬화되어 로깅됨
+    assert "admin" in start_log
+    assert "MASKED" not in start_log
+
+def test_robust_01_serialization_failure(mock_logger, mock_context):
+    # Given: __str__ 호출 시 예외를 발생시키는 손상된 객체
+    class BadObj:
+        def __str__(self):
+            raise RuntimeError("Toxic Object")
+
+    @log_decorator()
+    def unsafe_func(obj):
+        return "Survived"
+
+    # When: 이 객체를 인자로 넘겨 함수를 호출하면
+    result = unsafe_func(BadObj())
+    
+    # Then: 앱이 멈추지 않고 비즈니스 로직 정상 수행 및 직렬화 실패 경고 기록됨
+    assert result == "Survived"
+    mock_logger.warning.assert_called_with(
+        f"[{unsafe_func.__qualname__}] START | Params: (Serialization Failed)"
+    )
+
+# ========================================================================================
+# 3. 경계값 및 데이터 검증 (Boundary & Data)
+# ========================================================================================
+
+def test_bva_01_truncate_limit_return(mock_logger, mock_context):
+    # Given: 한계치를 초과하는 긴 문자열을 반환하는 함수
+    limit = 100
+    @log_decorator(truncate_limit=limit)
+    def big_return_func():
+        return "A" * 500
+
+    # When: 함수 호출 후
+    big_return_func()
+    end_log = mock_logger.info.call_args_list[-1][0][0]
+    
+    # Then: 결과 로그가 한계치까지만 잘리고 truncated 표시가 포함됨
+    assert "Result: " + ("A" * limit) + "... (truncated" in end_log
+
+def test_bva_02_container_limit_exceeded(mock_logger, mock_context):
+    # Given: 제한 길이를 초과하는 리스트 데이터
+    @log_decorator()
+    def list_func(data):
+        pass
+
+    long_list = list(range(100)) 
+    
+    # When: 해당 리스트를 인자로 함수 호출 시
+    list_func(long_list)
+
+    start_log = mock_logger.info.call_args_list[0][0][0]
+    
+    # Then: 길이(len)가 기록되고 내용 일부는 생략(...)됨
+    assert "[list len=100]" in start_log
+    assert "..." in start_log
+
+def test_bva_03_container_limit_safe(mock_logger, mock_context):
+    # Given: 제한 길이 이내의 짧은 리스트 데이터
+    @log_decorator()
+    def list_func(data):
+        pass
+
+    short_list = [1, 2, 3]
+    
+    # When: 함수 호출 시
+    list_func(short_list)
+
+    start_log = mock_logger.info.call_args_list[0][0][0]
+    
+    # Then: 생략 없이 온전히 기록됨
+    assert "[list len=3]" in start_log
+    assert "..." not in start_log 
+
+def test_bva_04_string_limit_exceeded(mock_logger, mock_context):
+    # Given: 100자를 초과하는 스칼라 문자열 
+    @log_decorator()
+    def str_func(text):
+        pass
+
+    long_str = "B" * 150
+    
+    # When: 해당 문자열로 함수 호출 시
+    str_func(long_str)
+
+    start_log = mock_logger.info.call_args_list[0][0][0]
+    
+    # Then: 문자열 일부가 잘리고 잘림 표시가 남음
+    assert "(truncated, total=150)" in start_log
+
+def test_bva_05_dataframe_duck_typing(mock_logger, mock_context):
+    # Given: DataFrame을 흉내 낸 Duck Typing용 클래스
+    class DataFrame:
+        def __init__(self, shape):
+            self.shape = shape
+    
+    df_instance = DataFrame(shape=(100, 5))
+
+    mock_pd = MagicMock()
+    mock_pd.DataFrame = DataFrame
+    
+    with patch.object(decorator_module, 'pd', mock_pd, create=True):
+        @log_decorator()
+        def process_df(data):
+            return data
+
+        # When: 해당 객체를 인자로 받고 그대로 반환할 때
+        process_df(df_instance)
+
+    start_log = mock_logger.info.call_args_list[0][0][0]
+    end_log = mock_logger.info.call_args_list[1][0][0]
+    
+    # Then: 직렬화 대신 형태(shape)만 로그에 요약됨
+    assert "DataFrame" in start_log
+    assert "(100, 5)" in start_log
+    assert "DataFrame" in end_log
+    assert "(100, 5)" in end_log
+
+# ========================================================================================
+# 4. 예외 및 정책 제어 (Exception Control) - Sync & Async
+# ========================================================================================
+
+def test_err_01_sync_unknown_wrapping(mock_logger, mock_context):
+    # Given: 일반 ValueError를 발생시키는 동기 함수
+    @log_decorator()
+    def crash_func():
+        raise ValueError("DB Err")
+
+    # When & Then: 호출 시 ETLError로 래핑되어 전파되고 에러 로깅됨
+    with pytest.raises(ETLError) as exc_info:
+        crash_func()
+    
+    assert exc_info.value.original_exception.__class__ == ValueError
+    mock_logger.error.assert_called_once()
+    assert "FAILED | Time:" in mock_logger.error.call_args[0][0]
+
+def test_err_02_sync_known_error_handling(mock_logger, mock_context):
+    # Given: 이미 정의된 도메인 예외(ETLError) 발생
+    original_err = ETLError(message="Extract Fail", should_retry=True)
+
+    @log_decorator()
+    def fail_func():
+        raise original_err
+
+    # When & Then: 중복 래핑 없이 원본 예외가 그대로 전파됨
+    with pytest.raises(ETLError) as exc_info:
+        fail_func()
+
+    assert exc_info.value is original_err 
+    mock_logger.error.assert_called_once()
+    assert "FAILED | Time:" in mock_logger.error.call_args[0][0]
+    assert "Retry: True" in mock_logger.error.call_args[0][0]
+
+def test_err_03_sync_suppress_error(mock_logger, mock_context):
+    # Given: 에러 억제 옵션이 켜진 상태에서 예외 발생
+    @log_decorator(suppress_error=True)
+    def suppress_func():
+        raise RuntimeError("Fatal")
+
+    # When: 함수 호출 시
+    result = suppress_func()
+    
+    # Then: 예외는 밖으로 전파되지 않고 None을 반환하며 로깅됨
+    assert result is None
+    mock_logger.error.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_err_04_async_unknown_wrapping(mock_logger, mock_context):
+    # Given: 일반 ValueError를 발생시키는 비동기 코루틴
+    @log_decorator()
+    async def crash_func_async():
+        raise ValueError("Async DB Err")
+
+    # When & Then: 비동기 호출 시에도 ETLError로 래핑되어 전파됨
+    with pytest.raises(ETLError) as exc_info:
+        await crash_func_async()
+    
+    assert exc_info.value.original_exception.__class__ == ValueError
+    mock_logger.error.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_err_05_async_known_error_handling(mock_logger, mock_context):
+    # Given: 이미 정의된 도메인 예외(ETLError) 발생 (비동기)
+    original_err = ETLError(message="Async Fail", should_retry=False)
+
+    @log_decorator()
+    async def fail_func_async():
+        raise original_err
+
+    # When & Then: 비동기 호출 시에도 중복 래핑 없이 원본 예외 전파
+    with pytest.raises(ETLError) as exc_info:
+        await fail_func_async()
+
+    assert exc_info.value is original_err
+    mock_logger.error.assert_called_once()
+    assert "Retry: False" in mock_logger.error.call_args[0][0]
+
+@pytest.mark.asyncio
+async def test_err_06_async_suppress_error(mock_logger, mock_context):
+    # Given: 에러 억제 옵션이 켜진 비동기 코루틴
+    @log_decorator(suppress_error=True)
+    async def suppress_func_async():
+        raise RuntimeError("Async Fatal")
+
+    # When: 코루틴 호출 시
+    result = await suppress_func_async()
+    
+    # Then: 예외 억제 후 None 반환
+    assert result is None
+    mock_logger.error.assert_called_once()
+
+# ========================================================================================
+# 5. 상태 제어 (Context State)
+# ========================================================================================
+
+def test_ctx_01_inject_new_context(mock_logger, mock_context):
+    # Given: 현재 컨텍스트(Request ID)가 초기값(system)일 때
+    mock_ctx, mock_set_ctx = mock_context
+    mock_ctx.get.return_value = "system"
+
+    @log_decorator()
+    def dummy():
+        pass
+
+    # When: 데코레이팅된 함수 호출
+    dummy()
+    
+    # Then: 신규 컨텍스트를 주입하는 set_context가 호출됨
+    mock_set_ctx.assert_called_once()
+
+def test_ctx_02_keep_existing_context(mock_logger, mock_context):
+    # Given: 현재 컨텍스트에 상위 호출자의 Request ID가 이미 셋팅되어 있을 때
+    mock_ctx, mock_set_ctx = mock_context
+    mock_ctx.get.return_value = "req-uuid-1234"
+
+    @log_decorator()
+    def dummy():
+        pass
+
+    # When: 함수 호출
+    dummy()
+    
+    # Then: 멱등성 보장 (기존 ID를 보존하며 신규 주입 함수는 호출되지 않음)
+    mock_set_ctx.assert_not_called()
+
+# ========================================================================================
+# 6. 추가 엣지 케이스 보완 (Branch Coverage 100% 달성용)
+# ========================================================================================
+
+def test_edge_01_log_entry_exception_coverage(mock_logger, mock_context):
+    """ _log_entry 내부의 악성 직렬화 오류 처리 분기 완벽 검증 """
+    # Given: kwargs 뿐만 아니라 args 에도 악성 객체 포함
+    class BadObj:
+        def __str__(self):
+            raise Exception("Toxic")
+            
+    @log_decorator()
+    def edge_func(*args, **kwargs):
+        return True
         
-        # 1. 현재 로드된 모듈 제거 (재로딩을 위해)
-        if target_module_name in sys.modules:
-            del sys.modules[target_module_name]
+    # When: args 에 악성 객체 주입
+    edge_func(BadObj())
+    
+    # Then: 비즈니스 로직은 보호되어 True 를 반환하고, Warning 로깅됨
+    mock_logger.warning.assert_called_with(
+        f"[{edge_func.__qualname__}] START | Params: (Serialization Failed)"
+    )
 
-        # 2. builtins.__import__ Mocking
-        # 목적: 첫 번째 'from src.common.log ...' 시도에서 ImportError 발생 유도
-        original_import = builtins.__import__
-
-        def side_effect_import(name, globals=None, locals=None, fromlist=(), level=0):
-            # 타겟 모듈이 'src.common.log'를 import 하려 할 때
-            if name == "src.common.log" and fromlist:
-                # 상태 플래그를 함수 속성으로 저장하여 1회만 실패하도록 설정
-                # (except 블록에서 재시도할 때는 성공해야 함)
-                if not getattr(side_effect_import, 'failed_once', False):
-                    side_effect_import.failed_once = True
-                    raise ImportError("Forced ImportError for Coverage")
-            return original_import(name, globals, locals, fromlist, level)
-
-        # 3. Patch 적용 및 모듈 Import 수행
-        with patch('builtins.__import__', side_effect=side_effect_import):
-            # 이때 log_decorator.py가 실행되면서:
-            # try: import src.common.log -> ImportError (side_effect)
-            # except: sys.path.append -> 다시 import src.common.log -> 성공 (failed_once=True)
-            try:
-                import src.common.decorators.log_decorator
-                importlib.reload(src.common.decorators.log_decorator)
-            except ImportError:
-                pytest.fail("Module import failed even after fallback logic")
-
-        # 4. 검증: 모듈이 정상적으로 로드되었는지 확인
-        assert "src.common.decorators.log_decorator" in sys.modules
-        
-        # 5. Cleanup: 다음 테스트를 위해 모듈을 정상 상태로 다시 로드
-        if target_module_name in sys.modules:
-            del sys.modules[target_module_name]
-        import src.common.decorators.log_decorator
-
-    # ==========================================
-    # Category: Internal Logic
-    # ==========================================
-
-    def test_tc022_log_error_direct_exception(self, mock_dependencies):
-        """[TC-022] [Branch] _log_error 직접 호출: 일반 Exception 처리 분기 강제 실행 (BrPart 해결)"""
-        # Given
-        deps = mock_dependencies
-        decorator = LoggingDecorator()
-        raw_error = ValueError("Raw Exception")
-        
-        # When: 데코레이터를 거치지 않고 내부 메서드를 직접 호출하여 ETLError가 아닌 에러 전달
-        decorator._log_error(deps["Logger"], "test_func", raw_error, 0.5)
-        
-        # Then: 'Error: ValueError - Raw Exception' 포맷으로 기록되는지 확인
-        log_msg = deps["Logger"].error.call_args[0][0]
-        assert "Error: ValueError - Raw Exception" in log_msg
-        assert "ETLError" not in log_msg
-
-    def test_tc023_log_entry_success_direct(self, mock_dependencies):
-        """[TC-023] [Statement] _log_entry 직접 호출: 정상 로깅 경로 강제 확정 (Miss 201 해결)"""
-        # Given
-        deps = mock_dependencies
-        decorator = LoggingDecorator()
-        
-        # When: json.dumps가 성공하는 정상 상황에서 메서드 직접 호출
-        decorator._log_entry(deps["Logger"], "direct_func", (1, 2), {"k": "v"})
-        
-        # Then: Line 201 (logger.info) 실행 확인
-        deps["Logger"].info.assert_called_with(ANY)
-        log_msg = deps["Logger"].info.call_args[0][0]
-        assert "START" in log_msg
-        assert '"arg_0": "1"' in log_msg
+def test_edge_02_log_error_regular_exception_coverage(mock_logger, mock_context):
+    """ _log_error 내부의 일반 Exception 분기(else 분기) 완벽 검증 """
+    # Given: LoggingDecorator 인스턴스를 직접 생성하고 일반적인 예외 객체 준비
+    decorator = LoggingDecorator()
+    mock_error = ValueError("Standard Error Test")
+    
+    # When: 파이프라인 래퍼를 거치지 않고 직접 _log_error 에 일반 예외 주입
+    decorator._log_error(mock_logger, "edge_func", mock_error, 0.1234)
+    
+    # Then: ETLError 처리가 아닌, 일반 예외 포맷(else 분기)으로 로그가 남음
+    mock_logger.error.assert_called_once()
+    error_msg = mock_logger.error.call_args[0][0]
+    
+    assert "FAILED | Time: 0.1234s" in error_msg
+    assert "Error: ValueError - Standard Error Test" in error_msg

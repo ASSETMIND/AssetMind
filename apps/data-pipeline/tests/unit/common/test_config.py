@@ -5,9 +5,10 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 
 # [Target Modules]
-# 실제 프로젝트 구조에 맞춰 import 경로 수정 필요 (예: src.common.config)
-from src.common.config import ConfigManager, JobPolicy, KISSettings
-
+from src.common.config import (
+    ConfigManager, JobPolicy, PipelineTask, 
+    AWSLoaderPolicy, PostgresLoaderPolicy, KISSettings
+)
 from src.common.exceptions import ConfigurationError
 
 # ========================================================================================
@@ -34,28 +35,19 @@ def mock_env(monkeypatch):
     return env_vars
 
 @pytest.fixture(autouse=True)
-def reset_config_state():
-    """[Teardown] Singleton 상태 격리를 위한 자동 초기화"""
-    # 테스트 전 초기화
+def reset_config_cache():
+    """[Teardown] Singleton 상태 격리를 위한 ClassVar 자동 초기화"""
     ConfigManager._cache.clear()
-    ConfigManager._active_task_name = None
     yield
-    # 테스트 후 초기화
     ConfigManager._cache.clear()
-    ConfigManager._active_task_name = None
 
 @pytest.fixture
 def config_file_helper(tmp_path):
-    """
-    YAML 파일 생성 및 Path Mocking을 돕는 헬퍼.
-    ConfigManager가 내부적으로 사용하는 Path(__file__) 로직을 가로채서
-    tmp_path를 바라보게 만듭니다.
-    """
-    def _create_and_patch(task_name: str, content: dict | str):
-        # 1. 파일 생성 구조: tmp_path/configs/{task_name}.yml
+    """YAML 파일 생성 및 Path Mocking 헬퍼"""
+    def _create_and_patch(file_name: str, content: dict | str):
         config_dir = tmp_path / "configs"
         config_dir.mkdir(parents=True, exist_ok=True)
-        file_path = config_dir / f"{task_name}.yml"
+        file_path = config_dir / f"{file_name}.yml"
         
         if isinstance(content, dict):
             with open(file_path, "w", encoding="utf-8") as f:
@@ -63,235 +55,227 @@ def config_file_helper(tmp_path):
         else:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
-        
         return tmp_path
 
     return _create_and_patch
 
 @pytest.fixture
 def patch_config_path(tmp_path):
-    """ConfigManager 내부의 Path 객체를 Patch하여 tmp_path를 루트로 인식하게 함"""
-    # src.common.config.Path를 Patch 해야 함.
+    """ConfigManager 내부의 Path 객체를 Patch하여 tmp_path를 루트로 인식"""
     with patch("src.common.config.Path") as mock_path_cls:
-        # Path(__file__).resolve().parents[2] 가 tmp_path가 되도록 설정
-        # parents[2]를 호출하므로, mock 객체 구조를 맞춰줌
         mock_path_instance = MagicMock()
         mock_path_instance.resolve.return_value.parents = [None, None, tmp_path]
         mock_path_cls.return_value = mock_path_instance
         yield mock_path_cls
 
 # ========================================================================================
-# 1. 초기화 테스트 (Initialization)
+# 1. 초기화 및 보안 테스트 (Init & Security)
 # ========================================================================================
 
 def test_init_01_valid_env(mock_env):
-    """[INIT-01] [Standard] 필수 환경변수가 존재하면 인스턴스 생성 성공"""
-    config = ConfigManager(task_name="test_init")
-    assert config.task_name == "test_init"
+    """[INIT-01] GIVEN 필수 환경변수 WHEN 인스턴스 생성 THEN 속성 정상 매핑"""
+    config = ConfigManager()
     assert config.kis.base_url == "https://kis.api"
+    assert config.fred.base_url == "https://fred.api"
 
 def test_init_02_missing_env(monkeypatch):
-    """[INIT-02] [BVA] 필수 환경변수 누락 시 ValidationError 발생 (Fail-Fast)"""
+    """[INIT-02] GIVEN 환경변수 누락 WHEN 인스턴스 생성 THEN ValidationError 발생"""
     monkeypatch.delenv("KIS_APP_KEY", raising=False)
-    # Pydantic이 로컬의 .env 파일을 읽어 값을 채우는 것을 방지하기 위해
-    # 테스트 범위(Context) 내에서만 env_file 설정을 무효화합니다.
     with patch.dict(KISSettings.model_config, {"env_file": ".non_existent_env_file"}):
         with pytest.raises(ValidationError):
             ConfigManager()
 
 def test_init_03_secret_security(mock_env):
-    """[INIT-03] [Security] 민감 정보는 SecretStr로 래핑되어 평문 노출 방지"""
+    """[INIT-03] GIVEN 시크릿 환경변수 WHEN 접근 THEN 평문 노출 방지(SecretStr)"""
     config = ConfigManager()
-    # __repr__ 시 평문이 보이지 않아야 함
-    assert "dummy_kis_key" not in str(config.kis.app_key)
-    # 명시적 호출 시에만 값 확인 가능
-    assert config.kis.app_key.get_secret_value() == "dummy_kis_key"
+    assert "dummy_upbit_secret" not in str(config.upbit.secret_key)
+    assert config.upbit.secret_key.get_secret_value() == "dummy_upbit_secret"
 
 # ========================================================================================
-# 2. 팩토리 & 캐싱 테스트 (Factory & Caching)
+# 2. 파일 로드 및 캐싱 테스트 (Load & Cache)
 # ========================================================================================
 
-def test_fact_01_factory_load(mock_env, config_file_helper, patch_config_path):
-    """[FACT-01] [State] 최초 호출 시 파일 로딩 및 캐시 저장, Active Task 설정"""
-    # Given
-    config_file_helper("task_A", {
+def test_load_01_valid_yaml_and_override(mock_env, config_file_helper, patch_config_path):
+    """[LOAD-01] GIVEN 정상 YAML WHEN load 호출 THEN 파싱 성공 및 전역 로그 설정 오버라이드"""
+    yaml_content = {
         "log_level": "DEBUG",
-        "log_dir": "custom_logs",
-        "log_filename": "task_a.log"
-    })
+        "log_dir": "/var/logs",
+        "log_filename": "test.log",
+        "custom_key": "custom_value"
+    }
+    config_file_helper("extractor", yaml_content)
     
-    # When
-    config = ConfigManager.get_config("task_A")
+    config = ConfigManager.load("extractor")
     
-    # Then
-    assert config.task_name == "task_A"
-    assert config.log_level == "DEBUG" # YAML 오버라이드 확인
-    assert config.log_dir == "custom_logs"
-    assert "task_A" in ConfigManager._cache
-    assert ConfigManager._active_task_name == "task_A"
+    assert config.log_level == "DEBUG"
+    assert config.log_dir == "/var/logs"
+    assert config.log_filename == "test.log"
+    assert config.yaml_data["custom_key"] == "custom_value"
+    assert "extractor" in ConfigManager._cache
 
-def test_fact_02_cache_hit(mock_env, config_file_helper, patch_config_path):
-    """[FACT-02] [Performance] 재호출 시 I/O 없이 동일한 객체 ID 반환 (캐시 적중)"""
-    # Given
-    config_file_helper("task_A", {})
-    first_config = ConfigManager.get_config("task_A")
+def test_load_02_cache_hit(mock_env, config_file_helper, patch_config_path):
+    """[LOAD-02] GIVEN 이미 로드된 캐시 상태 WHEN load 재호출 THEN I/O 없이 동일 인스턴스 반환"""
+    config_file_helper("extractor", {"key": "value"})
+    config1 = ConfigManager.load("extractor")
+    config2 = ConfigManager.load("extractor")
     
-    # When
-    second_config = ConfigManager.get_config("task_A")
-    
-    # Then
-    assert first_config is second_config  # 동일 인스턴스 확인
-    assert id(first_config) == id(second_config)
+    assert config1 is config2
+    assert id(config1) == id(config2)
 
-def test_fact_03_context_switch(mock_env, config_file_helper, patch_config_path):
-    """[FACT-03] [State] 다른 Task 호출 시 Active Config 교체 및 독립 객체 생성"""
-    # Given
-    config_file_helper("task_A", {})
-    config_file_helper("task_B", {})
-    ConfigManager.get_config("task_A")
+def test_load_03_broken_yaml(mock_env, config_file_helper, patch_config_path):
+    """[LOAD-03] GIVEN 문법 오류 YAML WHEN load 호출 THEN ConfigurationError 발생"""
+    config_file_helper("broken", "invalid: yaml: : format")
     
-    # When
-    config_b = ConfigManager.get_config("task_B")
-    
-    # Then
-    assert ConfigManager._active_task_name == "task_B"
-    assert config_b.task_name == "task_B"
-    assert len(ConfigManager._cache) == 2
+    with pytest.raises(ConfigurationError, match="YAML 파싱 실패"):
+        ConfigManager.load("broken")
 
-def test_fact_04_get_active_no_args(mock_env, config_file_helper, patch_config_path):
-    """[FACT-04] [Usability] 인자 없이 호출 시 현재 활성 설정 반환"""
-    # Given
-    config_file_helper("task_A", {})
-    ConfigManager.get_config("task_A")
-    
-    # When
-    config = ConfigManager.get_config()
-    
-    # Then
-    assert config.task_name == "task_A"
+def test_load_04_file_not_found(mock_env, patch_config_path):
+    """[LOAD-04] GIVEN 존재하지 않는 파일 WHEN load 호출 THEN 빈 yaml_data 반환"""
+    config = ConfigManager.load("not_exist")
+    assert config.yaml_data == {}
 
 # ========================================================================================
-# 3. 파일 로딩 테스트 (File Loading)
+# 3. 유틸리티 테스트 (Utility)
 # ========================================================================================
 
-def test_file_01_missing_file_fallback(mock_env, patch_config_path, capsys):
-    """[FILE-01] [Robustness] YAML 파일 부재 시 에러 없이 기본 설정(Env) 반환"""
-    # Given: 파일 생성 안함
-    task_name = "no_file_task"
+def test_util_01_get_method(mock_env, config_file_helper, patch_config_path):
+    """[UTIL-01] GIVEN 로드된 설정 WHEN get 호출 THEN 값 또는 기본값 반환"""
+    config_file_helper("test", {"exist_key": "exist_val"})
+    config = ConfigManager.load("test")
     
-    # When
-    config = ConfigManager.get_config(task_name)
-    
-    # Then
-    assert config.task_name == task_name
-    captured = capsys.readouterr()
-    assert "YAML config not found" in captured.out
-
-def test_file_02_empty_file(mock_env, config_file_helper, patch_config_path):
-    """[FILE-02] [BVA] 파일은 존재하나 내용이 비어있는 경우 기본값 로드"""
-    # Given
-    config_file_helper("empty_task", {})
-    
-    # When
-    config = ConfigManager.get_config("empty_task")
-    
-    # Then
-    assert config.extraction_policy == {}
-
-def test_file_03_broken_yaml(mock_env, config_file_helper, patch_config_path, capsys):
-    """[FILE-03] [Robustness] YAML 문법 오류 시 예외 처리 및 기본 설정 반환"""
-    # Given: 깨진 YAML 문법
-    config_file_helper("broken_task", "key: value: error:")
-    
-    # When
-    config = ConfigManager.get_config("broken_task")
-    
-    # Then
-    assert config.extraction_policy == {}
-    captured = capsys.readouterr()
-    assert "Failed to parse YAML" in captured.out
+    assert config.get("exist_key") == "exist_val"
+    assert config.get("not_exist", "default_val") == "default_val"
 
 # ========================================================================================
-# 4. 정책 검증 테스트 (Policy Validation)
+# 4. 수집 정책 검증 테스트 (Extractor Policy)
 # ========================================================================================
 
-def test_pol_01_valid_policy(mock_env, config_file_helper, patch_config_path):
-    """[POL-01] [Standard] 올바른 스키마의 정책 파싱 및 매핑 확인"""
-    # Given
-    policy_data = {
+def test_ext_01_domain_isolation(mock_env):
+    """[EXT-01] GIVEN extractor가 아닌 상태 WHEN get_extractor 호출 THEN ConfigurationError 발생"""
+    config = ConfigManager(file_name="pipeline")
+    with pytest.raises(ConfigurationError, match="'extractor' 설정에서만 호출 가능"):
+        config.get_extractor("job_1")
+
+def test_ext_02_missing_job(mock_env, config_file_helper, patch_config_path):
+    """[EXT-02] GIVEN 미존재 Job ID WHEN get_extractor 호출 THEN ConfigurationError 발생"""
+    config_file_helper("extractor", {"policy": {}})
+    config = ConfigManager.load("extractor")
+    
+    with pytest.raises(ConfigurationError, match="Job ID 'unknown'를 찾을 수 없습니다"):
+        config.get_extractor("unknown")
+
+def test_ext_03_valid_policy(mock_env, config_file_helper, patch_config_path):
+    """[EXT-03] GIVEN 정상 Job 데이터 WHEN get_extractor 호출 THEN JobPolicy 인스턴스 반환"""
+    job_data = {
         "policy": {
-            "job_1": {"provider": "KIS", "description": "test", "path": "/uapi/test"}
+            "job_kis_01": {
+                "provider": "KIS",
+                "description": "국내 주식 수집",
+                "path": "/uapi/domestic-stock"
+            }
         }
     }
-    config_file_helper("valid_task", policy_data)
+    config_file_helper("extractor", job_data)
+    config = ConfigManager.load("extractor")
     
-    # When
-    config = ConfigManager.get_config("valid_task")
-    
-    # Then
-    assert "job_1" in config.extraction_policy
-    assert isinstance(config.extraction_policy["job_1"], JobPolicy)
-    assert config.extraction_policy["job_1"].provider == "KIS"
-
-def test_pol_02_partial_failure(mock_env, config_file_helper, patch_config_path, capsys):
-    """[POL-02] [Partial Failure] 일부 정책 오류 시 유효한 정책만 로드 (Skip Invalid)"""
-    # Given
-    policy_data = {
-        "policy": {
-            "job_ok": {"provider": "KIS", "description": "ok", "path": "/ok"},
-            "job_bad": {"provider": "KIS"} # Missing description, path
-        }
-    }
-    config_file_helper("partial_task", policy_data)
-    
-    # When
-    config = ConfigManager.get_config("partial_task")
-    
-    # Then
-    assert "job_ok" in config.extraction_policy
-    assert "job_bad" not in config.extraction_policy
-    captured = capsys.readouterr()
-    assert "Invalid policy for job 'job_bad'" in captured.out
-
-def test_pol_03_invalid_enum(mock_env, config_file_helper, patch_config_path):
-    """[POL-03] [BVA] 지원하지 않는 Provider 타입 입력 시 검증 실패 및 스킵"""
-    # Given
-    policy_data = {
-        "policy": {
-            "job_enum": {"provider": "UNKNOWN", "description": "f", "path": "/f"}
-        }
-    }
-    config_file_helper("enum_task", policy_data)
-    
-    # When
-    config = ConfigManager.get_config("enum_task")
-    
-    # Then
-    assert "job_enum" not in config.extraction_policy
+    policy = config.get_extractor("job_kis_01")
+    assert isinstance(policy, JobPolicy)
+    assert policy.provider == "KIS"
+    assert policy.path == "/uapi/domestic-stock"
 
 # ========================================================================================
-# 5. 예외 및 상태 테스트 (Exception & State)
+# 5. 적재 정책 검증 테스트 (Loader Policy)
 # ========================================================================================
 
-def test_err_01_uninitialized_access(mock_env):
-    """[ERR-01] [Logic] 초기화 전 인자 없는 get_config 접근 시 Critical Error"""
-    # Given: 캐시가 비어있는 상태 (reset_config_state fixture)
-    
-    # When & Then
-    with pytest.raises(ConfigurationError, match="치명적 오류"):
-        ConfigManager.get_config()
+def test_ldr_01_domain_isolation(mock_env):
+    """[LDR-01] GIVEN loader가 아닌 상태 WHEN get_loader 호출 THEN ConfigurationError 발생"""
+    config = ConfigManager(file_name="extractor")
+    with pytest.raises(ConfigurationError, match="'loader' 설정에서만 호출 가능"):
+        config.get_loader("aws")
 
-def test_state_01_isolation(mock_env, config_file_helper, patch_config_path):
-    """[STATE-01] [Idempotency] Fixture에 의한 테스트 간 상태 격리 확인"""
-    # Given: 임의의 상태 변경
-    config_file_helper("temp", {})
-    ConfigManager.get_config("temp")
+def test_ldr_02_missing_loader(mock_env, config_file_helper, patch_config_path):
+    """[LDR-02] GIVEN 미존재 로더 타겟 WHEN get_loader 호출 THEN ConfigurationError 발생"""
+    config_file_helper("loader", {})
+    config = ConfigManager.load("loader")
     
-    # Teardown은 fixture가 수행하므로, 
-    # 여기서는 '다른 테스트가 끝난 직후'라고 가정했을 때 캐시가 비어있는지 확인할 수는 없음.
-    # 대신 이 테스트가 끝난 후 다음 테스트에 영향을 주지 않는지(reset_config_state 동작)는
-    # pytest 실행 구조상 보장됨. 
-    # 명시적으로 reset 기능을 호출하여 비워지는지 검증.
+    with pytest.raises(ConfigurationError, match="Loader 타겟 'unknown'을 찾을 수 없습니다"):
+        config.get_loader("unknown")
+
+def test_ldr_03_aws_policy(mock_env, config_file_helper, patch_config_path):
+    """[LDR-03] GIVEN AWS 로더 데이터 WHEN get_loader 호출 THEN AWSLoaderPolicy 반환"""
+    loader_data = {
+        "aws": {
+            "region": "ap-northeast-2",
+            "s3": {"bucket": "test-bucket"}
+        }
+    }
+    config_file_helper("loader", loader_data)
+    config = ConfigManager.load("loader")
     
-    ConfigManager._cache.clear()
-    assert len(ConfigManager._cache) == 0
+    policy = config.get_loader("aws")
+    assert isinstance(policy, AWSLoaderPolicy)
+    assert policy.region == "ap-northeast-2"
+
+def test_ldr_04_postgres_policy(mock_env, config_file_helper, patch_config_path):
+    """[LDR-04] GIVEN Postgres 로더 데이터 WHEN get_loader 호출 THEN PostgresLoaderPolicy 반환"""
+    loader_data = {
+        "postgres": {
+            "host": "localhost",
+            "port": 5432,
+            "database": "dw",
+            "user": "admin",
+            "default_schema": "public"
+        }
+    }
+    config_file_helper("loader", loader_data)
+    config = ConfigManager.load("loader")
+    
+    policy = config.get_loader("postgres")
+    assert isinstance(policy, PostgresLoaderPolicy)
+    assert policy.port == 5432
+
+def test_ldr_05_unsupported_loader(mock_env, config_file_helper, patch_config_path):
+    """[LDR-05] GIVEN 미지원 로더 타겟 WHEN get_loader 호출 THEN ConfigurationError 발생"""
+    loader_data = {"gcp": {"project_id": "test"}}
+    config_file_helper("loader", loader_data)
+    config = ConfigManager.load("loader")
+    
+    with pytest.raises(ConfigurationError, match="지원하지 않는 Loader 타겟입니다: gcp"):
+        config.get_loader("gcp")
+
+# ========================================================================================
+# 6. 파이프라인 정책 검증 테스트 (Pipeline Policy)
+# ========================================================================================
+
+def test_pipe_01_domain_isolation(mock_env):
+    """[PIPE-01] GIVEN pipeline이 아닌 상태 WHEN get_pipeline 호출 THEN ConfigurationError 발생"""
+    config = ConfigManager(file_name="extractor")
+    with pytest.raises(ConfigurationError, match="'pipeline' 설정에서만 호출 가능"):
+        config.get_pipeline("task_1")
+
+def test_pipe_02_missing_task(mock_env, config_file_helper, patch_config_path):
+    """[PIPE-02] GIVEN 미존재 Task ID WHEN get_pipeline 호출 THEN ConfigurationError 발생"""
+    config_file_helper("pipeline", {"tasks": {}})
+    config = ConfigManager.load("pipeline")
+    
+    with pytest.raises(ConfigurationError, match="Task ID 'unknown'를 찾을 수 없습니다"):
+        config.get_pipeline("unknown")
+
+def test_pipe_03_valid_task(mock_env, config_file_helper, patch_config_path):
+    """[PIPE-03] GIVEN 정상 Task 데이터 WHEN get_pipeline 호출 THEN PipelineTask 반환"""
+    task_data = {
+        "tasks": {
+            "task_daily_batch": {
+                "description": "일일 배치 수집",
+                "target_loader": "aws",
+                "extract_jobs": ["job_1", "job_2"]
+            }
+        }
+    }
+    config_file_helper("pipeline", task_data)
+    config = ConfigManager.load("pipeline")
+    
+    task = config.get_pipeline("task_daily_batch")
+    assert isinstance(task, PipelineTask)
+    assert task.target_loader == "aws"
+    assert len(task.extract_jobs) == 2

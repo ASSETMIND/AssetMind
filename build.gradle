@@ -67,6 +67,13 @@ subprojects {
             // Spring REST Docs 의존성
             testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
             asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+
+            // 모니터링
+            // Actuator: 애플리케이션 상태 모니터링 앤드포인트 제공
+            implementation 'org.springframework.boot:spring-boot-starter-actuator'
+            // Micrometer Prometheus Registry: Prometheus 형식으로 메트릭 변환
+            implementation 'io.micrometer:micrometer-registry-prometheus'
+
         }
 
         jacoco {

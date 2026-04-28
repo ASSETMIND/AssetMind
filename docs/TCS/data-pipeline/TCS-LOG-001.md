@@ -57,28 +57,32 @@ stateDiagram-v2
 
 ## 3. BDD 테스트 시나리오
 
-**시나리오 요약 (총 16건):**
+**시나리오 요약 (총 19건):**
 
-- **기능 성공 (Functional Success)**: 5건 (기본 포맷, 설정 로드, 자식 로거 분기)
-- **경계값 및 데이터 (BVA/Data)**: 3건 (비직렬화 객체, 특수문자, 예외 트레이스)
-- **견고성 (Robustness)**: 2건 (치명적 직렬화 실패, 파일 권한 오류)
-- **동시성 및 상태 (Concurrency/State)**: 6건 (싱글톤 경합/경쟁상태, 컨텍스트 격리, 멱등성, 핸들러 중복방지)
+- **포맷팅 및 시각화 (Formatting/Visualization)**: 7건 (ColorFormatter 미적용 분기, JsonFormatter 예외 직렬화 및 Fallback 방어 수정)
+- **컨텍스트 및 필터 (Context/Filter)**: 2건 (Request ID 주입, KST 시간 주입)
+- **무중단성 방어 (Fail-Safe/Robustness)**: 3건 (JSON 직렬화 붕괴 방어 수정, OSError 파일 권한 방어)
+- **초기화 및 동시성 (Init/Concurrency)**: 5건 (싱글톤 잠금, Init 내부 경합 분기, 핸들러 중복 방지)
+- **기능 유틸리티 (Utility)**: 2건 (Get Logger 계층, Set Context)
 
-|   테스트 ID   | 분류 |     기법     | 전제 조건 (Given)                      | 수행 (When)                            | 검증 (Then)                                                                      | 입력 데이터 / 상황             |
-| :-----------: | :--: | :----------: | :------------------------------------- | :------------------------------------- | :------------------------------------------------------------------------------- | :----------------------------- |
-|  **INIT-01**  | 단위 |     통합     | `ConfigManager` Mock 설정 (DEBUG 레벨) | `LogManager` 최초 초기화               | 1. 로거 레벨 `DEBUG` 설정<br>2. 핸들러 최소 1개 이상 부착                        | `log_level="DEBUG"`            |
-|  **FMT-01**   | 단위 |     표준     | `LogManager` 초기화 완료               | `logger.info("test")` 호출             | JSON 내 `time`(UTC), `korean_time`(KST), `host`, `pid` 필드 존재 확인            | `msg="test"`                   |
-|  **FMT-02**   | 단위 | **FailSafe** | 직렬화 불가능한 객체(Set 등) 포함      | `logger.info({"data": {1, 2}})` 호출   | 1. 에러 없음<br>2. 해당 객체가 문자열(`"{1, 2}"`)로 변환되어 기록됨              | `set={1, 2}`                   |
-|  **FMT-03**   | 단위 |     BVA      | 빈 문자열 또는 특수문자 포함 메시지    | `logger.info("")` 또는 이스케이프 문자 | JSON 문법 오류 없이 파싱 가능한 유효한 JSON 문자열 생성                          | `msg=""` or `"\n\t"`           |
-|  **FMT-04**   | 단위 | **FailSafe** | `json.dumps` 자체가 실패하도록 Mocking | `logger.info()` 호출                   | 1. 앱 크래시 없음<br>2. "CRITICAL: Failed to serialize" 메시지로 대체 기록       | `Mock side_effect=TypeError`   |
-|  **CTX-01**   | 단위 |     상태     | `set_context("req-123")` 실행          | `logger.info()` 호출                   | JSON 내 `request_id` 필드가 "req-123"과 일치함                                   | `id="req-123"`                 |
-|  **CTX-02**   | 단위 |     상태     | `set_context(None)` 실행               | `logger.info()` 호출                   | `request_id`가 UUID v4 형식으로 자동 생성되어 주입됨                             | `id=None`                      |
-|  **EXC-01**   | 단위 |     예외     | `try-except` 블록 내부                 | `logger.exception("Error")` 호출       | JSON 내 `exception` 필드에 Stack Trace 정보가 텍스트로 포함됨                    | `raise ValueError`             |
-|  **FILE-01**  | 통합 | **FailSafe** | 로그 디렉토리 쓰기 권한 제거(`chmod`)  | `LogManager` 초기화 시도               | 1. 앱 중단(Crash) 없음<br>2. `sys.stderr`에 에러 경고 출력                       | `Permission Denied`            |
-|  **CONC-01**  | 통합 |  **동시성**  | 인스턴스 없는 상태, 10개 스레드 대기   | 동시에 `LogManager()` 생성자 호출      | 1. 생성된 인스턴스 주소값이 모두 동일 (Singleton)<br>2. 에러 없이 10개 모두 성공 | `Threads=10`                   |
-|  **CONC-02**  | 통합 |  **동시성**  | `asyncio` 환경, 2개의 Task 실행        | 각 Task에서 서로 다른 Context ID 설정  | 로그 기록 시 서로의 `request_id`가 섞이지 않고 격리됨                            | `Task A="id-A", Task B="id-B"` |
-|  **IDEM-01**  | 단위 |    멱등성    | 이미 초기화된 `LogManager` 존재        | `LogManager()` 재호출                  | 새로운 인스턴스를 만들지 않고 기존 인스턴스 반환                                 | `Singleton Check`              |
-| **BRANCH-01** | 단위 |     분기     | `LogManager` 초기화 완료               | `get_logger("Child")` 호출             | 반환된 로거의 이름이 `APP.Child` 형태로 계층 구조를 가짐                         | `name="Child"`                 |
-| **BRANCH-02** | 단위 |     분기     | 로거에 이미 핸들러가 존재하는 상태     | `LogManager` 초기화 실행               | **핸들러 추가 로직을 건너뜀** (기존 핸들러 개수 유지)                            | `handlers=[Existing]`          |
-|  **RACE-01**  | 단위 |   **심화**   | `__new__`의 Lock 획득 시점 Mocking     | 다른 스레드가 인스턴스 생성했다고 가정 | 내가 생성하려던 것을 취소하고, **다른 스레드가 만든 인스턴스**를 반환            | `mock_lock` 조작               |
-|  **RACE-02**  | 단위 |   **심화**   | `__init__`의 Lock 획득 시점 Mocking    | 다른 스레드가 초기화 완료했다고 가정   | **초기화 로직(Config 로드 등)을 수행하지 않음** (`_initialized` 플래그 확인)     | `mock_lock` 조작               |
+|  테스트 ID  | 분류 |     기법     | 전제 조건 (Given)                                    | 수행 (When)                       | 검증 (Then)                                                          | 입력 데이터 / 상황                  |
+| :---------: | :--: | :----------: | :--------------------------------------------------- | :-------------------------------- | :------------------------------------------------------------------- | :---------------------------------- |
+| **CFMT-01** | 단위 |   동등분할   | 스네이크, 카멜, 빈 문자열 형태의 로거 이름           | `_format_name_to_pascal` 호출     | 모든 형태가 일관된 파스칼 케이스로 정규화됨                          | `"pipeline_service"`, `"App"`, `""` |
+| **CFMT-02** | 단위 |     분기     | `INFO`, `ERROR` 레벨 및 특수 키워드(`요약`, `START`) | `ColorFormatter.format()` 호출    | 레벨 및 키워드에 맞는 ANSI 컬러 코드가 포맷팅된 문자열에 포함됨      | `level="INFO", msg="작업 요약"`     |
+| **CFMT-03** | 단위 |     분기     | `WARNING`, `DEBUG` 등 별도 처리 조건이 없는 레벨     | `ColorFormatter.format()` 호출    | 조건문 통과(Bypass) 후 일반 포맷팅이 적용되어 반환됨                 | `level="WARNING"`                   |
+| **JFMT-01** | 단위 |     포맷     | UTC 기준의 `LogRecord.created` 타임스탬프            | `JsonFormatter.formatTime()` 호출 | `+00:00`이 `Z`로 치환된 ISO 8601 포맷 반환                           | `record.created = 1609459200`       |
+| **JFMT-02** | 단위 |     예외     | `exc_info`에 도메인 `ETLError`가 포함된 레코드       | `JsonFormatter.format()` 호출     | `ETLError.to_dict()` 내용 병합 및 `stack_trace` 필드 생성            | `raise ETLError`                    |
+| **JFMT-03** | 단위 |     예외     | `exc_info`에 일반 `ValueError`가 포함된 레코드       | `JsonFormatter.format()` 호출     | `exception` 필드에 시스템 스택 트레이스 문자열 기록                  | `raise ValueError`                  |
+| **JFMT-04** | 단위 | **FailSafe** | `json.dumps` 내부에서 치명적 예외 발생 상황          | `JsonFormatter.format()` 호출     | 프로세스 중단 없이 대체(Fallback) JSON 문자열 반환 (2차 직렬화 성공) | `Mock dumps -> [Error, Success]`    |
+| **FLT-01**  | 단위 |     상태     | `request_id_ctx`에 특정 ID가 셋팅된 상태             | `ContextFilter.filter()` 호출     | 레코드에 `request_id`와 변환된 `korean_time` 속성 주입               | `request_id="REQ-123"`              |
+| **INIT-01** | 단위 |    싱글톤    | 초기화되지 않은 `LogManager`                         | 인스턴스 2회 연속 생성            | 동일한 메모리 주소 반환 및 2번째는 초기화 로직 스킵                  | `manager1 is manager2`              |
+| **INIT-02** | 단위 |     분기     | `ConfigManager._cache`에 캐시된 설정 존재            | `LogManager` 최초 초기화          | 캐시된 설정을 로드하며 에러 없이 로거 설정 완료                      | `Config._cache = {"A": Mock()}`     |
+| **INIT-03** | 단위 |     분기     | 로거(`logger.handlers`)에 이미 핸들러가 존재         | `LogManager` 초기화 호출          | 핸들러 중복 추가(Duplicate Append) 방지 메커니즘 작동                | `len(logger.handlers) == 1`         |
+| **INIT-04** | 단위 |  **동시성**  | `__init__` 내부 Lock 획득 시점 타 스레드 간섭        | Lock 진입 직후 초기화 여부 검사   | `_initialized`가 `True`일 경우 내부 로직 바이패스                    | `Mock Lock -> initialized=True`     |
+| **FILE-01** | 통합 | **FailSafe** | 로그 디렉토리 쓰기 불가능 (OSError 강제)             | `_setup_file_handler()` 호출      | 프로세스 Crash 없이 `sys.stderr`에 에러 로그 출력                    | `Mock mkdir -> OSError`             |
+| **CONC-01** | 통합 |  **동시성**  | 멀티스레드 환경 (10개 스레드 동시 생성)              | `LogManager()` 호출 경합          | Double-Checked Locking을 통해 단 1개의 인스턴스만 보장               | `ThreadPool(10)`                    |
+| **CONC-02** | 단위 |    멱등성    | 인스턴스 생성 중 Lock 획득 시점 타 스레드 간섭       | `__new__` 내부 진입 시 검증       | Lock 획득 후 `_instance`가 이미 있다면 생성 취소 후 반환             | `Mock Lock.__enter__`               |
+| **CTX-01**  | 단위 |     상태     | `request_id="custom_id"` 명시적 전달                 | `LogManager.set_context()` 호출   | ContextVar에 "custom_id" 저장 및 반환                                | `request_id="custom_id"`            |
+| **CTX-02**  | 단위 |     상태     | `request_id=None` (파라미터 미제공)                  | `LogManager.set_context()` 호출   | UUID v4 포맷의 난수 ID 자동 생성 및 저장                             | `request_id=None`                   |
+| **LOG-01**  | 단위 |     계층     | `name="CHILD_MODULE"` 파라미터 제공                  | `get_logger(name)` 호출           | "APP.CHILD_MODULE" 이름의 하위 로거 객체 반환                        | `name="CHILD"`                      |
+| **LOG-02**  | 단위 |     계층     | `name=None` 파라미터 제공                            | `get_logger()` 호출               | "APP" 이름의 최상위 Root 로거 반환                                   | `name=None`                         |

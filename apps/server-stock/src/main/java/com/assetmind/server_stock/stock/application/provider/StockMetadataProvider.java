@@ -2,6 +2,8 @@ package com.assetmind.server_stock.stock.application.provider;
 
 import com.assetmind.server_stock.stock.infrastructure.persistence.jpa.StockMetaRepository;
 import jakarta.annotation.PostConstruct;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +36,18 @@ public class StockMetadataProvider {
         log.info("[StockMetadataProvider] {} 개의 주식 메타데이터 캐싱", stockNameCache.size());
     }
 
+    // 종목 코드를 기반으로 해당 종목 코드가 캐싱되어있는지 확인
+    public boolean isExist(String stockCode) {
+        return stockNameCache.containsKey(stockCode);
+    }
+
     // 종목 코드를 기반으로 종목 이름 조회
     public String getStockName(String stockCode) {
         return stockNameCache.getOrDefault(stockCode, stockCode);
+    }
+
+    // 캐싱된 전체 종목 코드 조회
+    public List<String> getAllStockCodes() {
+        return new ArrayList<>(stockNameCache.keySet());
     }
 }

@@ -121,3 +121,13 @@ bin/
 db/
 *.db
 *.sqlite
+
+# Flyway 마이그레이션 스크립트 예외 처리
+!apps/server-stock/src/main/resources/db/
+!apps/server-stock/src/main/resources/db/migration/
+
+# grafana 데이터 볼륨
+grafana_data/
+
+# Mock 데이터 CSV 파일
+apps/scripts/load_test_1m_candles.csv

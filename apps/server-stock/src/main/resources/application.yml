@@ -1,8 +1,83 @@
+server:
+  port: 9090
+  tomcat:
+    mbeanregistry:
+      enabled: true # 톰캣 지표 (쓰레드, 커넥션 등) 수집 활성화
+
 spring:
   application:
     name: stock-service
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local} # application 설정 local
+
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:stock-meta-data.sql
+
+  task:
+    execution:
+      shutdown:
+        await-termination: true
+        await-termination-period: 10s
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${POSTGRES_DB:assetmind}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    hikari:
+      pool-name: AssetMind-Stock-HikariCP # HikariCP 매트릭 name
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+      database: 1
+      lettuce:
+        shutdown-timeout: 100ms
+
+    jpa:
+      hibernate:
+        ddl-auto: validate
+      properties:
+        hibernate:
+          generate_statistics: true # DB 쿼리 실행 통계 활성화
+          format_sql: true
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+      database: postgresql
+      database-platform: org.hibernate.dialect.PostgreSQLDialect
+      defer-datasource-initialization: true
+
+logging:
+  file:
+    name: ./logs/error-tracking.log
+
+management:
+  server:
+    port: 9091
+  endpoints:
+    web:
+      exposure:
+        include: "prometheus, health, info"
+      base-path: "/manage" # 기본 경로 (/actuator)를 변경하여 스캐닝 공격 방어
+  endpoint:
+    prometheus:
+      access: read_only
+  metrics:
+    tags:
+      application: "AssetMind-Stock"
+
+
 
 kis:
-  token-expiration: 86400 # KIS Open API의 access_token 만료시간 24
+  token-expiration: 86400
+  base-url: "https://openapivts.koreainvestment.com:29443"
+  websocket-url: "ws://ops.koreainvestment.com:31000"
+  accounts:
+    - app-key: ${KIS_APP_KEY_1}
+      app-secret: ${KIS_APP_SECRET_KEY_1}
+    - app-key: ${KIS_APP_KEY_2}
+      app-secret: ${KIS_APP_SECRET_KEY_2}

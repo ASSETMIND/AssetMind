@@ -8,9 +8,10 @@ import static org.springframework.restdocs.operation.preprocess.Preprocessors.*;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
 import static org.springframework.restdocs.request.RequestDocumentation.*;
 
-import com.assetmind.server_stock.stock.domain.repository.StockHistoryRepository;
+import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
+import com.assetmind.server_stock.stock.domain.repository.RawTickRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
 import com.assetmind.server_stock.support.IntegrationTestSupport;
 import java.time.LocalDateTime;
@@ -18,12 +19,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.BDDMockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders;
 import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,10 +41,13 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
     private StockSnapshotRepository stockSnapshotRepository;
 
     @Autowired
-    private StockHistoryRepository stockHistoryRepository;
+    private RawTickRepository rawTickRepository;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @MockitoBean
+    private StockMetadataProvider stockMetadataProvider;
 
     @AfterEach
     void tearDown() {
@@ -209,6 +215,8 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
             String stockCode = "005930";
             saveHistory(stockCode, 71000L, LocalDateTime.now());
 
+            BDDMockito.given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
+
             // when & then
             // PathParameter(StockCode) 문서화를 위해 MockMvcRequestBuilders.get 대신 RestDocumentationRequestBuilders.get 사용
             mockMvc.perform(RestDocumentationRequestBuilders.get("/api/stocks/{stockCode}/history", stockCode)
@@ -216,7 +224,7 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
                             .accept(MediaType.APPLICATION_JSON))
                     .andDo(print())
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data[0].currentPrice").value(71000))
+                    .andExpect(jsonPath("$.data[0].currentPrice").value("71000.0"))
 
                     // 문서화 로직
                     .andDo(document("stock-history/get-history-success",
@@ -235,14 +243,14 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
                                     fieldWithPath("data[]").type(JsonFieldType.ARRAY).description("시계열 데이터 리스트"),
                                     fieldWithPath("data[].stockCode").type(JsonFieldType.STRING).description("종목 코드"),
                                     fieldWithPath("data[].currentPrice").type(JsonFieldType.STRING).description("체결가"),
-                                    fieldWithPath("data[].openPrice").type(JsonFieldType.STRING).description("시가"),
-                                    fieldWithPath("data[].highPrice").type(JsonFieldType.STRING).description("고가"),
-                                    fieldWithPath("data[].lowPrice").type(JsonFieldType.STRING).description("저가"),
-                                    fieldWithPath("data[].priceChange").type(JsonFieldType.STRING).description("전일 대비 (+1000, -500)"),
-                                    fieldWithPath("data[].changeRate").type(JsonFieldType.STRING).description("등락률 (+1.5, -2)"),
+                                    fieldWithPath("data[].openPrice").type(JsonFieldType.STRING).description("시가").optional(),
+                                    fieldWithPath("data[].highPrice").type(JsonFieldType.STRING).description("고가").optional(),
+                                    fieldWithPath("data[].lowPrice").type(JsonFieldType.STRING).description("저가").optional(),
+                                    fieldWithPath("data[].priceChange").type(JsonFieldType.STRING).description("전일 대비 (+1000, -500)").optional(),
+                                    fieldWithPath("data[].changeRate").type(JsonFieldType.STRING).description("등락률 (+1.5, -2)").optional(),
                                     fieldWithPath("data[].executionVolume").type(JsonFieldType.STRING).description("체결량"),
-                                    fieldWithPath("data[].cumulativeAmount").type(JsonFieldType.STRING).description("누적 거래 대금"),
-                                    fieldWithPath("data[].cumulativeVolume").type(JsonFieldType.STRING).description("누적 거래량"),
+                                    fieldWithPath("data[].cumulativeAmount").type(JsonFieldType.STRING).description("누적 거래 대금").optional(),
+                                    fieldWithPath("data[].cumulativeVolume").type(JsonFieldType.STRING).description("누적 거래량").optional(),
                                     fieldWithPath("data[].time").type(JsonFieldType.STRING).description("체결 시간 (HHmmss)")
                             )
                     ));
@@ -254,6 +262,8 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
             // given
             String stockCode = "005930";
             saveHistory(stockCode, 70000L, LocalDateTime.now());
+
+            BDDMockito.given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
 
             // when & then
             mockMvc.perform(get("/api/stocks/{stockCode}/history", stockCode))
@@ -289,10 +299,12 @@ class StockRestApiIntegrationTest extends IntegrationTestSupport {
     }
 
     private void saveHistory(String code, Long price, LocalDateTime time) {
-        stockHistoryRepository.save(StockDataEntity.builder()
+        rawTickRepository.save(RawTickJpaEntity.builder()
                 .stockCode(code)
-                .currentPrice(price)
-                .time(time.toString())
+                .currentPrice(Double.parseDouble(String.valueOf(price)))
+                .volume(10L)
+                .priceChange(9.2)
+                .tradeTimestamp(time)
                 .build());
     }
 

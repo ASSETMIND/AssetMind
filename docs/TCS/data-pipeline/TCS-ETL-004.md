@@ -55,28 +55,27 @@ stateDiagram-v2
 
 ## 3. BDD 테스트 시나리오
 
-**시나리오 요약:**
+**시나리오 요약 (총 15건):**
 
-- **초기화 (Initialization):** 3건 (필수 설정값 및 객체 생성 검증)
-- **요청 검증 (Validation):** 4건 (MC/DC 적용 - JobID, Policy, Provider, Date Params)
-- **정상 흐름 (Functional):** 1건 (전체 파이프라인 성공 및 URL 검증)
-- **데이터 안정성 (Data/Parsing):** 5건 (응답 구조 변형, 에러 코드, 암시적 성공 처리)
-- **예외 처리 (Exception):** 2건 (시스템 에러 래핑 및 비즈니스 에러 전파)
+- **초기화 (Initialization):** 3건 (필수 설정값 및 평문 키 추출 검증)
+- **요청 검증 (Validation):** 5건 (MC/DC 적용 - JobID, Policy Exception, Provider 불일치, 기본 날짜 주입, **날짜 존재 시 주입 스킵**)
+- **데이터 패치 (Fetch):** 1건 (URL 조립 알고리즘 및 호출 검증)
+- **응답 생성 (Response):** 6건 (이중 응답 구조 파싱, 에러 코드 식별, 암시적 성공 처리, **Root 성공 코드 무시 분기**)
 
-|  테스트 ID  | 분류 | 기법  | 전제 조건 (Given)                        | 수행 (When)                    | 검증 (Then)                                                          | 입력 데이터 / 상황              |
-| :---------: | :--: | :---: | :--------------------------------------- | :----------------------------- | :------------------------------------------------------------------- | :------------------------------ |
-| **INIT-01** | 단위 |  BVA  | `ecos.base_url`이 비어있는 설정 객체     | `ECOSExtractor(config)` 초기화 | `ExtractorError` 발생 (Critical Config Error)                        | `base_url=""`                   |
-| **INIT-02** | 단위 |  BVA  | `ecos.api_key`가 없는 설정 객체          | `ECOSExtractor(config)` 초기화 | `ExtractorError` 발생 (Critical Config Error)                        | `api_key=None`                  |
-| **INIT-03** | 단위 | 표준  | 유효한 설정(URL, Key 포함) 객체          | `ECOSExtractor(config)` 초기화 | 인스턴스 정상 생성 (가드 절 통과)                                    | `base_url="http://..."`         |
-| **REQ-01**  | 단위 | MC/DC | `job_id`가 없는 요청 객체                | `extract(request)` 호출        | `ExtractorError` 발생 (Invalid Request)                              | `job_id=None`                   |
-| **REQ-02**  | 단위 | MC/DC | 설정 파일에 정의되지 않은 `job_id` 요청  | `extract(request)` 호출        | `ExtractorError` 발생 (Policy not found)                             | `job_id="UNKNOWN"`              |
-| **REQ-03**  | 단위 | MC/DC | Provider가 'KIS'로 설정된 정책 요청      | `extract(request)` 호출        | `ExtractorError` 발생 (Provider Mismatch)                            | `provider="KIS"`                |
-| **REQ-04**  | 단위 | MC/DC | `start_date` 파라미터가 누락됨           | `extract(request)` 호출        | `ExtractorError` 발생 (Mandatory for ECOS)                           | `params={"end_date": "..."}`    |
-| **FLOW-01** | 단위 | 표준  | 정상 정책, 서비스 내 `INFO-000` 응답     | `extract(request)` 호출        | 1. `ResponseDTO` 반환<br>2. URL 조립 포맷 일치<br>3. 메타데이터 검증 | `CODE="INFO-000"`               |
-| **DATA-01** | 단위 | 구조  | Root 레벨에 `RESULT.CODE="INFO-200"`     | `extract(request)` 호출        | `ExtractorError` 발생 (Root Level Failure)                           | `{"RESULT": {"CODE": "200"}}`   |
-| **DATA-02** | 단위 | 구조  | Root에 정책 경로(`StatisticSearch`) 없음 | `extract(request)` 호출        | `ExtractorError` 발생 (Invalid Response)                             | `{"WrongKey": {...}}`           |
-| **DATA-03** | 단위 | 구조  | 서비스 내 `RESULT.CODE="INFO-200"`       | `extract(request)` 호출        | `ExtractorError` 발생 (Business Failure)                             | `{"Stat..": {"RESULT": "200"}}` |
-| **DATA-04** | 단위 | 방어  | Root `RESULT` 존재하나 성공(`INFO-000`)  | `extract(request)` 호출        | 에러 없이 정상 데이터 반환 (Root 결과 무시 분기 검증)                | Root `CODE="INFO-000"`          |
-| **DATA-05** | 단위 | 방어  | 서비스 내 `RESULT` 키 자체가 누락됨      | `extract(request)` 호출        | 에러 없이 정상 데이터 반환 (암시적 성공 처리 분기 검증)              | `{"row": [...]} ` (No RESULT)   |
-| **ERR-01**  | 예외 | 래핑  | HTTP 클라이언트가 `ValueError` 발생      | `extract(request)` 호출        | `ExtractorError`로 래핑되어 던져짐 (System Error)                    | Raise `ValueError`              |
-| **ERR-02**  | 예외 | 전파  | 내부 로직에서 `ExtractorError` 발생      | `extract(request)` 호출        | 에러가 래핑되지 않고 그대로 전파됨 (중복 래핑 방지)                  | Raise `ExtractorError`          |
+|  테스트 ID   | 분류 | 기법  | 전제 조건 (Given)                              | 수행 (When)                | 검증 (Then)                                     | 입력 데이터 / 상황        |
+| :----------: | :--: | :---: | :--------------------------------------------- | :------------------------- | :---------------------------------------------- | :------------------------ |
+| **INIT-01**  | 단위 |  BVA  | `ecos.base_url`이 비어있는 설정 객체           | `ECOSExtractor()` 초기화   | `ExtractorError` 발생 (Critical Config Error)   | `base_url=""`             |
+| **INIT-02**  | 단위 |  BVA  | `ecos.api_key`가 없는 설정 객체                | `ECOSExtractor()` 초기화   | `ExtractorError` 발생 (Critical Config Error)   | `api_key=None`            |
+| **INIT-03**  | 단위 | 표준  | 유효한 설정(URL, Key 포함) 객체                | `ECOSExtractor()` 초기화   | 인스턴스 생성 및 `get_secret_value()` 추출 확인 | 정상 `config` 주입        |
+|  **REQ-01**  | 단위 | MC/DC | `job_id`가 없는 요청 객체                      | `_validate_request()` 호출 | `ExtractorError` 발생 (Invalid Request)         | `job_id=None`             |
+|  **REQ-02**  | 단위 | 예외  | 설정 객체에서 정책 조회 중 예외 발생           | `_validate_request()` 호출 | `ExtractorError` 발생 (Policy Error 래핑)       | `get_extractor` Exception |
+|  **REQ-03**  | 단위 | MC/DC | Provider가 'ECOS'가 아닌 정책 반환             | `_validate_request()` 호출 | `ExtractorError` 발생 (Provider Mismatch)       | `provider="KIS"`          |
+|  **REQ-04**  | 단위 | 방어  | Request 및 Policy 모두 날짜 파라미터 누락      | `_validate_request()` 호출 | 기본값(`start_date`, `end_date`) 자동 주입됨    | 빈 `params` 객체          |
+|  **REQ-05**  | 단위 | 분기  | Request에 `start_date`, `end_date` 명시됨      | `_validate_request()` 호출 | 기본값 주입 분기를 건너뜀 (Branch 97, 101)      | `params`에 날짜 포함      |
+| **FETCH-01** | 단위 | 조합  | 정상 파라미터가 포함된 요청 객체               | `_fetch_raw_data()` 호출   | ECOS 규격에 맞는 Path 방식 URL 조립 및 통신     | `stat_code`, `cycle` 등   |
+| **RESP-01**  | 단위 | 구조  | Root 레벨에 `RESULT.CODE != INFO-000`          | `_create_response()` 호출  | `ExtractorError` 발생 (Root Error)              | Root `CODE="ERR-100"`     |
+| **RESP-02**  | 단위 | 구조  | Root 레벨에 정책 경로 키(Service Key) 누락     | `_create_response()` 호출  | `ExtractorError` 발생 (Key Missing)             | `{"WrongKey": {}}`        |
+| **RESP-03**  | 단위 | 구조  | 서비스 내 `RESULT.CODE != INFO-000`            | `_create_response()` 호출  | `ExtractorError` 발생 (Inner Error)             | Inner `CODE="ERR-200"`    |
+| **RESP-04**  | 단위 | 표준  | 서비스 내 정상 `RESULT` 객체 포함 (`INFO-000`) | `_create_response()` 호출  | 파싱 성공 및 표준 `ExtractedDTO` 래핑 반환      | Inner `CODE="INFO-000"`   |
+| **RESP-05**  | 단위 | 방어  | 서비스 내 `RESULT` 객체 아예 없음              | `_create_response()` 호출  | 에러 통과 및 암시적 성공(Implicit Success) 처리 | `{"row": [...]}`          |
+| **RESP-06**  | 단위 | 방어  | Root에 `RESULT` 존재하나 성공(`INFO-000`)      | `_create_response()` 호출  | 에러 처리 스킵 후 데이터 정상 파싱 (Branch 171) | Root `CODE="INFO-000"`    |

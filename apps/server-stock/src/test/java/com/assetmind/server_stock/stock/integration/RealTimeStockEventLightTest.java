@@ -1,5 +1,6 @@
 package com.assetmind.server_stock.stock.integration;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.BDDMockito.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -11,18 +12,23 @@ import com.assetmind.server_stock.stock.application.StockService;
 import com.assetmind.server_stock.stock.application.listener.StockTradeEventListener;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.web.socket.TextMessage;
 
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(classes = {
-        KisWebSocketHandler.class,          // 발행자
         StockTradeEventListener.class,      // 수신자
         KisEventMapper.class,               // 매퍼
         KisRealTimeDataParser.class,
@@ -30,8 +36,13 @@ import org.springframework.web.socket.TextMessage;
 })
 public class RealTimeStockEventLightTest {
 
+    private KisWebSocketHandler webSocketHandler; // 발행자
+
     @Autowired
-    private KisWebSocketHandler webSocketHandler;
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private KisEventMapper eventMapper;
 
     @MockitoSpyBean
     private StockTradeEventListener eventListener;
@@ -42,8 +53,23 @@ public class RealTimeStockEventLightTest {
     @MockitoBean
     private StockService stockService;
 
+    @BeforeEach
+    void setUp() {
+        // 테스트용 POJO KIS 핸들러를 직접 생성 (Spring EventPublisher 주입)
+        webSocketHandler = new KisWebSocketHandler(
+                "dummy-key",
+                null,
+                List.of(),
+                null, // objectMapper (이 테스트에선 안 쓰임)
+                parser, // Mock 객체
+                eventMapper, // 실제 빈
+                eventPublisher, // 실제 빈 (핵심!)
+                null // taskScheduler (이 테스트에선 안 쓰임)
+        );
+    }
+
     @Test
-    @DisplayName("이벤트 테스트용 컨텍스트에서 이벤트 발행 및 수신 검증")
+    @DisplayName("성공: 이벤트 테스트용 컨텍스트에서 이벤트 발행 및 수신 검증")
     void givenStockData_whenPublishEvent_thenSubscribeEvent() throws Exception {
         // given
         KisRealTimeData mockData = KisRealTimeData.builder()
@@ -74,6 +100,29 @@ public class RealTimeStockEventLightTest {
         assertThat(event.stockCode()).isEqualTo("005930");
         assertThat(event.changeSign()).isEqualTo("1");
 
+    }
+
+    @Test
+    @DisplayName("실패: 서비스 계층에서 예외가 발생해도 리스너가 스레드를 보호하고 로그를 남긴다.")
+    void givenServiceException_whenHandleEvent_thenCatchAndLogError(CapturedOutput output) {
+        // given: 임의의 실시간 체결 이벤트 생성
+        RealTimeStockTradeEvent dummyEvent = RealTimeStockTradeEvent.builder()
+                .stockCode("005930")
+                .currentPrice(80000L)
+                .changeSign("3") // 보합 기호
+                .build();
+
+        // Mocking: 서비스 계층에서 DB 타임아웃 등의 치명적 에러가 터졌다고 가정
+        doThrow(new RuntimeException("DB Connection Timeout!"))
+                .when(stockService).processRealTimeTrade(any(RealTimeStockTradeEvent.class));
+
+        // when & then 1: 예외가 리스너 밖으로 새어나가지 않는지 검증 (스레드 생존 검증)
+        assertDoesNotThrow(() -> eventListener.handleStockTradeEvent(dummyEvent));
+
+        // when & then 2: 캡처된 로그(output)에 의도한 ERROR 로그가 찍혔는지 검증
+        assertThat(output.getOut())
+                .contains("[Stock Trade Event] 처리 중 에러 발생")
+                .contains("DB Connection Timeout!");
     }
 
 }

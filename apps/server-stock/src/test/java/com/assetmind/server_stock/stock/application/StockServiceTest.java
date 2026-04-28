@@ -2,7 +2,6 @@ package com.assetmind.server_stock.stock.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -15,10 +14,12 @@ import com.assetmind.server_stock.stock.application.event.StockRankingUpdatedEve
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.application.mapper.StockMapper;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
-import com.assetmind.server_stock.stock.domain.repository.StockHistoryRepository;
+import com.assetmind.server_stock.stock.domain.enums.CandleType;
+import com.assetmind.server_stock.stock.domain.repository.CandleRepository;
+import com.assetmind.server_stock.stock.domain.repository.RawTickRepository;
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
-import com.assetmind.server_stock.stock.exception.InvalidStockParameterException;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockDataEntity;
+import com.assetmind.server_stock.stock.exception.StockNotFoundException;
+import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
 import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
 import com.assetmind.server_stock.stock.presentation.dto.StockHistoryResponse;
 import com.assetmind.server_stock.stock.presentation.dto.StockRankingResponse;
@@ -37,10 +38,13 @@ import org.springframework.context.ApplicationEventPublisher;
 class StockServiceTest {
 
     @Mock
+    private CandleRepository candleRepository;
+
+    @Mock
     private StockSnapshotRepository stockSnapshotRepository;
 
     @Mock
-    private StockHistoryRepository stockHistoryRepository;
+    private RawTickRepository rawTickRepository;
 
     @Mock
     private StockMetadataProvider stockMetadataProvider;
@@ -89,7 +93,7 @@ class StockServiceTest {
             given(stockMetadataProvider.getStockName(stockCode)).willReturn(stockName);
             given(stockMapper.toRedisEntity(eq(event), eq(stockName))).willReturn(
                     StockPriceRedisEntity.builder().build());
-            given(stockMapper.toJpaEntity(eq(event))).willReturn(StockDataEntity.builder().build());
+            given(stockMapper.toJpaEntity(eq(event))).willReturn(RawTickJpaEntity.builder().build());
 
             // when
             stockService.processRealTimeTrade(event);
@@ -100,11 +104,15 @@ class StockServiceTest {
 
             // Redis & DB 저장소 호출 확인
             verify(stockSnapshotRepository, times(1)).save(any(StockPriceRedisEntity.class));
-            verify(stockHistoryRepository, times(1)).save(any(StockDataEntity.class));
+            verify(rawTickRepository, times(1)).save(any(RawTickJpaEntity.class));
 
             // 2개의 이벤트(History, Ranking) 발행 확인
             verify(eventPublisher, times(1)).publishEvent(any(StockHistorySavedEvent.class));
             verify(eventPublisher, times(1)).publishEvent(any(StockRankingUpdatedEvent.class));
+
+            // 1분봉 캐싱 호출 확인
+            verify(candleRepository, times(1)).save(any(RealTimeStockTradeEvent.class), any(
+                    CandleType.class));
         }
 
         @Test
@@ -112,8 +120,7 @@ class StockServiceTest {
         void givenNullEvent_whenProcessRealTimeTrade_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(null))
-                    .isInstanceOf(InvalidStockParameterException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_STOCK_PARAMETER);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -124,7 +131,7 @@ class StockServiceTest {
 
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(event))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -135,7 +142,7 @@ class StockServiceTest {
 
             // when & then
             assertThatThrownBy(() -> stockService.processRealTimeTrade(event))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -194,8 +201,18 @@ class StockServiceTest {
             // given
             String stockCode = "005930";
             int limit = 20;
-            List<StockDataEntity> repositoryDataList = List.of(StockDataEntity.builder().build());
-            given(stockHistoryRepository.findRecentData(stockCode, limit)).willReturn(repositoryDataList);
+
+            RawTickJpaEntity mockEntity = RawTickJpaEntity.builder()
+                    .stockCode(stockCode)
+                    .tradeTimestamp(LocalDateTime.of(2026, 3, 24, 15, 30, 0))
+                    .currentPrice(80000.0)
+                    .priceChange(1000.0)
+                    .volume(150L)
+                    .build();
+
+            List<RawTickJpaEntity> repositoryDataList = List.of(mockEntity);
+            given(rawTickRepository.findRecentData(stockCode, limit)).willReturn(repositoryDataList);
+            given(stockMetadataProvider.isExist(stockCode)).willReturn(true);
 
             List<StockHistoryResponse> expectedHistory = repositoryDataList.stream()
                     .map(StockHistoryResponse::from)
@@ -206,7 +223,7 @@ class StockServiceTest {
 
             // then
             assertThat(result).isEqualTo(expectedHistory);
-            verify(stockHistoryRepository).findRecentData(stockCode, limit);
+            verify(rawTickRepository).findRecentData(stockCode, limit);
         }
 
         @Test
@@ -214,8 +231,8 @@ class StockServiceTest {
         void givenNullStockCode_whenGetStockRecentHistory_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.getStockRecentHistory(null, 10))
-                    .isInstanceOf(InvalidStockParameterException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_STOCK_PARAMETER);
+                    .isInstanceOf(StockNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOT_FOUND_STOCK);
         }
 
         @Test
@@ -223,7 +240,7 @@ class StockServiceTest {
         void givenEmptyStockCode_whenGetStockRecentHistory_thenThrowException() {
             // when & then
             assertThatThrownBy(() -> stockService.getStockRecentHistory("  ", 10))
-                    .isInstanceOf(InvalidStockParameterException.class);
+                    .isInstanceOf(StockNotFoundException.class);
         }
     }
 }

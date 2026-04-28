@@ -3,6 +3,7 @@ package com.assetmind.server_stock.market_access.infrastructure.kis.config;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,6 +22,7 @@ public class JacksonConfig {
     @Bean
     public ObjectMapper objectMapper() {
         return JsonMapper.builder()
+                .addModule(new JavaTimeModule())
                 // JSON의 실수형(Float) 데이터를 무조건 BigDecimal로 역직렬화한다.
                 // (이유: 0.1 + 0.2 != 0.3 부동소수점 이슈 방지)
                 .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
