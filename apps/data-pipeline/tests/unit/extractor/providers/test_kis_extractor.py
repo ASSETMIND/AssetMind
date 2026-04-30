@@ -1,287 +1,215 @@
 import pytest
-import asyncio
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
-from typing import Dict, Any, Optional
+from unittest.mock import MagicMock, AsyncMock, patch
 
-# [Target Modules] - Imports for type hinting (actual classes are patched)
 from src.common.dtos import RequestDTO, ExtractedDTO
 from src.common.exceptions import ExtractorError
-from src.common.interfaces import IHttpClient, IAuthStrategy
-from src.common.config import ConfigManager
+from src.extractor.providers.kis_extractor import KISExtractor
 
 # ========================================================================================
-# [Mocks & Stubs] DTO & Value Object Replacement (Isolation)
-# ========================================================================================
-
-class MockRequestDTO:
-    """테스트용 Request DTO (인자 수용 가능)"""
-    def __init__(self, job_id: str = "unknown", params: Dict = None):
-        self.job_id = job_id
-        self.params = params or {}
-
-class MockExtractedDTO:
-    """테스트용 Extracted DTO (인자 수용 가능)"""
-    def __init__(self, data: Any = None, meta: Dict = None):
-        self.data = data
-        self.meta = meta or {}
-
-class MockSecretStr:
-    """Pydantic SecretStr 동작 모방을 위한 Stub"""
-    def __init__(self, value: str):
-        self._value = value
-    
-    def get_secret_value(self) -> str:
-        return self._value
-
-class MockJobPolicy:
-    """Config 내 JobPolicy 객체 모방"""
-    def __init__(self, provider: str = "KIS", path: str = "/uapi/test", 
-                 params: Dict = None, tr_id: str = "TR_123"):
-        self.provider = provider
-        self.path = path
-        self.params = params or {}
-        self.tr_id = tr_id
-
-# ========================================================================================
-# [Fixtures] 테스트 환경 설정 및 격리
+# [Fixtures] 의존성 격리 및 통제 (Root Cause 해결)
 # ========================================================================================
 
 @pytest.fixture(autouse=True)
-def mock_environment():
+def mock_decorators():
     """
-    [Critical Fix]
-    1. LogManager 및 Decorator 패치 (Pass-through)
-    2. DTO 패치 (TypeError 방지) - src.common.dtos 레벨에서 적용
+    [CRITICAL] 데코레이터로 인한 사이드 이펙트(Delay, Retry 등)를 원천 차단하여 
+    순수 로직만 검증할 수 있도록 Pass-through 처리합니다.
     """
     passthrough = lambda *args, **kwargs: lambda func: func
-    
-    with patch("src.common.log.LogManager.get_logger") as mock_get_logger, \
-         patch("src.common.decorators.log_decorator.log_decorator", side_effect=passthrough), \
-         patch("src.common.decorators.retry_decorator.retry", side_effect=passthrough), \
-         patch("src.common.decorators.rate_limit_decorator.rate_limit", side_effect=passthrough), \
-         patch("src.common.dtos.RequestDTO", side_effect=MockRequestDTO), \
-         patch("src.common.dtos.ExtractedDTO", side_effect=MockExtractedDTO):
-        
-        mock_get_logger.return_value = MagicMock()
+    with patch("src.extractor.providers.kis_extractor.log_decorator", side_effect=passthrough), \
+         patch("src.extractor.providers.kis_extractor.rate_limit", side_effect=passthrough), \
+         patch("src.extractor.providers.kis_extractor.retry", side_effect=passthrough):
         yield
 
 @pytest.fixture
 def mock_http_client():
-    """비동기 HTTP 요청을 모방하는 Mock Client"""
-    client = MagicMock(spec=IHttpClient)
+    """비동기 네트워크 통신 모방"""
+    client = MagicMock()
     client.get = AsyncMock()
     return client
 
 @pytest.fixture
 def mock_auth_strategy():
-    """인증 토큰 발급을 모방하는 Mock Strategy"""
-    strategy = MagicMock(spec=IAuthStrategy)
+    """토큰 발급 로직 모방"""
+    strategy = MagicMock()
     strategy.get_token = AsyncMock(return_value="Bearer test_token")
     return strategy
 
 @pytest.fixture
 def mock_config():
     """
-    [Fix] spec 제한을 제거하고 extraction_policy를 실제 딕셔너리로 구성
+    KIS API 필수 환경 변수 및 각 Job ID별 정책을 모방하여 반환합니다.
     """
-    config = MagicMock() # spec=ConfigManager 제거
-    
-    # KIS 섹션 설정
-    config.kis = MagicMock()
+    config = MagicMock()
     config.kis.base_url = "https://api.kis.com"
-    config.kis.app_key = MockSecretStr("secret_key")
-    config.kis.app_secret = MockSecretStr("secret_val")
+    config.kis.app_key.get_secret_value.return_value = "plain_app_key"
+    config.kis.app_secret.get_secret_value.return_value = "plain_app_secret"
     
-    # Extraction Policy (Dict 접근 허용)
-    config.extraction_policy = {
-        "job_valid": MockJobPolicy(params={"static": "A"}),
-        "job_fred": MockJobPolicy(provider="FRED"),
-        "job_no_tr": MockJobPolicy(tr_id=None),  # type: ignore
-    }
+    def get_extractor_mock(job_id):
+        policy = MagicMock()
+        if job_id == "valid_job":
+            policy.provider = "KIS"
+            policy.tr_id = "TR_123"
+            policy.path = "/v1/stock"
+            policy.params = {"static_param": "A"}
+            return policy
+        elif job_id == "fred_job":
+            policy.provider = "FRED"
+            return policy
+        elif job_id == "no_tr_job":
+            policy.provider = "KIS"
+            policy.tr_id = None
+            return policy
+        else:
+            raise Exception("Policy Not Found")
+            
+    config.get_extractor.side_effect = get_extractor_mock
     return config
 
 @pytest.fixture
 def extractor(mock_http_client, mock_auth_strategy, mock_config):
     """
-    모듈 임포트 시점 제어 및 클린 룸 테스트 환경 제공 (SUT)
+    부모 클래스(AbstractExtractor)의 불필요한 초기화 간섭을 막고
+    Config만 주입된 완벽하게 격리된 KISExtractor SUT를 생성합니다.
     """
-    module_name = "src.extractor.providers.kis_extractor"
-    # 기존 모듈 삭제 후 재임포트 (mock_environment 패치 적용)
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-    
-    from src.extractor.providers.kis_extractor import KISExtractor
-    return KISExtractor(mock_http_client, mock_auth_strategy, mock_config)
+    with patch("src.extractor.providers.kis_extractor.AbstractExtractor.__init__", 
+               lambda self, client: setattr(self, 'config', mock_config) or setattr(self, 'http_client', client)):
+        return KISExtractor(mock_http_client, mock_auth_strategy)
 
 # ========================================================================================
-# 1. 초기화 테스트 (Initialization)
+# 1. 초기화 (Initialization) 테스트 [Lines 62-75 커버]
 # ========================================================================================
 
-def test_init_01_critical_config_error(mock_http_client, mock_auth_strategy, mock_config):
-    """[INIT-01] kis.base_url이 비어있는 경우 초기화 단계에서 즉시 실패 (Fail-Fast)"""
-    from src.extractor.providers.kis_extractor import KISExtractor
-    
+def test_init_01_missing_base_url(mock_http_client, mock_auth_strategy, mock_config):
+    """[INIT-01] base_url이 비어있을 경우 인스턴스화 시점에 조기 실패 (Fail-Fast) 검증"""
+    # GIVEN
     mock_config.kis.base_url = ""
-    with pytest.raises(ExtractorError, match="Critical Config Error"):
-        KISExtractor(mock_http_client, mock_auth_strategy, mock_config)
+    
+    # WHEN / THEN
+    with patch("src.extractor.providers.kis_extractor.AbstractExtractor.__init__", 
+               lambda self, client: setattr(self, 'config', mock_config)):
+        with pytest.raises(ExtractorError, match="Critical Config Error"):
+            KISExtractor(mock_http_client, mock_auth_strategy)
+
+def test_init_02_success(mock_http_client, mock_auth_strategy, mock_config):
+    """[INIT-02] 유효한 설정 환경에서 시크릿 평문 복호화 및 초기화 완료 검증"""
+    # GIVEN
+    mock_config.kis.base_url = "https://api.kis.com"
+    
+    # WHEN
+    with patch("src.extractor.providers.kis_extractor.AbstractExtractor.__init__", 
+               lambda self, client: setattr(self, 'config', mock_config)):
+        instance = KISExtractor(mock_http_client, mock_auth_strategy)
+    
+    # THEN
+    assert instance.base_url == "https://api.kis.com"
+    assert instance.app_key == "plain_app_key"
+    assert instance.app_secret == "plain_app_secret"
 
 # ========================================================================================
-# 2. 요청 검증 테스트 (Validation - MC/DC)
+# 2. 요청 검증 (Validation) 테스트 [Lines 86-105 커버]
 # ========================================================================================
 
 def test_req_01_missing_job_id(extractor):
-    """[REQ-01] Request에 job_id가 없는 경우 유효성 검증 실패"""
-    request = MockRequestDTO(job_id=None) # type: ignore
+    """[REQ-01] job_id가 누락된 악의적/비정상 요청의 차단 검증"""
+    # GIVEN
+    request = RequestDTO(job_id=None)
     
-    with pytest.raises(ExtractorError, match="'job_id' is mandatory"):
+    # WHEN / THEN
+    with pytest.raises(ExtractorError, match="'job_id'는 필수 항목입니다"):
         extractor._validate_request(request)
 
-def test_req_02_policy_not_found(extractor):
-    """[REQ-02] Config에 정의되지 않은 job_id 요청 시 실패"""
-    request = MockRequestDTO(job_id="job_unknown")
+def test_req_02_policy_exception(extractor):
+    """[REQ-02] 시스템(Config)에 등록되지 않은 job_id 요청의 차단 검증"""
+    # GIVEN
+    request = RequestDTO(job_id="unknown_job")
     
-    with pytest.raises(ExtractorError, match="Policy not found"):
+    # WHEN / THEN
+    with pytest.raises(ExtractorError, match="설정 오류: Policy Not Found"):
         extractor._validate_request(request)
 
 def test_req_03_provider_mismatch(extractor):
-    """[REQ-03] Provider가 KIS가 아닌 경우 (예: FRED) 요청 거부"""
-    request = MockRequestDTO(job_id="job_fred")
+    """[REQ-03] KIS 추출기에 타 제공자(FRED 등) 요청이 유입되었을 때 라우팅 방어 검증"""
+    # GIVEN
+    request = RequestDTO(job_id="fred_job")
     
-    with pytest.raises(ExtractorError, match="Provider Mismatch"):
+    # WHEN / THEN
+    with pytest.raises(ExtractorError, match="API 제공자 불일치"):
         extractor._validate_request(request)
 
 def test_req_04_missing_tr_id(extractor):
-    """[REQ-04] 정책에 필수 필드 tr_id가 누락된 경우 실패"""
-    request = MockRequestDTO(job_id="job_no_tr")
+    """[REQ-04] KIS 필수 스펙인 tr_id가 정책에서 누락되었을 때의 차단 검증"""
+    # GIVEN
+    request = RequestDTO(job_id="no_tr_job")
     
-    with pytest.raises(ExtractorError, match="'tr_id' is missing"):
+    # WHEN / THEN
+    with pytest.raises(ExtractorError, match="'tr_id'가 누락되었습니다"):
         extractor._validate_request(request)
 
-# ========================================================================================
-# 3. 정상 흐름 및 기능 테스트 (Functional & Flow)
-# ========================================================================================
-
-@pytest.mark.asyncio
-async def test_flow_01_happy_path_e2e(extractor, mock_http_client):
-    """[FLOW-01] 정상 요청 -> 토큰 획득 -> API 호출 -> 응답 생성 확인 (Happy Path)"""
-    request = MockRequestDTO(job_id="job_valid")
-    mock_response = {"rt_cd": "0", "msg1": "Success", "output": []}
-    mock_http_client.get.return_value = mock_response
+def test_req_05_success(extractor):
+    """[REQ-05] 완벽한 요청 시 예외 발생 없이 Validation 통과 여부 검증"""
+    # GIVEN
+    request = RequestDTO(job_id="valid_job")
     
-    response = await extractor.extract(request)
-    
-    assert isinstance(response, MockExtractedDTO)
-    assert response.data == mock_response
-    assert response.meta["job_id"] == "job_valid"
-    mock_http_client.get.assert_called_once()
-
-@pytest.mark.asyncio
-async def test_flow_02_param_priority(extractor, mock_http_client):
-    """[FLOW-02] 파라미터 병합 시 Request Params가 Static Policy보다 우선순위 가짐"""
-    request = MockRequestDTO(job_id="job_valid", params={"static": "B", "dynamic": "C"})
-    mock_http_client.get.return_value = {"rt_cd": "0"}
-    
-    await extractor.extract(request)
-    
-    call_args = mock_http_client.get.call_args
-    merged_params = call_args.kwargs['params']
-    assert merged_params["static"] == "B"  # Policy 값 "A"가 "B"로 교체됨
-    assert merged_params["dynamic"] == "C" # 새로운 파라미터 추가됨
-
-@pytest.mark.asyncio
-async def test_flow_03_url_construction(extractor, mock_http_client, mock_config):
-    """[FLOW-03] Base URL과 Policy Path가 결합되어 완전한 URL 호출"""
-    mock_config.kis.base_url = "https://api.test.com"
-    mock_config.extraction_policy["job_valid"].path = "/v1/stock"
-    request = MockRequestDTO(job_id="job_valid")
-    mock_http_client.get.return_value = {"rt_cd": "0"}
-    
-    await extractor.extract(request)
-    
-    expected_url = "https://api.test.com/v1/stock"
-    mock_http_client.get.assert_called_with(expected_url, headers=ANY, params=ANY)
+    # WHEN / THEN
+    extractor._validate_request(request) # 에러 없이 통과해야 함
 
 # ========================================================================================
-# 4. 보안 및 인증 테스트 (Security)
+# 3. 데이터 실행 (Fetch) 테스트 [Lines 125-150 커버]
 # ========================================================================================
 
 @pytest.mark.asyncio
-async def test_sec_01_secret_decoding(extractor, mock_http_client):
-    """[SEC-01] SecretStr 타입의 키가 헤더에는 평문으로 복호화되어 주입됨"""
-    request = MockRequestDTO(job_id="job_valid")
-    mock_http_client.get.return_value = {"rt_cd": "0"}
+async def test_fetch_01_success(extractor, mock_http_client, mock_auth_strategy):
+    """[FETCH-01] 토큰 발급, 파라미터 병합, 헤더 주입 등 네트워크 호출 전/후 프로세스 무결성 검증"""
+    # GIVEN
+    request = RequestDTO(job_id="valid_job", params={"dynamic_param": "B"})
+    mock_http_client.get.return_value = {"rt_cd": "0", "data": "OK"}
     
-    await extractor.extract(request)
+    # WHEN
+    result = await extractor._fetch_raw_data(request)
     
-    call_headers = mock_http_client.get.call_args.kwargs['headers']
-    assert call_headers["appkey"] == "secret_key"
-    assert call_headers["appsecret"] == "secret_val"
-    assert not isinstance(call_headers["appkey"], MockSecretStr)
-
-@pytest.mark.asyncio
-async def test_sec_02_token_injection(extractor, mock_http_client):
-    """[SEC-02] AuthStrategy에서 발급받은 토큰이 Authorization 헤더에 주입됨"""
-    request = MockRequestDTO(job_id="job_valid")
-    mock_http_client.get.return_value = {"rt_cd": "0"}
-    
-    await extractor.extract(request)
-    
-    call_headers = mock_http_client.get.call_args.kwargs['headers']
-    assert call_headers["authorization"] == "Bearer test_token"
-
-# ========================================================================================
-# 5. 데이터 안정성 및 견고성 테스트 (Robustness & Data)
-# ========================================================================================
-
-@pytest.mark.asyncio
-async def test_data_01_business_failure(extractor, mock_http_client):
-    """[DATA-01] API 응답 rt_cd가 '0'이 아닌 경우 Business Failure 처리"""
-    mock_response = {"rt_cd": "1", "msg1": "Account Number Error"}
-    mock_http_client.get.return_value = mock_response
-    request = MockRequestDTO(job_id="job_valid")
-    
-    with pytest.raises(ExtractorError) as exc:
-        await extractor.extract(request)
-    
-    assert "KIS API Failed" in str(exc.value)
-    assert "Account Number Error" in str(exc.value)
-
-@pytest.mark.asyncio
-async def test_data_02_missing_rt_cd(extractor, mock_http_client):
-    """[DATA-02] 응답에 필수 필드 rt_cd가 없는 경우 견고성 테스트"""
-    mock_response = {"data": "invalid_structure"}
-    mock_http_client.get.return_value = mock_response
-    request = MockRequestDTO(job_id="job_valid")
-    
-    with pytest.raises(ExtractorError, match="Unknown Error"):
-        await extractor.extract(request)
+    # THEN
+    mock_auth_strategy.get_token.assert_awaited_once_with(mock_http_client)
+    mock_http_client.get.assert_awaited_once_with(
+        "https://api.kis.com/v1/stock",
+        headers={
+            "content-type": "application/json; charset=utf-8",
+            "authorization": "Bearer test_token",
+            "appkey": "plain_app_key",
+            "appsecret": "plain_app_secret",
+            "tr_id": "TR_123"
+        },
+        params={"static_param": "A", "dynamic_param": "B"}
+    )
+    assert result == {"rt_cd": "0", "data": "OK"}
 
 # ========================================================================================
-# 6. 예외 처리 및 데코레이터 테스트 (Exception & Decorators)
+# 4. 응답 파싱 (Create Response) 테스트 [Lines 168-176 커버]
 # ========================================================================================
 
-@pytest.mark.asyncio
-async def test_err_01_system_error_wrapping(extractor):
-    """[ERR-01] 실행 중 예상치 못한 에러(ValueError) 발생 시 ExtractorError로 래핑"""
-    # 데코레이터가 Pass-through 상태이므로, _fetch_raw_data에 직접 예외를 주입하여 
-    # AbstractExtractor의 템플릿 메서드 내 try-except 블록을 검증합니다.
-    extractor._fetch_raw_data = AsyncMock(side_effect=ValueError("Parsing Error"))
+def test_res_01_biz_error(extractor):
+    """[RES-01] HTTP 200 응답이더라도 rt_cd가 '0'이 아니면 비즈니스 실패로 간주하는 로직 검증"""
+    # GIVEN
+    raw_data = {"rt_cd": "1", "msg": "잘못된 계좌번호입니다"}
+    job_id = "valid_job"
     
-    request = MockRequestDTO(job_id="job_valid")
-    
-    with pytest.raises(ExtractorError, match="작업 중 알 수 없는 시스템 오류 발생"):
-        await extractor.extract(request)
+    # WHEN / THEN
+    with pytest.raises(ExtractorError, match="KIS API 실패: 잘못된 계좌번호입니다 \\(Code: 1\\)"):
+        extractor._create_response(raw_data, job_id)
 
-def test_dec_01_decorator_application(extractor):
-    """[DEC-01] _fetch_raw_data 메서드에 데코레이터가 적용되어 있는지 검증"""
-    # 데코레이터가 적용된 메서드는 __wrapped__ 속성을 가짐 (functools.wraps 사용 시)
-    # mock_environment에서 데코레이터를 Pass-through로 패치했더라도,
-    # 실제 소스코드의 @rate_limit 문법적 적용 여부는 확인할 수 있음.
-    # 단, 패치 방식에 따라 __wrapped__가 사라질 수도 있으므로, 
-    # 이 테스트는 '데코레이터 로직이 실행됨'보다는 '데코레이터가 선언됨'을 확인하는 용도임.
-    method = extractor._fetch_raw_data
-    # Pass-through 패치라도 원본 함수를 반환하므로 속성은 유지될 수 있음
-    # 만약 실패한다면 이 Assert는 생략 가능 (Integration Test에서 검증)
-    if hasattr(method, "__wrapped__"):
-        assert True
+def test_res_02_success(extractor):
+    """[RES-02] 정상 응답 시 표준 포맷(ExtractedDTO)으로 데이터와 메타데이터가 래핑되는지 검증"""
+    # GIVEN
+    raw_data = {"rt_cd": "0", "output": ["A", "B"]}
+    job_id = "valid_job"
+    
+    # WHEN
+    result = extractor._create_response(raw_data, job_id)
+    
+    # THEN
+    assert isinstance(result, ExtractedDTO)
+    assert result.data == raw_data
+    assert result.meta["source"] == "KIS"
+    assert result.meta["job_id"] == "valid_job"
+    assert result.meta["status_code"] == "0"
+    assert "extracted_at" in result.meta

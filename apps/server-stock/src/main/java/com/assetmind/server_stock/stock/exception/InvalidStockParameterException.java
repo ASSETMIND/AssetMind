@@ -8,4 +8,8 @@ public class InvalidStockParameterException extends BusinessException {
     public InvalidStockParameterException(ErrorCode errorCode) {
         super(errorCode);
     }
+
+    public InvalidStockParameterException(String message, ErrorCode errorCode) {
+        super(message, errorCode);
+    }
 }

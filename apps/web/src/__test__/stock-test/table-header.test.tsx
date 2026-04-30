@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import TableHeader from '../../components/stock/table-header';
+import TableHeader from '../../components/stock-main/table-header';
 
 describe('TableHeader Component', () => {
 	it('기본적으로 모든 헤더 컬럼이 렌더링되어야 한다', () => {

@@ -1,20 +1,22 @@
 """
 재시도 데코레이터 모듈 (Retry Decorator Module)
 
-일시적인 오류(Transient Failures) 발생 시, 정의된 전략(Backoff)에 따라
-함수 실행을 재시도하여 시스템의 회복 탄력성(Resilience)을 보장합니다.
-
-데이터 수집(Extractor) 단계에서 외부 API 호출 실패나 네트워크 타임아웃 처리에 필수적입니다.
+일시적인 오류(Transient Failures) 발생 시, 정의된 전략(Backoff)에 따라 함수 실행을 재시도하여 시스템의 회복 탄력성(Resilience)을 보장합니다.
+데이터 수집(Extractor) 단계에서 외부 API 호출 실패나 네트워크 타임아웃 발생 시, 외부 서버에 가해지는 충격을 분산시키는 3단계 방어막(운 방어)의 핵심입니다.
 
 주요 기능:
-- Exponential Backoff: 재시도 횟수가 늘어날수록 대기 시간을 지수적으로 증가시킴.
-- Jitter (Randomness): 여러 요청이 동시에 재시도하여 서버를 타격하는(Thundering Herd) 현상 방지.
-- Hybrid Support: 동기(Sync) 및 비동기(Async) 함수 모두 지원.
-- Selective Retry: 특정 예외 타입에 대해서만 재시도 수행 가능.
+- [Exponential Backoff] 재시도 횟수가 늘어날수록 대기 시간을 2의 배수로 지수적으로 증가시킴.
+- [Jitter (Randomness)] 여러 요청이 동시에 깨어나 API 서버를 다시 타격하는(Thundering Herd) 현상을 완벽히 차단.
+- [Hybrid Support] 동기(Sync) 및 비동기(Async) 함수 모두 지원.
+- [Selective Retry] 객체 내부에 정의된 예외 타입 및 `should_retry` 속성에 따른 선별적 재시도 수행.
 
 Trade-off:
 - Latency Increase: 재시도 수행 시 전체 응답 시간이 길어질 수 있음.
   따라서, 사용자 대기 시간이 중요한 API보다는 백그라운드 작업(ETL)에 적합함.
+- Jitter 알고리즘 (Full Jitter vs Equal Jitter):
+  - 장점: `Equal Jitter(최소 대기시간 보장 + 무작위 지연)` 방식을 채택하여, 재시도들이 너무 빨리 연속해서 실행되어 다시 차단(Ban) 당하는 현상을 막고 시간축으로 균일하게 분산시킴.
+  - 단점: 재시도가 3~4회 거듭될수록 2초, 4초, 8초로 응답 시간(Latency)이 기하급수적으로 길어짐.
+  - 근거: 현재 파이프라인은 실시간 사용자 서빙 API가 아니라 일 단위 백그라운드 배치(Bronze ETL)이므로, 빠른 실패(Fail-Fast)보다 시간이 조금 더 걸리더라도 최종 수집 성공률 100%를 달성하는 것이 압도적으로 중요함. 따라서 지연 시간을 감수하고서라도 가장 안정적인 지수적 백오프를 채택함.
 """
 
 import asyncio
@@ -103,18 +105,21 @@ class RetryDecorator:
         Returns:
             float: 대기 시간(초).
         """
-        # 지수 백오프 계산
-        delay = self.base_delay * (self.backoff_factor ** (attempt - 1))
+        # 1. 지수적 증가 (Exponential Backoff)
+        # 생성자(__init__)에서 주입받은 기본 대기 시간(self.delay)을 기준으로,
+        # 재시도 횟수마다 2의 제곱으로 대기 시간을 기하급수적으로 늘립니다.
+        # (예: delay가 1.0초일 때 -> 1회차: 1초, 2회차: 2초, 3회차: 4초)
+        backoff_base = self.delay * (2 ** (attempt - 1))
         
-        # 최대 시간 제한
-        delay = min(delay, self.max_delay)
+        # 2. 시간 분산 (Equal Jitter 알고리즘)
+        # 계산된 대기 시간의 50%는 고정 대기(최소한의 쿨타임 보장)로 가져가고,
+        # 나머지 50%의 시간 내에서 랜덤 난수(Jitter)를 발생시킵니다.
+        # 이를 통해 실패했던 수십 개의 코루틴이 정확히 같은 시간에 깨어나는 것을 막고
+        # 0.01초 단위로 뿔뿔이 흩어지게 하여 KIS 서버의 TPS 제한을 매우 부드럽게 통과합니다.
+        min_delay = backoff_base * 0.5
+        jitter = random.uniform(0, backoff_base * 0.5)
         
-        # Jitter 추가 (Thundering Herd 방지)
-        if self.jitter:
-            # 0 ~ 100ms 사이의 무작위 값 추가
-            delay += random.uniform(0, 0.1)
-            
-        return delay
+        return round(min_delay + jitter, 2)
 
     def _log_retry(self, logger, func_name, attempt, error, next_delay):
         """재시도 발생 사실을 경고(Warning) 레벨로 로깅합니다."""

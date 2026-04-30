@@ -129,18 +129,20 @@ class MarketAccessServiceTest {
     void whenGetApprovalKeyForConnection_thenDelegateToProvider() {
         // given
         // 접속키는 캐싱하지 않고 매번 새로 받아오는지 검증
+        String appKey = "test-app-key";
+        String appSecret = "test-app-secret";
         String expectedKeyVal = "fresh-approval-key";
         ApiApprovalKey expectedKey = ApiApprovalKey.from(expectedKeyVal);
 
-        given(marketTokenProvider.fetchApprovalKey()).willReturn(expectedKey);
+        given(marketTokenProvider.fetchApprovalKey(appKey, appSecret)).willReturn(expectedKey);
 
         // when
-        ApiApprovalKey result = marketAccessService.getApprovalKey();
+        ApiApprovalKey result = marketAccessService.getApprovalKey(appKey, appSecret);
 
         // then
         assertThat(result.value()).isEqualTo(expectedKeyVal);
 
         // 캐싱 로직 없이 호출 시마다 Provider에 요청하는지 확인 (1번 호출 검증)
-        verify(marketTokenProvider, times(1)).fetchApprovalKey();
+        verify(marketTokenProvider, times(1)).fetchApprovalKey(appKey, appSecret);
     }
 }

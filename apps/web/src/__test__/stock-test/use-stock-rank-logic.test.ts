@@ -8,11 +8,6 @@ jest.mock('../../hooks/stock/use-stock-value-ranking');
 
 const mockUseStockRanking = useStockRanking as jest.Mock;
 
-// api 상수 모킹
-jest.mock('../../api/stock.ts', () => ({
-	STOCK_WS_URL: 'ws://localhost:8080/stocks',
-}));
-
 describe('useStockRankLogic Hook', () => {
 	beforeEach(() => {
 		// 각 테스트 전에 모킹 함수 초기화
@@ -26,6 +21,7 @@ describe('useStockRankLogic Hook', () => {
 				stockName: '삼성전자',
 				currentPrice: 82500,
 				changeRate: 1.25,
+				priceChange: 1000,
 				cumulativeAmount: 587600000000, // 5,876억원
 				cumulativeVolume: 7122424,
 			},
@@ -34,6 +30,7 @@ describe('useStockRankLogic Hook', () => {
 				stockName: 'SK하이닉스',
 				currentPrice: 131000,
 				changeRate: -2.5,
+				priceChange: -3500,
 				cumulativeAmount: 432100000000, // 4,321억원
 				cumulativeVolume: 3300000,
 			},
@@ -43,6 +40,7 @@ describe('useStockRankLogic Hook', () => {
 		mockUseStockRanking.mockReturnValue({
 			rankingData: mockRankingData,
 			isConnected: true,
+			isLoading: false,
 		});
 
 		const { result } = renderHook(() => useStockRankLogic('VALUE', 2));
@@ -50,17 +48,19 @@ describe('useStockRankLogic Hook', () => {
 		// 1. useStockRanking이 올바른 인자로 호출되었는지 확인
 		expect(mockUseStockRanking).toHaveBeenCalledWith('VALUE', 2);
 
-		// 2. 반환된 stockList가 올바른 형식과 값을 갖는지 확인
-		const { stockList, isConnected } = result.current;
+		// 2. 반환된 상태값 확인
+		const { stockList, isConnected, isLoading, sortType } = result.current;
 
 		expect(isConnected).toBe(true);
+		expect(isLoading).toBe(false);
+		expect(sortType).toBe('value');
 		expect(stockList).toHaveLength(2);
 
-		// 첫 번째 아이템 (삼성전자) 검증
+		// 첫 번째 아이템 (삼성전자) 검증 - 필드명 변경 반영 (stockCode, stockName)
 		expect(stockList[0]).toEqual({
-			id: '005930',
+			stockCode: '005930',
 			rank: 1,
-			name: '삼성전자',
+			stockName: '삼성전자',
 			price: '82,500',
 			changeRate: 1.25,
 			tradeVolume: '5,876억원',
@@ -70,9 +70,9 @@ describe('useStockRankLogic Hook', () => {
 
 		// 두 번째 아이템 (SK하이닉스) 검증
 		expect(stockList[1]).toEqual({
-			id: '000660',
+			stockCode: '000660',
 			rank: 2,
-			name: 'SK하이닉스',
+			stockName: 'SK하이닉스',
 			price: '131,000',
 			changeRate: -2.5,
 			tradeVolume: '4,321억원',
@@ -81,11 +81,37 @@ describe('useStockRankLogic Hook', () => {
 		});
 	});
 
+	it('거래량(VOLUME) 타입일 때 tradeVolume 포맷이 변경되어야 한다', () => {
+		const mockRankingData: StockRankingDto[] = [
+			{
+				stockCode: '005930',
+				stockName: '삼성전자',
+				currentPrice: 82500,
+				changeRate: 0,
+				priceChange: 0,
+				cumulativeAmount: 100000000,
+				cumulativeVolume: 1234567,
+			},
+		];
+
+		mockUseStockRanking.mockReturnValue({
+			rankingData: mockRankingData,
+			isConnected: true,
+			isLoading: false,
+		});
+
+		const { result } = renderHook(() => useStockRankLogic('VOLUME'));
+
+		expect(result.current.stockList[0].tradeVolume).toBe('1,234,567주');
+		expect(result.current.sortType).toBe('volume');
+	});
+
 	it('rankingData가 없거나 비어있을 때 빈 배열을 반환해야 한다', () => {
 		// rankingData가 null일 때
 		mockUseStockRanking.mockReturnValue({
 			rankingData: null,
 			isConnected: true,
+			isLoading: false,
 		});
 		const { result: resultNull } = renderHook(() => useStockRankLogic('VALUE'));
 		expect(resultNull.current.stockList).toEqual([]);
@@ -94,6 +120,7 @@ describe('useStockRankLogic Hook', () => {
 		mockUseStockRanking.mockReturnValue({
 			rankingData: [],
 			isConnected: true,
+			isLoading: false,
 		});
 		const { result: resultEmpty } = renderHook(() =>
 			useStockRankLogic('VALUE'),
@@ -108,6 +135,7 @@ describe('useStockRankLogic Hook', () => {
 				stockName: '초급등주',
 				currentPrice: 10000,
 				changeRate: 30, // 50 + 30 * 2 = 110 -> 90으로 제한되어야 함
+				priceChange: 3000,
 				cumulativeAmount: 100000000,
 				cumulativeVolume: 10000,
 			},
@@ -116,6 +144,7 @@ describe('useStockRankLogic Hook', () => {
 				stockName: '초급락주',
 				currentPrice: 10000,
 				changeRate: -25, // 50 - 25 * 2 = 0 -> 10으로 제한되어야 함
+				priceChange: -2500,
 				cumulativeAmount: 100000000,
 				cumulativeVolume: 10000,
 			},
@@ -124,6 +153,7 @@ describe('useStockRankLogic Hook', () => {
 		mockUseStockRanking.mockReturnValue({
 			rankingData: mockRankingData,
 			isConnected: true,
+			isLoading: false,
 		});
 
 		const { result } = renderHook(() => useStockRankLogic('VALUE'));

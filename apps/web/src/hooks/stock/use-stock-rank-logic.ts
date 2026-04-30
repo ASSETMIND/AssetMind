@@ -1,51 +1,20 @@
-import { useMemo } from 'react';
-import { useStockRanking } from './use-stock-value-ranking';
-import type { RankingType, StockRow } from '../../types/stock';
+import { useStockStore } from '../../store/use-stock-store';
+import { useStockRanking, type RankingType } from './use-stock-value-ranking';
 
-export const useStockRankLogic = (type: RankingType, limit = 20) => {
-	const { rankingData, isConnected } = useStockRanking(type, limit);
+/**
+ * 랭킹 리스트 데이터 처리 로직을 담당하는 훅
+ * - Zustand Store의 stockCodes를 구독하여 리스트 순서 관리
+ */
+export const useStockRankLogic = (type: RankingType, limit = 40) => {
+	const { isConnected, isLoading } = useStockRanking(type, limit);
 
-	const stockList: StockRow[] = useMemo(() => {
-		if (!rankingData) return [];
-
-		return rankingData.map((stock, index) => {
-			// 랭킹 타입에 따라 표시할 거래 데이터 결정
-			// VALUE: 거래대금(원), VOLUME: 거래량(주) → tradeAmount에 통합
-			const tradeAmount =
-				type === 'VOLUME'
-					? stock.cumulativeVolume
-					: stock.cumulativeAmount;
-
-			// 매수 비율 추정 (API 미제공 — 등락률 기반)
-			// 등락률이 높을수록 매수세 강하다고 가정
-			let buyRatio = 50 + stock.changeRate * 2;
-			buyRatio = Math.max(10, Math.min(90, Math.floor(buyRatio)));
-
-			// 등락 방향에 따라 ticker 상태 결정
-			const tickerState: StockRow['tickerState'] =
-				stock.changeRate > 0
-					? 'rise'
-					: stock.changeRate < 0
-						? 'fall'
-						: 'idle';
-
-			return {
-				id: stock.stockCode,
-				rank: index + 1,
-				isFavorite: false, // 즐겨찾기는 로컬 상태로 관리 (API 미제공)
-				name: stock.stockName,
-				price: stock.currentPrice,
-				changeRate: stock.changeRate,
-				tradeAmount,
-				buyRatio,
-				tickerState,
-			};
-		});
-	}, [rankingData, type]);
+	// 전체 맵이 아닌 정렬된 코드 리스트만 구독 (순서 변경 시에만 리렌더링)
+	const stockCodes = useStockStore((state) => state.stockCodes);
 
 	return {
-		stockList,
+		stockCodes,
 		isConnected,
+		isLoading,
 		sortType: (type === 'VALUE' ? 'value' : 'volume') as 'value' | 'volume',
 	};
 };

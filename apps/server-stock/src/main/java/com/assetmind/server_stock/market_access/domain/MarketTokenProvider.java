@@ -22,7 +22,8 @@ public interface MarketTokenProvider {
 
     /**
      * WebSocket 연결 접속를 발급받아 반환한다. (Socket 용)
+     * 멀티플렉싱을 위해 각각의 AppKey, AppSecret을 받아 독립적으로 발급
      * @return 도메인 전용 ApprovalKey VO
      */
-    ApiApprovalKey fetchApprovalKey();
+    ApiApprovalKey fetchApprovalKey(String appKey, String appSecret);
 }

@@ -12,6 +12,7 @@ import com.assetmind.server_stock.stock.application.StockService;
 import com.assetmind.server_stock.stock.application.listener.StockTradeEventListener;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,13 +22,13 @@ import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.web.socket.TextMessage;
 
 @ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(classes = {
-        KisWebSocketHandler.class,          // 발행자
         StockTradeEventListener.class,      // 수신자
         KisEventMapper.class,               // 매퍼
         KisRealTimeDataParser.class,
@@ -35,8 +36,13 @@ import org.springframework.web.socket.TextMessage;
 })
 public class RealTimeStockEventLightTest {
 
+    private KisWebSocketHandler webSocketHandler; // 발행자
+
     @Autowired
-    private KisWebSocketHandler webSocketHandler;
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private KisEventMapper eventMapper;
 
     @MockitoSpyBean
     private StockTradeEventListener eventListener;
@@ -46,6 +52,21 @@ public class RealTimeStockEventLightTest {
 
     @MockitoBean
     private StockService stockService;
+
+    @BeforeEach
+    void setUp() {
+        // 테스트용 POJO KIS 핸들러를 직접 생성 (Spring EventPublisher 주입)
+        webSocketHandler = new KisWebSocketHandler(
+                "dummy-key",
+                null,
+                List.of(),
+                null, // objectMapper (이 테스트에선 안 쓰임)
+                parser, // Mock 객체
+                eventMapper, // 실제 빈
+                eventPublisher, // 실제 빈 (핵심!)
+                null // taskScheduler (이 테스트에선 안 쓰임)
+        );
+    }
 
     @Test
     @DisplayName("성공: 이벤트 테스트용 컨텍스트에서 이벤트 발행 및 수신 검증")

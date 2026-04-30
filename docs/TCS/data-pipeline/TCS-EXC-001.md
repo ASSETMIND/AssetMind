@@ -98,3 +98,17 @@ classDiagram
 | **TRF-02** |   Unit   | Property  | `MergeColumnCollisionError` 생성 | `to_dict()` 호출 | `colliding_columns` 리스트 보존, `should_retry` = **False**       | `colliding_cols=["name"]` |
 | **TRF-03** |   Unit   | Property  | `MergeCardinalityError` 생성     | `to_dict()` 호출 | `left_shape`, `right_shape` 튜플 보존, `should_retry` = **False** | `left=(10,2)`             |
 | **TRF-04** |   Unit   | Chaining  | `MergeExecutionError` 생성       | `to_dict()` 호출 | `join_type` 보존, `original_exception` 전달 시 `cause` 기록       | `join_type="left"`        |
+
+### 3.5. 적재 계층 예외 (Loader Exceptions)
+
+**시나리오 요약 (총 3건):**
+
+1. **유효성 검증 실패 (Validation):** 1건 (필수 데이터 누락 확인 및 재시도 불가 강제 검증)
+2. **압축 처리 예외 (Compression):** 1건 (OOM/인코딩 에러 원인 보존 및 재시도 불가 강제 검증)
+3. **S3 업로드 예외 (Upload):** 1건 (Boto3 에러 체이닝, 멀티파트 메타데이터 보존 및 재시도 강제 검증)
+
+|  Test ID   | Category | Technique | Given                        | When             | Then                                                                          | Input Data              |
+| :--------: | :------: | :-------: | :--------------------------- | :--------------- | :---------------------------------------------------------------------------- | :---------------------- |
+| **LDR-01** |   Unit   | Property  | `LoaderValidationError` 생성 | `to_dict()` 호출 | `invalid_fields`, `dto_name` 보존, `should_retry` = **False**                 | `invalid_fields=["id"]` |
+| **LDR-02** |   Unit   | Chaining  | `ZstdCompressionError` 생성  | `to_dict()` 호출 | `data_size_bytes` 보존, `cause`에 예외 기록, `should_retry` = **False**       | `data_size=1024`        |
+| **LDR-03** |   Unit   | Property  | `S3UploadError` 생성         | `to_dict()` 호출 | `bucket`, `key`, `is_multipart` 등 메타데이터 보존, `should_retry` = **True** | `bucket="test-bucket"`  |

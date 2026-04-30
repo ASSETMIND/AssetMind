@@ -4,10 +4,13 @@ import com.assetmind.server_stock.market_access.domain.ApiAccessToken;
 import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
 import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFailedException;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
+import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprovalKeyRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisApprovalKeyResponse;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisTokenResponse;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +18,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 /**
  * KIS API를 이용하여(외부 시스템) Auth를 위한 토큰을 가져오는 역할
@@ -25,15 +29,7 @@ import reactor.core.publisher.Mono;
 public class KisAuthAdapter implements MarketTokenProvider {
 
     private final WebClient.Builder webClientBuilder;
-
-    @Value("${kis.base-url}")
-    private String baseUrl;
-
-    @Value("${kis.app-key}")
-    private String appKey;
-
-    @Value("${kis.app-secret}")
-    private String appSecret;
+    private final KisProperties kisProperties;
 
     /**
      * KIS(한국투자증권) 접근토큰발급 API 사용하여 API에 접근하기 위한 accessToken을 받음
@@ -41,9 +37,11 @@ public class KisAuthAdapter implements MarketTokenProvider {
      */
     @Override
     public ApiAccessToken fetchToken() {
-        WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+        WebClient webClient = webClientBuilder.baseUrl(kisProperties.getBaseUrl()).build();
 
-        KisTokenRequest request = KisTokenRequest.of(appKey, appSecret);
+        // 일반 REST API 호출용 토큰은 첫 번째 계좌의 키를 사용
+        Account firstAccount = kisProperties.getAccounts().getFirst();
+        KisTokenRequest request = KisTokenRequest.of(firstAccount.appKey(), firstAccount.appSecret());
 
         try {
             // 접근토큰발급 API
@@ -57,6 +55,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
                                 .flatMap(errorBody -> Mono.error(new MarketAccessFailedException("KIS API Error: " + errorBody)))
                     )
                     .bodyToMono(KisTokenResponse.class)
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                     .block();
 
             if (response == null) {
@@ -77,12 +76,13 @@ public class KisAuthAdapter implements MarketTokenProvider {
     }
 
     /**
-     * KIS(한국투자증권) 실시간(웹소켓) 접속키 발급 API를 사용하여 실시간 웹소켓에 접속하기 위한 approval_key를 받음
+     * KIS(한국투자증권) 실시간(웹소켓) 접속키 발급 API를 사용하여
+     * 파라미터로 들어온 특정 appkey에 대한 실시간 웹소켓에 접속하기 위한 approval_key를 받음
      * @return 문자열 타입의 approval_key
      */
     @Override
-    public ApiApprovalKey fetchApprovalKey() {
-        WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+    public ApiApprovalKey fetchApprovalKey(String appKey, String appSecret) {
+        WebClient webClient = webClientBuilder.baseUrl(kisProperties.getBaseUrl()).build();
 
         KisApprovalKeyRequest request = KisApprovalKeyRequest.of(appKey, appSecret);
 
@@ -98,6 +98,7 @@ public class KisAuthAdapter implements MarketTokenProvider {
                                                     "KIS WebSocket API Error: " + errorBody)))
                     )
                     .bodyToMono(KisApprovalKeyResponse.class)
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                     .block();
 
             if (response == null) {

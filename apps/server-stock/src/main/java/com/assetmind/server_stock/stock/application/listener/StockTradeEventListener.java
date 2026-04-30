@@ -9,10 +9,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
- * 실시간 주가 데이터 이벤트 수신 리스너 클래스
+ * 실시간 주가 데이터 이벤트 수신 리스너 클래스(로깅 및 DB 저장)
  *
  * 웹소켓 핸들러에서 발행한 이벤트를 비동기로 수신
- * 수신된 데이터를 기반으로 로깅, DB 저장 등의 수신 후 작업을 수행
+ * 수신된 데이터를 기반으로 로깅, DB 저장 등의 수신 후 작업을 위해 Service로 수신한 이벤트를 위임한다.
  */
 @Slf4j
 @Component
@@ -32,7 +32,7 @@ public class StockTradeEventListener {
         try {
             printEventLog(event);
 
-            // TODO: 비즈니스 로직 수행 (서비스 연동 하여 DB 저장)
+            // 실시간 데이터를 DB 저장
             stockService.processRealTimeTrade(event);
         } catch (Exception e) {
             // @Async가 적용된 비동기 메서드 이므로 메인 스레드로 예외가 전파되지 않음

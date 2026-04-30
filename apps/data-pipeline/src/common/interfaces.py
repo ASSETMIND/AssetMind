@@ -107,3 +107,25 @@ class ITransformer(ABC):
             TransformerError: 데이터 변환 과정에서 발생한 모든 예외.
         """
         pass
+
+class ILoader(ABC):
+    """모든 데이터 적재기가 반드시 구현해야 하는 최상위 인터페이스.
+    
+    Service Layer(예: LoaderService)는 외부 인프라에 종속되지 않도록
+    오직 이 인터페이스에만 의존하여 다형성을 확보합니다.
+    """
+
+    @abstractmethod
+    def load(self, dto: ExtractedDTO) -> bool:
+        """데이터 적재 작업을 수행합니다.
+        
+        Args:
+            dto (ExtractedDTO): 이전 단계(Transform)에서 전달된 정제된 데이터 전송 객체.
+
+        Returns:
+            bool: 적재 성공 여부.
+            
+        Raises:
+            LoaderError: 적재 과정에서 발생한 모든 예외.
+        """
+        pass

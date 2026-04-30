@@ -1,169 +1,259 @@
 """
-데이터 수집 추상화 모듈 (Data Extraction Abstraction)
+이 모듈은 '설정 주도(Configuration-Driven) ETL' 파이프라인의 'E(Extraction)' 단계를 정의하는 핵심 추상화 계층입니다.
+변경된 Pydantic 설정 객체(ConfigManager)와 상호작용하며, 모든 데이터 수집기(Extractor)가 표준화된 생명주기(Lifecycle)와 
+에러 처리 정책을 일관되게 따르도록 인터페이스 규격을 강제합니다.
 
-이 모듈은 '설정 주도(Configuration-Driven) ETL' 파이프라인의 'E(Extraction)' 단계를 정의합니다.
-변경된 Pydantic 설정 객체(ConfigManager)와 상호작용하며, 모든 수집기가 표준화된 생명주기(Lifecycle)를
-따르도록 강제합니다.
-
-데이터 흐름 (Data Flow):
-RequestDTO(job_id) -> Validate(Config.policy -> JobPolicy) -> Prepare(Token & Params) -> Fetch(I/O) -> Verify -> Wrap(ResponseDTO)
+[전체 데이터 흐름 설명 (Input -> Output)]
+1. RequestDTO: 외부(스케줄러/API)로부터 특정 데이터 수집 작업(job_id) 실행 요청 유입.
+2. Validation: ConfigManager를 통해 요청된 job_id가 유효한 수집 정책(JobPolicy)인지 사전 검증.
+3. Preparation & Fetch: 수집기 구현체가 인증 토큰 확보 및 파라미터를 병합하여 실제 HTTP I/O 요청 수행.
+4. Verification & Wrap: 수집된 원본 데이터(Raw Data)의 무결성을 검증하고, 파이프라인 표준 규격인 ExtractedDTO로 래핑하여 반환.
 
 주요 기능:
-- Template Method 패턴을 통한 수집 생명주기 제어 (Validation -> Execution -> Packaging)
-- Pydantic 기반 설정 객체(ConfigManager) 의존성 주입 및 타입 보장
-- 인프라 계층(Network)과 도메인 계층(Extractor)의 에러 격리 및 로깅 표준화
+- Template Method Pattern: 수집 생명주기 제어 로직(Validation -> Execution -> Packaging)을 상위에서 정의하고 세부 구현은 하위로 위임.
+- Dependency Injection: Pydantic 기반 설정 객체(ConfigManager)와 HTTP 클라이언트(IHttpClient)의 의존성 주입을 통한 결합도 제어.
+- Error Isolation: 인프라 계층(Network)의 장애와 도메인 계층(Extractor)의 비즈니스 에러를 분리하고 데코레이터를 통한 로깅 규격 표준화.
 
-Trade-off:
+Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약.
 - Strong Coupling with ConfigManager:
-    - 장점: 모든 수집기가 Pydantic 모델의 타입 안전성(Type Safety)과 자동완성 혜택을 누림.
-    - 단점: ConfigManager 구조 변경 시 모든 Extractor 구현체에 영향을 줌.
-    - 근거: 엔터프라이즈 환경에서 '컴파일 타임 에러 감지'가 '유연성'보다 운영 안정성에 더 중요함.
+  - 장점: 모든 수집기 구현체가 Pydantic 모델이 제공하는 강력한 타입 안전성(Type Safety)과 자동완성 혜택을 누릴 수 있어 개발자의 휴먼 에러를 방지함.
+  - 단점: 추상화 계층이 구체적인 설정 관리자(ConfigManager)에 직접 의존하게 되어, 설정 스키마 변경 시 모든 Extractor 구현체에 파급 효과가 발생함(강한 결합).
+  - 근거: 엔터프라이즈 데이터 파이프라인 환경에서는 런타임의 '유연성'보다, 잘못된 설정으로 인한 대규모 데이터 오염을 막기 위한 '초기화 타임 에러 감지(Fail-Fast)'가 운영 안정성에 압도적으로 중요하므로 이 결합도를 수용함.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+import asyncio
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
 from src.common.interfaces import IExtractor, IHttpClient
 from src.common.dtos import RequestDTO, ExtractedDTO
 from src.common.exceptions import ETLError, ExtractorError, ConfigurationError
 from src.common.log import LogManager
-from src.common.config import ConfigManager
+from src.common.config import ConfigManager, JobPolicy
+from src.common.decorators.log_decorator import log_decorator
 
 
+# ==============================================================================
+# [Abstract Class] AbstractExtractor
+# ==============================================================================
 class AbstractExtractor(IExtractor, ABC):
-    """모든 데이터 수집기(Provider)의 최상위 추상 클래스.
+    """모든 데이터 수집기(Provider)가 상속받아야 하는 최상위 템플릿(추상) 클래스.
     
-    구현체(KISExtractor 등)는 이 클래스를 상속받아 구체적인 수집 로직을 구현해야 하며,
-    반드시 Pydantic 기반의 ConfigManager를 주입받아야 합니다.
+    구현체(KISExtractor, FREDExtractor 등)는 이 클래스를 상속받아 구체적인 수집 로직(Hook 메서드)을 
+    구현해야 하며, 반드시 Pydantic 기반의 ConfigManager를 통해 작업 정책을 할당받아야 합니다.
 
     Attributes:
-        http_client (IHttpClient): HTTP 요청 처리를 위한 어댑터.
-        config (ConfigManager): 애플리케이션 전역 설정 객체. (JobPolicy 포함)
-        logger (logging.Logger): 추적성을 위한 로거 인스턴스.
+        http_client (IHttpClient): 비동기 HTTP 통신을 담당하는 인프라 어댑터 인스턴스.
+        config (ConfigManager): 수집 정책(JobPolicy)이 포함된 애플리케이션 전역 설정 객체.
+        logger (logging.Logger): 클래스별 격리된 추적성을 제공하는 로거 인스턴스.
     """
 
-    def __init__(self, http_client: IHttpClient, config: ConfigManager):
-        """AbstractExtractor를 초기화하고 필수 의존성을 검증합니다.
+    # [설계 의도] 과도한 동시 요청으로 인한 메모리 고갈 및 API Rate Limit 병목(Timeout/에러)을 
+    # 방지하기 위한 글로벌 동시성 제어 락. 각 Extractor 구현체당 최대 5개의 동시 요청만 허용.
+    MAX_CONCURRENT_REQUESTS: int = 5
+
+    def __init__(self, http_client: IHttpClient):
+        """AbstractExtractor 인스턴스를 초기화하고 필수 의존성의 무결성을 검증합니다.
 
         Args:
-            http_client (IHttpClient): 비동기 HTTP 클라이언트.
-            config (ConfigManager): 데이터 수집 정책이 포함된 앱 설정 객체.
+            http_client (IHttpClient): 데이터 수집에 사용할 비동기 HTTP 클라이언트.
 
         Raises:
-            ConfigurationError: 필수 의존성(Config 등)이 누락된 경우.
+            ConfigurationError: 필수 의존성(IHttpClient 등)이 주입되지 않은 경우.
         """
-        # Rationale: 의존성 주입 시점에 None 체크를 수행하여 런타임 NullReference 에러 방지.
-        if config is None:
-            raise ConfigurationError("초기화 실패: ConfigManager 인스턴스가 필요합니다.")
+        # [설계 의도] 방어적 프로그래밍. 의존성이 누락된 상태로 인스턴스가 생성되어
+        # 런타임 도중 파이프라인이 붕괴되는 것을 초기화 시점에 조기 차단(Fail-Fast)함.
+        if http_client is None:
+            raise ConfigurationError("초기화 실패: IHttpClient 인스턴스가 필요합니다.")
              
         self.http_client = http_client
-        self.config = config
+        self.config = ConfigManager.load("extractor")
         self.logger = LogManager.get_logger(self.__class__.__name__)
+        self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
 
+    @log_decorator()
     async def extract(self, request: RequestDTO) -> ExtractedDTO:
-        """데이터 추출(Extraction) 템플릿 메서드.
+        """데이터 수집 파이프라인의 전체 생명주기를 관장하는 템플릿 메서드(Template Method).
 
-        모든 수집기는 이 메서드가 정의한 순서(Validation -> Execution -> Packaging)를
-        따라야 하며, 개별 단계(_hooks)만 오버라이딩하여 구현합니다.
-
-        Process:
-            1. _validate_request: JobPolicy(Pydantic) 존재 여부 및 필수 필드 검증.
-            2. _fetch_raw_data: 인증, 파라미터 병합 후 실제 I/O 실행.
-            3. _create_response: 응답 상태 확인 및 DTO 포장.
+        모든 자식 수집기는 이 메서드가 강제하는 순서(Validation -> Execution -> Packaging)를
+        준수해야 하며, 개별 단계의 세부 로직(_hooks)만 오버라이딩하여 구현합니다.
+        
+        [설계 의도]
+        수동으로 작성되었던 시작/종료 로깅, 에러 로깅 및 예외 래핑(ETLError) 역할을 `@log_decorator`로
+        완벽히 위임하여 횡단 관심사를 분리(DRY 원칙 준수)하고, 이 메서드는 비즈니스 생명주기 제어에만 집중함.
 
         Args:
-            request (RequestDTO): job_id와 파라미터를 포함한 요청 객체.
+            request (RequestDTO): 실행할 작업의 고유 ID(job_id)와 런타임 파라미터를 포함한 데이터 전송 객체.
 
         Returns:
-            ExtractedDTO: 원본 데이터(Raw Data)와 메타데이터가 포함된 응답 객체.
-
-        Raises:
-            ExtractorError: 검증 실패, 설정 누락, API 비즈니스 에러 등 수집 불가 상황.
+            ExtractedDTO: 외부 API로부터 수집된 원본 데이터(Raw Data)와 작업 메타데이터가 포함된 표준 응답 객체.
         """
+        # [설계 의도] 자식 클래스의 _create_response에서 출처를 식별하기 위해
+        # RequestDTO 내부에 명시된 job_id를 안전하게 추출 (Duck Typing 방어).
+        job_id = request.job_id if request and hasattr(request, "job_id") else "Unknown"
+
+        # 1. Validation Hook: 요청 및 설정 검증
+        self._validate_request(request)
+        policy = self.config.get_extractor(job_id)
+
+        # 2. Preparation Hook: 매크로 치환 및 청크(Chunk) 분할
+        # [설계 의도] 대용량 기간 데이터를 API Limit에 걸리지 않는 안전한 크기로 쪼개어 요청 파라미터 리스트를 생성.
+        chunked_params_list = self._prepare_chunked_params(policy, request.params)
+
+        # 3. Execution Hook: 병렬 비동기 I/O 호출
+        # 단순 asyncio.gather 대신 Semaphore를 감싼 내부 비동기 래퍼를 
+        # 정의하여 동시에 실행되는 코루틴의 숫자를 안전하게 통제함.
+        async def _bounded_fetch(chunk_req: RequestDTO) -> Any:
+            async with self._semaphore:
+                return await self._fetch_raw_data(chunk_req)
+            
+        # 분할된 날짜 구간을 동시에 요청하여 속도를 극대화.
+        tasks = []
+        for chunk_param in chunked_params_list:
+            chunk_request = RequestDTO(job_id=job_id, params=chunk_param)
+            tasks.append(_bounded_fetch(chunk_request))
+            
+        raw_data_list = await asyncio.gather(*tasks)
+
+        # 4. Packaging Hook: 리스트로 반환된 다중 청크 데이터를 하나로 병합 및 규격화
+        response = self._create_response(raw_data_list, job_id)
+
+        return response
+    
+    def _prepare_chunked_params(self, policy: JobPolicy, runtime_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """런타임 지시어(TODAY, LEGACY)를 실제 날짜로 해석하고 chunk_size에 맞춰 파라미터를 쪼갭니다.
+
+        Args:
+            policy (JobPolicy): Pydantic으로 검증된 YAML 기반 정적 수집 정책 (chunk_size, base_date 포함).
+            runtime_params (Dict[str, Any]): 스케줄러가 주입한 런타임 파라미터.
+
+        Returns:
+            List[Dict[str, Any]]: 매크로가 실제 YYYYMMDD로 치환되고 구간이 분할된 파라미터 딕셔너리 리스트.
+        """
+        # [설계 의도] Airflow에서 명시적으로 모드를 주입하지 않으면 데일리 배치(TODAY)로 안전하게 폴백(Fallback)함.
+        extract_mode = runtime_params.get("EXTRACT_MODE", "TODAY")
         
-        # Template Method 패턴을 적용하여 수집 생명주기의 일관된 흐름을 보장.
-        extractor_name = self.__class__.__name__
-        job_id = request.job_id if request else "Unknown"
-        try:
-            # 1. Start Logging
-            self.logger.info(f"[{extractor_name}] 추출 시작 | Job: {job_id}")
+        # 시스템 로컬 시간이 아닌, 스케줄러가 보장하는 논리적 실행일(Logical Date)을 최우선 기준으로 삼음.
+        execution_date_str = runtime_params.get("EXECUTION_DATE", datetime.now().strftime("%Y%m%d"))
+        end_dt = datetime.strptime(execution_date_str, "%Y%m%d")
 
-            # 2. Validation Phase (Policy & Request Check)
-            # Fail-Fast 원칙: I/O 비용 발생 전 요청과 설정의 유효성을 먼저 확인.
-            self._validate_request(request)
+        if extract_mode == "LEGACY":
+            start_dt = datetime.strptime(policy.base_date, "%Y%m%d")
+        else:
+            # TODAY 모드: 시작일과 종료일이 동일 (하루치)
+            start_dt = end_dt
 
-            # 3. Execution Phase (Auth -> Merge Params -> I/O)
-            # 복잡한 준비 과정(토큰 등)과 실행을 하나의 추상 메서드로 캡슐화.
-            raw_data = await self._fetch_raw_data(request)
+        # YAML에 정의된 원본 정책 파라미터를 복사하여 베이스 생성
+        base_params = policy.params.copy()
+        
+        # 런타임 파라미터 중 예약어(EXTRACT_MODE 등)를 제외하고 덮어쓰기
+        for k, v in runtime_params.items():
+            if k not in ["EXTRACT_MODE", "EXECUTION_DATE"]:
+                base_params[k] = v
 
-            # 4. Packaging Phase (Status Check -> Wrap)
-            # 데이터의 가공 없이 순수 '수집 성공 여부'만 판단하여 전달.
-            response = self._create_response(raw_data, job_id)
+        chunk_size = policy.chunk_size
+        chunked_list = []
+        current_start = start_dt
 
-            self.logger.info(f"[{extractor_name}] 추출 완료 | Job: {job_id}")
-            return response
+        # [설계 의도] While 루프를 통한 날짜 슬라이싱. 시작일과 종료일 사이의 기간이 chunk_size를 
+        # 초과할 경우, API가 수용 가능한 최대 범위로 잘라내어 여러 개의 파라미터 셋을 생성.
+        while current_start <= end_dt:
+            current_end = current_start + timedelta(days=chunk_size - 1)
+            if current_end > end_dt:
+                current_end = end_dt
 
-        except ETLError as e:
-            # 이미 ETLError로 래핑된 예외는 그대로 상위로 전파
-            self.logger.error(f"[{extractor_name}] 도메인 로직 실패 | Job: {job_id} | Error: {e}")
-            raise e
-        except Exception as e:
-            # 예상치 못한 시스템 에러는 ETLError로 래핑하여 일관된 예외 처리 보장
-            error_msg = f"[{extractor_name}] 작업 중 알 수 없는 시스템 오류 발생"
-            self.logger.error(f"{error_msg} | Job: {job_id} | Error: {e}", exc_info=True)
-            raise ExtractorError(
-                message=error_msg,
-                details={
-                    "extractor": extractor_name,
-                    "job_id": job_id,
-                    "raw_error": str(e)
-                },
-                original_exception=e,  # 원본 에러 보존
-            )
+            chunked_list.append(self._replace_macros(base_params, current_start, current_end))
+            current_start = current_end + timedelta(days=1)
+
+        return chunked_list
+
+    def _replace_macros(self, params: Dict[str, Any], start_dt: datetime, end_dt: datetime) -> Dict[str, Any]:
+        """파라미터 딕셔너리 내부의 매크로 지시어를 실제 날짜 문자열로 치환합니다.
+
+        Args:
+            params (Dict[str, Any]): 치환 전 원본 파라미터.
+            start_dt (datetime): 계산된 시작일.
+            end_dt (datetime): 계산된 종료일.
+
+        Returns:
+            Dict[str, Any]: 치환이 완료된 파라미터.
+        """
+        replaced = {}
+        # 1. KIS, ECOS용 기본 포맷 (YYYYMMDD)
+        start_str = start_dt.strftime("%Y%m%d")
+        end_str = end_dt.strftime("%Y%m%d")
+        
+        # 2. FRED, 외부 글로벌 API용 대시 포맷 (YYYY-MM-DD)
+        start_str_dash = start_dt.strftime("%Y-%m-%d")
+        end_str_dash = end_dt.strftime("%Y-%m-%d")
+
+        for key, value in params.items():
+            if isinstance(value, str):
+                if value == "$START_DATE":
+                    replaced[key] = start_str
+                elif value == "$END_DATE":
+                    replaced[key] = end_str
+                elif value == "$START_DATE_DASH":
+                    replaced[key] = start_str_dash
+                elif value == "$END_DATE_DASH":
+                    replaced[key] = end_str_dash
+                else:
+                    replaced[key] = value
+            else:
+                replaced[key] = value
+        
+        return replaced
 
     @abstractmethod
     def _validate_request(self, request: RequestDTO) -> None:
-        """요청의 정합성 및 설정(JobPolicy) 존재 여부를 검증합니다.
+        """수집 요청의 정합성 및 설정(JobPolicy) 존재 여부를 사전 검증하는 훅(Hook) 메서드.
 
-        구현체는 `self.config.extraction_policy` (Dict[str, JobPolicy])를 확인하여
-        요청된 작업이 유효한지 판단해야 합니다.
+        구현체는 `self.config` 내부에 해당 `request.job_id`에 매핑되는 유효한 수집 정책이 
+        존재하는지 판단하고, 누락된 파라미터가 없는지 확인해야 합니다.
 
         Args:
-            request (RequestDTO): 요청 객체.
+            request (RequestDTO): 검증할 수집 요청 객체.
 
         Raises:
-            ExtractorError: 설정이 없거나 요청이 유효하지 않은 경우.
+            ExtractorError: 설정 파일에 정책이 누락되었거나 필수 요청 파라미터가 유효하지 않은 경우.
         """
         pass # pragma: no cover
 
     @abstractmethod
     async def _fetch_raw_data(self, request: RequestDTO) -> Any:
-        """수집 준비(Preparation) 및 실행(Execution)을 담당합니다.
+        """수집 준비(Preparation) 및 비동기 네트워크 실행(Execution)을 담당하는 훅(Hook) 메서드.
 
-        구현체는 `self.config` 객체의 속성(Attribute)에 접근하여 다음을 수행합니다:
-        1. (필요 시) 인증 토큰 확보.
-        2. JobPolicy의 Params와 Request Params 병합.
-        3. HTTP 요청 수행.
+        구현체는 `self.config` 객체의 속성에 접근하여 다음 작업을 반드시 수행해야 합니다:
+        1. (필요 시) 인증 모듈을 통한 토큰 확보 및 헤더 구성.
+        2. JobPolicy에 정의된 정적 Params와 RequestDTO의 런타임 Params 병합.
+        3. `self.http_client`를 이용한 비동기 HTTP 요청 수행.
 
         Args:
-            request (RequestDTO): 요청 객체.
+            request (RequestDTO): 수집 파라미터가 포함된 요청 객체.
 
         Returns:
-            Any: API로부터 받은 원본 응답 데이터.
+            Any: 외부 API로부터 반환된 파싱 전 원본 응답 데이터 (주로 Dict 구조체).
         """
         pass # pragma: no cover
 
     @abstractmethod
-    def _create_response(self, raw_data: Any) -> ExtractedDTO:
-        """수집 결과 검증(Verification) 및 포장(Packaging)을 담당합니다.
+    def _create_response(self, raw_data: Any, job_id: str) -> ExtractedDTO:
+        """수집된 원본 결과의 검증(Verification) 및 시스템 표준 포장(Packaging)을 담당하는 훅(Hook) 메서드.
+
+        [설계 의도]
+        단순히 HTTP Status 200이 떨어졌더라도 비즈니스 로직상 에러(예: 결과값 빈 배열, API Limit 초과 메시지)가
+        포함되어 있을 수 있으므로, 이를 파싱하여 확인한 뒤 다운스트림(Loader)이 이해할 수 있는 
+        ExtractedDTO 규격으로 래핑합니다.
 
         Args:
-            raw_data (Any): _fetch_raw_data의 결과값.
+            raw_data (Any): `_fetch_raw_data`가 반환한 수집 원본 데이터.
+            job_id (str): 현재 실행 중인 작업의 고유 ID (메타데이터 추적용).
 
         Returns:
-            ResponseDTO: 최종 결과 객체.
+            ExtractedDTO: 후속 파이프라인 단계로 전달할 최종 표준 결과 객체.
 
         Raises:
-            ExtractorError: API 호출은 성공했으나 비즈니스 로직상 실패인 경우.
+            ExtractorError: API 호출 자체는 성공했으나 반환된 페이로드 내부에 비즈니스 에러가 포함된 경우.
         """
         pass # pragma: no cover

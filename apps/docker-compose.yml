@@ -23,3 +23,30 @@ services:
     ports:
       - "6379:6379"
     restart: always
+
+  # Prometheus 컨테이너 (모니터링 지표 수집기)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: assetmind-prometheus
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+
+  # Grafana 컨테이너 (모니터링 대시보드)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: assetmind-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml # 자동 데이터소스 프로비저닝
+      - ./grafana_data:/var/lib/grafana # 대시보드 데이터 영구 보존용 볼륨
+    restart: unless-stopped

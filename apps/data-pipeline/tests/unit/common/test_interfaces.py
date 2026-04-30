@@ -22,7 +22,7 @@ sys.modules["pandas"] = mock_pd
 
 # [Target Modules]
 import pandas as pd
-from src.common.interfaces import IHttpClient, IAuthStrategy, IExtractor, ITransformer
+from src.common.interfaces import IHttpClient, IAuthStrategy, IExtractor, ILoader, ITransformer
 from src.common.dtos import RequestDTO, ExtractedDTO
 
 # ========================================================================================
@@ -46,6 +46,10 @@ class ValidExtractor(IExtractor):
 class ValidTransformer(ITransformer):
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
+
+class ValidLoader(ILoader):
+    def load(self, dto: ExtractedDTO) -> bool:
+        return True
 
 # ========================================================================================
 # 1. IHttpClient 인터페이스 테스트
@@ -171,7 +175,7 @@ async def test_ext_05_base_method_execution():
     assert await SuperExtractor().extract(RequestDTO()) is None
 
 # ========================================================================================
-# 4. ITransformer 인터페이스 테스트 (신규)
+# 4. ITransformer 인터페이스 테스트
 # ========================================================================================
 
 def test_trf_01_prevent_direct_instantiation():
@@ -225,3 +229,64 @@ def test_trf_05_exception_propagation():
             
     # When & Then 2: 에러 없이 None 반환 (pass 실행 증명)
     assert SuperTransformer().transform(dummy_df) is None
+
+# ========================================================================================
+# 5. ILoader 인터페이스 테스트
+# ========================================================================================
+
+def test_ldr_01_prevent_direct_instantiation():
+    """[LDR-01] [표준] ILoader 직접 인스턴스화 차단"""
+    # Given: ILoader 추상 클래스
+    # When & Then: 직접 인스턴스화 시도 시 TypeError 발생
+    with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+        ILoader()
+
+def test_ldr_02_partial_implementation():
+    """[LDR-02] [BVA] load 메서드 누락 시 인스턴스화 차단"""
+    # Given: 필수 추상 메서드(load)를 구현하지 않은 하위 클래스
+    class BadLoader(ILoader): pass
+    
+    # When & Then: TypeError 발생 및 누락된 메서드 이름(load) 검증
+    with pytest.raises(TypeError, match="abstract method .?load.?"):
+        BadLoader()
+
+def test_ldr_03_sync_contract():
+    """[LDR-03] [계약] 제공된 시그니처에 따라 load는 동기(Sync) 함수여야 함"""
+    # Given & When: load 메서드의 코루틴(비동기) 여부 검사
+    is_async = inspect.iscoroutinefunction(ILoader.load)
+    
+    # Then: 비동기 함수가 아님을 증명 (False 반환)
+    assert is_async is False
+
+def test_ldr_04_annotations_check():
+    """[LDR-04] [데이터] 타입 힌트가 ExtractedDTO와 bool을 올바르게 참조하는지 검사"""
+    # Given: load 메서드의 애노테이션 딕셔너리 추출
+    annotations = ILoader.load.__annotations__
+    
+    # When & Then: 파라미터 타입과 반환 타입이 강제된 규격과 일치하는지 확인
+    assert annotations['dto'] == ExtractedDTO
+    assert annotations['return'] == bool
+
+def test_ldr_05_exception_propagation():
+    """[LDR-05] [견고성] 예외가 삼켜지지 않고 전파되는지 확인 및 super() 분기 커버리지 100% 달성"""
+    # Given 1: 테스트용 도메인 에러 및 이를 발생시키는 구현체
+    class LoaderError(Exception): pass 
+    
+    class BrokenLoader(ILoader):
+        def load(self, dto: ExtractedDTO) -> bool:
+            raise LoaderError("Load Error")
+            
+    loader = BrokenLoader()
+    dummy_dto = ExtractedDTO()
+    
+    # When & Then 1: 인터페이스에서 예외를 억제하지 않고 그대로 상위로 전파하는지 확인
+    with pytest.raises(LoaderError, match="Load Error"):
+        loader.load(dummy_dto)
+        
+    # Given 2: 커버리지 확보를 위해 부모의 추상 메서드(pass)를 호출하는 구현체
+    class SuperLoader(ILoader):
+        def load(self, dto: ExtractedDTO) -> bool:
+            return super().load(dto)
+            
+    # When & Then 2: 에러 없이 실행되며 부모의 빈 반환값(None)을 정상적으로 가져오는지 확인
+    assert SuperLoader().load(dummy_dto) is None

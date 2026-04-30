@@ -1,28 +1,29 @@
 """
-UPBIT(업비트) 데이터 수집기 구현체 (UPBIT Extractor)
+업비트(UPBIT) 오픈 API를 활용하여 암호화폐(Cryptocurrency) 시세 및 시장 데이터를 수집하는 구체화된 수집기(Extractor) 모듈입니다.
+모든 API 호출 정보(URL, 파라미터 등)를 하드코딩하지 않고 외부 설정(ConfigManager)에서 동적으로 로드하며,
+`AbstractExtractor`가 강제하는 생명주기를 준수하여 인증(JWT), 파라미터 병합, 비동기 통신, 에러 핸들링을 캡슐화합니다.
 
-이 모듈은 업비트 오픈 API를 사용하여 데이터를 수집하는 역할을 담당합니다.
-모든 API 호출 정보(URL, Market Code 등)를 코드 내 상수가 아닌 외부 설정(ConfigManager)에서
-동적으로 로드하여 유연성을 확보했습니다.
-
-데이터 흐름 (Data Flow):
-RequestDTO(job_id) -> Load Policy from Config -> Get Token -> Merge Params -> Async API Call -> Check Status -> ResponseDTO
+[전체 데이터 흐름 설명 (Input -> Output)]
+1. RequestDTO: 파이프라인 컨트롤러로부터 특정 수집 대상 작업(job_id) 실행 요청 유입.
+2. Validation: ConfigManager에서 UPBIT 전용 작업(JobPolicy)인지 확인하고 식별자 사전 검증.
+3. Preparation & Auth: UPBITAuthStrategy를 통해 JWT 토큰을 확보(필요 시)하고, 정적 정책과 동적 파라미터를 병합하여 HTTP Header 구성.
+4. Execution: 비동기 HTTP 클라이언트(IHttpClient)를 통해 조립된 URL과 헤더로 API 호출 (Rate Limit 10회/초 제한 준수).
+5. Verification & Wrap: HTTP 응답 페이로드 내 비즈니스 에러(`error` 객체)를 검증 후 다운스트림용 표준 ExtractedDTO로 래핑.
 
 주요 기능:
-- 설정 파일(YAML) 기반의 API 요청 정보 동적 로딩
-- 작업 ID(job_id) 유효성 검사 및 필수 정책(Policy) 확인
-- API 응답 에러 객체(error) 검사를 통한 수집 성공 여부 판단
-- 수집 실패 시 도메인 표준 예외(ExtractorError) 발생
+- Configuration-Driven Execution: 코드 배포 없이 YAML 설정 파일 수정만으로 새로운 마켓/코인 수집 작업 동적 추가 가능.
+- Dynamic Header Injection: AuthStrategy와 연동하여 JWT 토큰을 매 요청마다 동적 주입 (Public 엔드포인트의 경우 생략 가능).
+- Application-Level Error Handling: 응답 내에 포함되거나 별도로 반환되는 업비트 자체 비즈니스 에러(`error` 딕셔너리)를 포착하여 파이프라인 중단(Fail-Fast).
 
-Trade-off:
-- Runtime Config Dependency:
-    - 장점: 새로운 코인 마켓 추가 시 코드를 배포하지 않고 설정 파일 수정만으로 대응 가능.
-    - 단점: 설정 파일의 오타나 누락이 런타임 에러로 이어질 수 있음.
-    - 근거: 급변하는 암호화폐 시장 특성상 새로운 마켓 데이터 수집 요구사항에 빠르게 대응해야 함.
+Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약.
+- Runtime Config Dependency (Late Binding):
+  - 장점: 급변하는 암호화폐 시장 특성상 새로운 마켓(코인 페어) 데이터 수집 요구사항에 소스 코드 수정 및 재배포 없이 즉각 대응이 가능함.
+  - 단점: 설정 파일의 오타나 필수 값 누락이 컴파일 타임이 아닌 런타임(또는 초기화 타임) 에러로 발현될 위험이 존재함.
+  - 근거: 다양한 종류의 자산을 수집해야 하는 파이프라인 특성상 확장성(Scalability) 확보가 코드 레벨의 강한 결합(Hardcoding)보다 우선시됨.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List
 
 from src.common.config import ConfigManager
 from src.common.dtos import RequestDTO, ExtractedDTO
@@ -36,97 +37,87 @@ from src.common.decorators.retry_decorator import retry
 from src.extractor.providers.abstract_extractor import AbstractExtractor
 
 class UPBITExtractor(AbstractExtractor):
-    """설정(Config)에 정의된 정책을 기반으로 동작하는 업비트 데이터 수집기.
+    """설정(Config)에 정의된 정책을 기반으로 동작하는 업비트(UPBIT) 전용 데이터 수집기.
+
+    `AbstractExtractor`를 상속받아 UPBIT 규격에 맞는 Validation, Fetch, Response 조립 훅(Hook)을 구현합니다.
 
     Attributes:
-        auth_strategy (IAuthStrategy): 토큰 발급(JWT) 및 갱신을 담당하는 전략 객체.
-        config (ConfigManager): 애플리케이션의 전체 설정 정보를 담고 있는 객체.
+        auth_strategy (IAuthStrategy): UPBIT JWT 토큰 발급 및 서명을 담당하는 전략 인스턴스.
+        base_url (str): UPBIT API의 엔드포인트 도메인.
     """
 
-    def __init__(
-        self, 
-        http_client: IHttpClient, 
-        auth_strategy: IAuthStrategy, 
-        config: ConfigManager
-    ):
-        """UPBITExtractor를 초기화합니다.
+    def __init__(self, http_client: IHttpClient, auth_strategy: IAuthStrategy):
+        """UPBITExtractor 인스턴스를 초기화하고 의존성을 주입받습니다.
 
         Args:
-            http_client (IHttpClient): HTTP 요청 클라이언트.
-            auth_strategy (IAuthStrategy): UPBIT 인증 토큰 발급 전략.
-            config (ConfigManager): 앱 설정 객체.
-        """
-        # 부모 클래스(AbstractExtractor) 초기화 (여기서 config 기본 검증 수행됨)
-        super().__init__(http_client, config)
-        self.auth_strategy = auth_strategy
-        
-        # Rationale: ConfigManager가 Pydantic 모델이므로 upbit 필드의 존재는 보장되지만, 
-        # 명시적으로 base_url이 비어있는지 체크하여 Fail-Fast를 유도함.
-        if not config.upbit.base_url:
-            raise ExtractorError("Critical Config Error: 'upbit.base_url' is empty in ConfigManager.")
-    
-    def _validate_request(self, request: RequestDTO) -> None:
-        """요청된 작업(Job)이 UPBIT 수집 정책에 부합하는지 검증합니다.
-
-        1. job_id가 Config의 extraction_policy에 존재하는지 확인.
-        2. 해당 Policy의 Provider가 'UPBIT'인지 확인.
-        3. UPBIT API 호출에 필수적인 파라미터(params) 설정 여부 확인.
-
-        Args:
-            request (RequestDTO): 요청 객체.
+            http_client (IHttpClient): 비동기 네트워크 통신을 담당할 HTTP 클라이언트 어댑터.
+            auth_strategy (IAuthStrategy): UPBIT 전용 인증 토큰 발급/서명 관리 객체.
 
         Raises:
-            ExtractorError: 정책이 없거나, Provider가 다르거나, 필수 필드가 누락된 경우.
+            ExtractorError: ConfigManager에 필수 설정값(base_url)이 누락된 경우.
         """
-        if not request.job_id:
-            raise ExtractorError("Invalid Request: 'job_id' is mandatory.")
-
-        # Rationale: Pydantic 모델의 딕셔너리 속성(extraction_policy)에 접근.
-        policy = self.config.extraction_policy.get(request.job_id)
+        super().__init__(http_client)
+        self.auth_strategy = auth_strategy
+        self.base_url = self.config.upbit.base_url
         
-        if not policy:
-            self.logger.error(f"Policy missing for job_id: {request.job_id}")
-            raise ExtractorError(f"Configuration Error: Policy not found for job_id '{request.job_id}'.")
-
-        # Rationale: 다른 Provider(예: KIS)의 작업을 UPBIT 수집기에 요청하는 실수를 방지.
-        if policy.provider != "UPBIT":
-            raise ExtractorError(f"Provider Mismatch: Job '{request.job_id}' is for '{policy.provider}', not 'UPBIT'.")
-
-        # Rationale: 대부분의 업비트 API는 'market' 파라미터가 필수임. (Policy나 Request Params 중 한 곳에는 있어야 함)
-        # KIS의 tr_id 체크와 유사하게, UPBIT 로직에 필수적인 사전 검증을 수행.
-        combined_params = {**policy.params, **request.params}
-        if "market" not in combined_params and "markets" not in combined_params:
-             self.logger.warning(f"Parameter Warning: 'market' might be missing in policy '{request.job_id}'.")
-
-    @log_decorator(logger_name="UPBIT_Extractor")
-    @rate_limit(limit=10, period=1.0, bucket_key="UPBIT_Quotation")
-    @retry(max_retries=3)
-    async def _fetch_raw_data(self, request: RequestDTO) -> Any:
-        """설정된 정책과 인증 정보를 결합하여 UPBIT API를 호출합니다.
-
-        Decorators:
-            @retry: 네트워크 오류 시 재시도.
-            @rate_limit: 초당 10회 제한 (Quotation API 기준).
-            @log_decorator: 수행 로깅.
+        # [설계 의도] 필수 환경변수 누락 시 시스템 구동 시점(Fail-Fast)에 에러를 발생시켜
+        # 런타임 도중 의미 없는 네트워크 호출과 예외가 발생하는 것을 조기 방지함.
+        if not self.base_url:
+            raise ExtractorError("Critical Config Error: 'base_url'가 누락되었습니다.")
+    
+    def _validate_request(self, request: RequestDTO) -> None:
+        """요청된 작업(Job)이 UPBIT 수집 정책에 부합하는지 런타임에 사전 검증합니다.
 
         Args:
-            request (RequestDTO): 검증된 요청 객체.
+            request (RequestDTO): 파이프라인 컨트롤러로부터 전달받은 수집 요청 객체.
+
+        Raises:
+            ExtractorError: job_id가 누락되었거나, 설정에 없거나, Provider가 불일치하는 경우.
+        """
+        if not request.job_id:
+            raise ExtractorError("유효하지 않은 요청: 'job_id'는 필수 항목입니다.")
+
+        # [설계 의도] 설정 파일에서 해당 job_id를 찾지 못할 경우, 하위 로직 실행 전
+        # 조기 예외를 발생시켜 시스템의 상태 이상을 즉각적으로 알림.
+        try:
+            policy = self.config.get_extractor(request.job_id)
+        except Exception as e:
+            raise ExtractorError(f"설정 오류: {e}")
+
+        # [설계 의도] 파이프라인 YAML 설정의 휴먼 에러로 인해 타 API(예: KIS) 작업이 
+        # UPBIT 수집기로 잘못 라우팅되는 것을 원천 방어함.
+        if policy.provider != "UPBIT":
+            raise ExtractorError(f"API 제공자 불일치: Job '{request.job_id}'은(는) '{policy.provider}'용이며, 'UPBIT'용이 아닙니다.")
+
+    @rate_limit(limit=10, period=1.0, bucket_key="UPBIT")
+    @retry(max_retries=3)
+    async def _fetch_raw_data(self, request: RequestDTO) -> Any:
+        """설정된 정책, 인증 토큰(JWT), 요청 파라미터를 병합하여 UPBIT API를 비동기 호출합니다.
+
+        Decorators:
+            @retry: 일시적인 네트워크 장애나 서버 오류 시 최대 3회 재시도.
+            @rate_limit: UPBIT Quotation API의 초당 10회 호출 제한 규정을 클라이언트 사이드에서 강제 준수.
+
+        Args:
+            request (RequestDTO): 검증이 완료된 요청 객체.
 
         Returns:
-            Any: API 원본 응답 데이터 (Dict or List).
+            Any: UPBIT API로부터 수신한 JSON 형식의 원본 응답 데이터 (주로 Dict 또는 List 구조체).
         """
         # 1. 인증 토큰 확보 (AuthStrategy 위임)
+        # [설계 의도] 토큰 생성 및 JWT 서명 로직을 추출기(Extractor)에서 분리하여 단일 책임 원칙(SRP) 준수.
         token = await self.auth_strategy.get_token(self.http_client)
 
         # 2. 정책 로드 (Validation 단계를 통과했으므로 존재 보장)
-        policy = self.config.extraction_policy[request.job_id]
+        policy = self.config.get_extractor(request.job_id)
         
         # 3. URL 구성
-        # Config의 계층 구조(config.upbit.base_url)와 객체 속성(policy.path)을 활용.
-        url = f"{self.config.upbit.base_url}{policy.path}"
+        # Config의 계층 구조(config.upbit.base_url)와 객체 속성(policy.path)을 결합.
+        url = f"{self.base_url}{policy.path}"
         
         # 4. 헤더 구성
-        # Bearer Token 방식을 사용하며, 인증이 필요 없는 경우 token이 None일 수 있음.
+        # [설계 의도] Bearer Token 방식을 사용하며, 시세 조회 등 인증이 필요 없는 
+        # Public 엔드포인트의 경우 token이 None일 수 있으므로 이를 동적으로 처리.
         headers = {
             "accept": "application/json",
         }
@@ -134,41 +125,59 @@ class UPBITExtractor(AbstractExtractor):
             headers["authorization"] = token
 
         # 5. 파라미터 병합
-        # Static Params(Config)와 Dynamic Params(Request)를 병합. Request가 우선순위를 가짐.
+        # [설계 의도] 정적 설정(policy.params)을 기본값으로 두고, 스케줄러 등이 주입한
+        # 동적 파라미터(request.params)로 덮어쓰기하여 런타임 유연성을 극대화함.
         merged_params = {**policy.params, **request.params}
-
-        self.logger.debug(f"Executing UPBIT Request | Job: {request.job_id} | Path: {policy.path}")
 
         # 6. 비동기 호출 수행
         return await self.http_client.get(url, headers=headers, params=merged_params)
 
-    def _create_response(self, raw_data: Any, job_id: str) -> ExtractedDTO:
-        """UPBIT API 응답의 에러 객체(error)를 확인하고 DTO로 포장합니다.
+    def _create_response(self, raw_data_list: List[Any], job_id: str) -> ExtractedDTO:
+        """UPBIT API 응답 구조를 파싱하여 비즈니스 에러를 식별하고 시스템 표준 DTO로 포장합니다.
 
         Args:
-            raw_data (Any): API 원본 응답.
-            job_id (str): 요청된 작업 ID.
+            raw_data_list (List[Any]): HTTP 클라이언트가 JSON으로 파싱 완료한 원본 데이터 리스트.
+            job_id (str): 현재 응답이 속한 작업의 메타데이터 식별용 고유 ID.
+
         Returns:
-            ExtractedDTO: 결과 객체.
+            ExtractedDTO: 원본 데이터와 필수 메타데이터가 병합된 표준 결과 객체.
 
         Raises:
-            ExtractorError: 응답 내에 'error' 키가 존재하는 경우.
+            ExtractorError: 반환된 페이로드 내에 'error' 구조체가 포함되어 있는 경우.
         """
-        # Rationale: UPBIT API는 에러 발생 시 {'error': {'name':..., 'message':...}} 형태를 반환함.
-        if isinstance(raw_data, dict) and "error" in raw_data:
-            error_payload = raw_data["error"]
-            error_name = error_payload.get("name", "UnknownError")
-            error_msg = error_payload.get("message", "No message provided")
-            
-            self.logger.error(f"UPBIT API Business Failure: {error_msg} (Name: {error_name})")
-            raise ExtractorError(f"UPBIT API Failed: {error_msg} (Name: {error_name})")
+        # [설계 의도] 방어적 프로그래밍.
+        if not raw_data_list:
+            raise ExtractorError(f"[{job_id}] 수집된 데이터가 없습니다 (빈 응답 리스트 반환).")
+
+        # [설계 의도] UPBIT는 데이터 덩어리가 최상위 배열(List)이므로 베이스를 리스트로 잡음
+        merged_data: List[Any] = []
+
+        for idx, raw_data in enumerate(raw_data_list):
+            # 1. 에러 검증 (Fail-Fast)
+            # [설계 의도] UPBIT API는 에러 시 List가 아니라 Dict 타입으로 {'error': {...}} 반환함.
+            if isinstance(raw_data, dict) and "error" in raw_data:
+                error_payload = raw_data["error"]
+                error_name = error_payload.get("name", "알 수 없는 오류")
+                error_msg = error_payload.get("message", "메시지 없음")
+                raise ExtractorError(f"UPBIT API 부분 실패 (Chunk {idx+1}/{len(raw_data_list)}): {error_msg} ({error_name})")
+
+            # 2. 정상 응답 병합
+            if isinstance(raw_data, list):
+                # [개선] 빈 리스트([])인 경우 무시하여 메모리와 스토리지 낭비 방지 (비용/효익 최적화)
+                if not raw_data:
+                    continue
+                
+                merged_data.extend(raw_data)
+            else:
+                raise ExtractorError(f"UPBIT API 알 수 없는 응답 구조: 배열(List)이 아닙니다.")
 
         return ExtractedDTO(
-            data=raw_data,
+            data=merged_data,
             meta={
                 "source": "UPBIT",
                 "job_id": job_id,
                 "extracted_at": datetime.now().isoformat(),
-                "status_code": "OK" # UPBIT는 별도의 상태 코드를 본문에 주지 않으므로 OK로 통일
+                "status_code": "OK",
+                "chunks_merged": len(raw_data_list)
             }
         )

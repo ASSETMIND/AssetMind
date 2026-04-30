@@ -2,8 +2,12 @@ package com.assetmind.server_stock.stock.integration;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.KisWebSocketHandler;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.assetmind.server_stock.support.IntegrationTestSupport;
 import com.assetmind.server_stock.support.MockKisDataFeeder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
@@ -26,6 +31,7 @@ import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSession.Subscription;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketSession;
@@ -43,9 +49,23 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
     private int port;
 
     @Autowired
-    private WebSocketHandler kisWebSocketHandler;
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private KisRealTimeDataParser dataParser;
+
+    @Autowired
+    private KisEventMapper eventMapper;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private TaskScheduler taskScheduler;
 
     private WebSocketStompClient socketStompClient;
+
+    private KisWebSocketHandler kisWebSocketHandler;
 
     private static final String WEBSOCKET_ENDPOINT = "/ws-stock";
     private static final String SUBSCRIBE_SPECIFIC_TOPIC = "/topic/stocks/035420";
@@ -59,6 +79,18 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
         );
         this.socketStompClient = new WebSocketStompClient(webSocketClient);
         this.socketStompClient.setMessageConverter(new MappingJackson2MessageConverter());
+
+        // 빈 Account와 테스트용 Chunk 리스트를 포함하는 테스용 KIS handler
+        this.kisWebSocketHandler = new KisWebSocketHandler(
+                "test-approval-key",
+                null,
+                List.of("035420", "005930"),
+                objectMapper,
+                dataParser,
+                eventMapper,
+                eventPublisher,
+                taskScheduler
+        );
     }
 
     @Test
