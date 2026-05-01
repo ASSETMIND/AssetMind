@@ -6,9 +6,14 @@ import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
 import com.assetmind.server_stock.stock.exception.InvalidChartParameterException;
+import com.assetmind.server_stock.stock.presentation.dto.ChartRequestDto;
 import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto;
+import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto.CandleDto;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,68 +31,95 @@ public class ChartService {
     private final Ohlcv1dRepository ohlcv1dRepository;
 
     @LogExecutionTime
-    public ChartResponseDto getCandles(String stockCode, String timeframe, LocalDateTime endTime, int limit) {
-        if (endTime == null) {
-            endTime = LocalDateTime.now();
+    public ChartResponseDto getNCandles(String stockCode, String timeframe, LocalDateTime endTime, int limit) {
+
+        // 변수 intervalString 에서 정수 값만 추출
+        int minuteInterval = parseMinuteInterval(timeframe);
+
+        // 필요한 1분봉 개수 역산 (예: 5분봉 20개 -> 1분봉 100개)
+        int requireRawCount = limit * minuteInterval;
+
+        // 필요한 만큼만 1분봉 데이터 조회
+        List<OhlcvDto> rawCandles = ohlcv1mRepository.findOneMinuteCandles(stockCode, endTime,
+                requireRawCount);
+
+        if (rawCandles.isEmpty()) {
+            return ChartResponseDto.builder()
+                    .stockCode(stockCode)
+                    .timeframe(timeframe)
+                    .candles(Collections.emptyList())
+                    .build();
         }
 
-        log.info("[ChartService] 차트 조회 - 종목: {}, 타임프레임: {}, 기준시간: {}, 조회 요청 개수: {}", stockCode, timeframe, endTime, limit);
+        // 1분봉 데이터를 그룹화 하고 N분봉으로 병합
+        List<CandleDto> result = rawCandles.stream()
+                // N분 단위로 시간을 자르고 그룹화 (예: 5분봉, 10:04 데이터 -> 10:00 그룹)
+                .collect(Collectors.groupingBy(
+                        candle -> truncateNMinute(candle.candleTimestamp(), minuteInterval)))
+                .entrySet().stream()
+                // 시간대 별로 묶인(10:00, 10:05, 10:10 ..) 1분봉 리스트를 하나의 N분봉으로 합침
+                .map(entry -> {
+                    LocalDateTime groupTime = entry.getKey();
+                    List<OhlcvDto> group = entry.getValue();
 
-        List<OhlcvDto> dtoList;
+                    // 시가/종가를 위한 시간순(오름차순) 정렬
+                    group.sort(Comparator.comparing(OhlcvDto::candleTimestamp));
 
-        // 요청 받은 timeframe이 분봉(1m) 테이블로 갈지, 일봉(1d) 테이블로 갈지 결정
-        if (isMinuteTimeframe(timeframe)) {
-            String intervalString = getMinuteInterval(timeframe);
-            dtoList = ohlcv1mRepository.findDynamicMinuteCandles(stockCode, intervalString, endTime, limit);
-        } else {
-            dtoList = getOhlcvDtoBasedDailyCandles(stockCode, timeframe, endTime, limit);
-        }
+                    Double open = group.get(0).openPrice();
+                    Double close = group.getLast().closePrice();
+                    Double high = group.stream().mapToDouble(OhlcvDto::highPrice).max()
+                            .orElse(open);
+                    Double low = group.stream().mapToDouble(OhlcvDto::lowPrice).min()
+                            .orElse(open);
+                    Long volume = group.stream().mapToLong(OhlcvDto::volume).sum();
 
-        List<ChartResponseDto.CandleDto> candleDtos = dtoList.stream()
-                .map(dto -> ChartResponseDto.CandleDto.builder()
-                        .timestamp(dto.candleTimestamp())
-                        .open(String.valueOf(dto.openPrice()))
-                        .high(String.valueOf(dto.highPrice()))
-                        .low(String.valueOf(dto.lowPrice()))
-                        .close(String.valueOf(dto.closePrice()))
-                        .volume(String.valueOf(dto.volume()))
-                        .build()
-                ).toList();
+                    return CandleDto.builder()
+                            .timestamp(groupTime)
+                            .open(String.valueOf(open))
+                            .high(String.valueOf(high))
+                            .low(String.valueOf(low))
+                            .close(String.valueOf(close))
+                            .volume(String.valueOf(volume))
+                            .build();
+                })
+                // N분봉으로 그룹화된 결과들을 최신순(내림차순)으로 정렬
+                .sorted(Comparator.comparing(CandleDto::timestamp).reversed())
+                .limit(limit)
+                .toList();
 
         return ChartResponseDto.builder()
                 .stockCode(stockCode)
                 .timeframe(timeframe)
-                .candles(candleDtos)
+                .candles(result)
                 .build();
     }
 
-    private boolean isMinuteTimeframe(String timeframe) {
-        return timeframe.endsWith("m") && !timeframe.endsWith("mo");
+    /**
+     * "3m", "5m" 등의 문자열에서 숫자만 추출
+     * @param timeframe 분봉 간격
+     * @return 숫자만 추출한 분봉
+     */
+    private int parseMinuteInterval(String timeframe) {
+        if (timeframe != null && timeframe.endsWith("m")) {
+            try {
+                return Integer.parseInt(timeframe.replace("m", ""));
+            } catch (NumberFormatException e) {
+                log.error("[ChartService] 잘못된 분봉 간격 포맷입니다: {}", timeframe);
+            }
+        }
+        throw new InvalidChartParameterException(ErrorCode.INVALID_CHART_PARAMETER, "지원하지 않는 분봉 간격입니다:" + timeframe);
     }
 
-    private String getMinuteInterval(String timeframe) {
-        return switch (timeframe.toLowerCase()) {
-            case "1m" -> "1 minute";
-            case "3m" -> "3 minutes";
-            case "5m" -> "5 minutes";
-            case "15m" -> "15 minutes";
-            default -> throw new InvalidChartParameterException(ErrorCode.INVALID_CHART_PARAMETER, "지원하지 않는 분봉 타임프레임입니다.");
-        };
-    }
-
-    private List<OhlcvDto> getOhlcvDtoBasedDailyCandles(String stockCode, String timeframe, LocalDateTime endTime, int limit) {
-        return switch (timeframe.toLowerCase()) {
-            // 고정 길이 (date_bin 사용)
-            case "1d" -> ohlcv1dRepository.findDynamicDailyCandles(stockCode, "1 day", endTime, limit);
-            case "3d" -> ohlcv1dRepository.findDynamicDailyCandles(stockCode, "3 days", endTime, limit);
-            case "5d" -> ohlcv1dRepository.findDynamicDailyCandles(stockCode, "5 days", endTime, limit);
-            case "1w" -> ohlcv1dRepository.findDynamicDailyCandles(stockCode, "1 week", endTime, limit);
-
-            // 가변 길이 (date_trunc 사용)
-            case "1mo" -> ohlcv1dRepository.findMonthlyCandles(stockCode, endTime, limit);
-            case "1y" -> ohlcv1dRepository.findYearlyCandles(stockCode, endTime, limit);
-
-            default -> throw new InvalidChartParameterException(ErrorCode.INVALID_CHART_PARAMETER, "지원하지 않는 일/주/월/년봉 타임프레임입니다: ");
-        };
+    /**
+     * 시간을 N분 단위로 내림
+     * 예: time=10:13, n=5 -> return=10:10
+     * @param time N분 단위로 내림할 시간
+     * @param n N분에 해당되는 분
+     * @return N분 단위로 내림 된 시간
+     */
+    private LocalDateTime truncateNMinute(LocalDateTime time, int n) {
+        int minute = time.getMinute();
+        int truncatedMinute = (minute / n) * n;
+        return time.withMinute(truncatedMinute).withSecond(0).withNano(0);
     }
 }
