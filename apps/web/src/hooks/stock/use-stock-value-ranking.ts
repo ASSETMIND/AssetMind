@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useWebSocket } from '../web-socket/use-web-socket';
 import { useStockStore } from '../../store/use-stock-store';
-import type { StockRankingDto } from '../../types/stock';
+import type { StockRankingDto, RankingType } from '../../types/stock';
 import { STOCK_WS_URL, getStockRanking } from '../../api/stock';
 import { usePageVisibility } from '../common/use-page-visibility';
 
-export type RankingType = 'VALUE' | 'VOLUME';
+export type { RankingType };
 
 // 데이터 포맷팅 유틸리티
-const formatStockData = (item: any): StockRankingDto => ({
+const formatStockData = (item: StockRankingDto): StockRankingDto => ({
 	stockCode: item.stockCode,
 	stockName: item.stockName,
 	currentPrice: Number(item.currentPrice) || 0,
@@ -43,7 +43,6 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 		queryFn: async () => {
 			const data = await getStockRanking(type, limit);
 			const formatted = data.map(formatStockData);
-			// 초기 데이터를 전역 스토어에 동기화
 			setInitialStocks(formatted);
 			return formatted;
 		},
@@ -59,26 +58,20 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 	}, [isVisible, refetch]);
 
 	useEffect(() => {
-		// 연결되지 않았거나 탭이 백그라운드면 실행하지 않음
 		if (!isConnected || !isVisible) return;
 
 		const topic = `/topic/ranking/${type.toLowerCase()}`;
-		const subscription = subscribe(topic, (data: any) => {
+		const subscription = subscribe(topic, (data: unknown) => {
 			const rawList = Array.isArray(data) ? data : [data];
-			const parsedList = rawList.map(formatStockData);
-
-			// 버퍼에 데이터 추가
+			const parsedList = (rawList as StockRankingDto[]).map(formatStockData);
 			messageBuffer.current.push(...parsedList);
 		});
 
 		// 배치 처리 타이머: 300ms마다 버퍼를 비우고 전역 스토어 업데이트
 		const batchInterval = setInterval(() => {
 			if (messageBuffer.current.length === 0) return;
-
 			const currentBuffer = [...messageBuffer.current];
-			messageBuffer.current = []; // 버퍼 비우기
-
-			// 전역 스토어에 일괄 업데이트 요청 (Worker 연산 트리거)
+			messageBuffer.current = [];
 			updateStocks(currentBuffer, type, limit);
 		}, 300);
 

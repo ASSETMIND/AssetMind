@@ -7,7 +7,7 @@ import { useStockRanking, type RankingType } from './use-stock-value-ranking';
  */
 export const useStockRankLogic = (type: RankingType, limit = 40) => {
 	const { isConnected, isLoading } = useStockRanking(type, limit);
-	
+
 	// 전체 맵이 아닌 정렬된 코드 리스트만 구독 (순서 변경 시에만 리렌더링)
 	const stockCodes = useStockStore((state) => state.stockCodes);
 
