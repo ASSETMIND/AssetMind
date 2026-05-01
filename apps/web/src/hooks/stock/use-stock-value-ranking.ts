@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useWebSocket } from '../web-socket/use-web-socket';
 import { useStockStore } from '../../store/use-stock-store';
@@ -49,13 +49,16 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 		staleTime: 1000 * 60,
 	});
 
+	const refetchRef = useRef(refetch);
+	refetchRef.current = refetch;
+
 	// 탭이 다시 활성화될 때 최신 데이터 동기화 (Resume logic)
 	useEffect(() => {
 		if (isVisible) {
 			console.log('Tab visible: Refreshing stock ranking data...');
-			refetch();
+			refetchRef.current();
 		}
-	}, [isVisible, refetch]);
+	}, [isVisible]);
 
 	useEffect(() => {
 		if (!isConnected || !isVisible) return;
