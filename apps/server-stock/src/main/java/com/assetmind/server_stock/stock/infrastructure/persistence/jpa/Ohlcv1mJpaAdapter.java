@@ -81,6 +81,15 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
 
     }
 
+    @LogExecutionTime
+    @Override
+    public List<OhlcvDto> findOneMinuteCandles(String stockCode, LocalDateTime endTime, int limit) {
+        return ohlcv1mJpaRepository.findRawCandles(stockCode, endTime, limit)
+                .stream()
+                .map(projection -> toDto(stockCode, projection))
+                .toList();
+    }
+
     private OhlcvDto toDto(Ohlcv1mJpaEntity entity) {
         return new OhlcvDto(
                 entity.getStockCode(),
