@@ -86,7 +86,7 @@ public class Ohlcv1mJpaAdapter implements Ohlcv1mRepository {
     public List<OhlcvDto> findOneMinuteCandles(String stockCode, LocalDateTime endTime, int limit) {
         return ohlcv1mJpaRepository.findRawCandles(stockCode, endTime, limit)
                 .stream()
-                .map(projection -> toDto(stockCode, projection))
+                .map(this::toDto)
                 .toList();
     }
 
