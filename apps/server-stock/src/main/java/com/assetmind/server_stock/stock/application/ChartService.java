@@ -1,12 +1,10 @@
 package com.assetmind.server_stock.stock.application;
 
 import com.assetmind.server_stock.global.aspect.LogExecutionTime;
-import com.assetmind.server_stock.global.error.ErrorCode;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
+import com.assetmind.server_stock.stock.domain.enums.CandleType;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1dRepository;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
-import com.assetmind.server_stock.stock.exception.InvalidChartParameterException;
-import com.assetmind.server_stock.stock.presentation.dto.ChartRequestDto;
 import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto;
 import com.assetmind.server_stock.stock.presentation.dto.ChartResponseDto.CandleDto;
 import java.time.LocalDateTime;
@@ -33,8 +31,13 @@ public class ChartService {
     @LogExecutionTime
     public ChartResponseDto getNCandles(String stockCode, String timeframe, LocalDateTime endTime, int limit) {
 
-        // 변수 intervalString 에서 정수 값만 추출
-        int minuteInterval = parseMinuteInterval(timeframe);
+        CandleType candleType = CandleType.from(timeframe);
+
+        int minuteInterval = candleType.getWindowMinutes();
+
+        if (endTime == null) {
+            endTime = LocalDateTime.now();
+        }
 
         // 필요한 1분봉 개수 역산 (예: 5분봉 20개 -> 1분봉 100개)
         int requireRawCount = limit * minuteInterval;
@@ -92,22 +95,6 @@ public class ChartService {
                 .timeframe(timeframe)
                 .candles(result)
                 .build();
-    }
-
-    /**
-     * "3m", "5m" 등의 문자열에서 숫자만 추출
-     * @param timeframe 분봉 간격
-     * @return 숫자만 추출한 분봉
-     */
-    private int parseMinuteInterval(String timeframe) {
-        if (timeframe != null && timeframe.endsWith("m")) {
-            try {
-                return Integer.parseInt(timeframe.replace("m", ""));
-            } catch (NumberFormatException e) {
-                log.error("[ChartService] 잘못된 분봉 간격 포맷입니다: {}", timeframe);
-            }
-        }
-        throw new InvalidChartParameterException(ErrorCode.INVALID_CHART_PARAMETER, "지원하지 않는 분봉 간격입니다:" + timeframe);
     }
 
     /**
