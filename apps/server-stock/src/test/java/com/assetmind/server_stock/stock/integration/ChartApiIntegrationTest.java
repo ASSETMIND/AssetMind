@@ -65,7 +65,7 @@ public class ChartApiIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.candles[0].high").value("160.0"))   // 3분 중 최고가
                 .andExpect(jsonPath("$.data.candles[0].low").value("80.0"))     // 3분 중 최저가
                 .andExpect(jsonPath("$.data.candles[0].close").value("155.0"))  // 09:02의 종가
-                .andExpect(jsonPath("$.data.candles[0].volume").value("60L"));  // 거래량 총합 (10+20+30)
+                .andExpect(jsonPath("$.data.candles[0].volume").value("60"));  // 거래량 총합 (10+20+30)
     }
 
     @Test
