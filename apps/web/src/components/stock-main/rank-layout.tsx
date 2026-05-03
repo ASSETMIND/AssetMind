@@ -1,54 +1,81 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 import { useLatestSurgeAlert } from '../../hooks/stock/use-stock-alerts';
-import type { RankingType } from '../../hooks/stock/use-stock-value-ranking';
+import { useStockStore } from '../../store/use-stock-store';
+import type { RankingType, StockRow } from '../../types/stock';
 import StockFilterGroup from './stock-filter-group';
-import StockItem from './stock-item';
-import TableHeader from './table-header';
+import StockTable from './stock-table';
 import Toast from '../common/toast';
 
-/**
- * 랭킹 페이지의 전체 레이아웃
- * - 최적화: stockCodes 리스트만 가지고 루프를 돌며, 개별 아이템은 직접 스토어에서 데이터를 가져옴
- */
 export default function RankLayout() {
 	const [rankingType, setRankingType] = useState<RankingType>('VALUE');
-	const { stockCodes, isLoading } = useStockRankLogic(rankingType);
-
-	// 실시간 급등 알림 데이터 가져오기
+	const { stockCodes, isLoading, sortType } = useStockRankLogic(rankingType);
 	const { latestAlert, clearAlert } = useLatestSurgeAlert();
 
+	const stockMapRef = useRef(useStockStore.getState().stockMap);
+
+	useEffect(() => {
+		const unsub = useStockStore.subscribe((state) => {
+			stockMapRef.current = state.stockMap;
+		});
+		return () => unsub();
+	}, []);
+
+	const rows: StockRow[] = useMemo(() => {
+		return stockCodes
+			.map((code, index) => {
+				const stock = stockMapRef.current.get(code);
+				if (!stock) return null;
+
+				let buyRatio = 50 + stock.changeRate * 2;
+				buyRatio = Math.max(10, Math.min(90, Math.floor(buyRatio)));
+
+				const tickerState: StockRow['tickerState'] =
+					stock.changeRate > 0 ? 'rise' : stock.changeRate < 0 ? 'fall' : 'idle';
+
+				const row: StockRow = {
+					id: stock.stockCode,
+					rank: index + 1,
+					isFavorite: false,
+					name: stock.stockName,
+					price: stock.currentPrice,
+					changeRate: stock.changeRate,
+					tradeAmount:
+						rankingType === 'VOLUME'
+							? stock.cumulativeVolume
+							: stock.cumulativeAmount,
+					buyRatio,
+					tickerState,
+				};
+				return row;
+			})
+			.filter((row): row is StockRow => row !== null);
+	}, [stockCodes, rankingType]);
+
 	return (
-		<div className='w-full max-w-6xl mx-auto px-4 overflow-hidden'>
-			{/* 필터 영역 */}
-			<StockFilterGroup
-				activeType={rankingType}
-				onTypeChange={setRankingType}
-			/>
+		<div className='w-full max-w-6xl mx-auto px-4'>
+			<StockFilterGroup activeType={rankingType} onTypeChange={setRankingType} />
 
-			{/* 랭킹 리스트 영역 */}
-			<div className='rounded-lg min-h-100'>
-				<TableHeader sortType={rankingType} />
-				<div className='flex flex-col'>
-					{/* stockCodes가 바뀔 때만(즉, 순위 정렬이 바뀔 때만) 리스트가 재정렬됨 */}
-					{stockCodes.map((code, index) => (
-						<StockItem
-							key={code}
-							stockCode={code}
-							rank={index + 1}
-							rankingType={rankingType}
-						/>
-					))}
-
-					{!isLoading && stockCodes.length === 0 && (
-						<div className='py-20 text-center text-gray-500'>
-							데이터를 불러오는 중입니다...
-						</div>
-					)}
-				</div>
+			<div style={{ width: '100%', overflowX: 'auto' }}>
+				{isLoading && rows.length === 0 ? (
+					<div className='flex flex-col gap-2 py-2'>
+						{Array.from({ length: 10 }).map((_, i) => (
+							<div
+								key={i}
+								className='h-[60px] animate-pulse rounded-md'
+								style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+							/>
+						))}
+					</div>
+				) : rows.length === 0 ? (
+					<div className='py-20 text-center' style={{ color: '#9194A1' }}>
+						데이터를 불러오는 중...
+					</div>
+				) : (
+					<StockTable rows={rows} sortType={sortType} />
+				)}
 			</div>
 
-			{/* 급등 알림 토스트 시각화 */}
 			{latestAlert && (
 				<Toast
 					key={JSON.stringify(latestAlert)}
@@ -56,13 +83,17 @@ export default function RankLayout() {
 					onClose={clearAlert}
 				>
 					<div className='flex flex-col gap-1'>
-						<span className='text-xs text-gray-400'>실시간 급등락 포착</span>
 						<div className='text-sm flex items-center gap-2'>
 							<strong className='text-white text-base'>
 								{latestAlert.stockName}
 							</strong>
 							<span
-								className={`font-semibold ${latestAlert.changeRate.startsWith('-') ? 'text-blue-500' : 'text-red-500'}`}
+								style={{
+									fontWeight: 600,
+									color: latestAlert.changeRate.startsWith('-')
+										? '#256AF4'
+										: '#EA580C',
+								}}
 							>
 								{latestAlert.changeRate}
 							</span>
