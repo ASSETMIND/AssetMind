@@ -411,3 +411,29 @@ class UnsupportedFormatError(ReaderError):
             "actual_format": actual_format
         }
         super().__init__(message, details=details, should_retry=False)
+
+class ReaderServiceError(ReaderError):
+    """ReaderService 계층의 파라미터 유효성 및 라우팅 단계에서 발생하는 예외.
+    
+    데이터 I/O 물리 계층(AbstractReader)으로 넘어가기 전, Entry Point에서 
+    잘못된 스토리지 식별자나 유효하지 않은 source_path가 유입되는 것을 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        target_reader: Optional[str] = None,
+        invalid_path: Optional[str] = None
+    ) -> None:
+        details = {}
+        if target_reader:
+            details["target_reader"] = target_reader
+        if invalid_path:
+            details["invalid_path"] = invalid_path
+            
+        # 파라미터 누락/오류는 재시도해도 실패하므로 should_retry=False로 강제함
+        super().__init__(
+            message,
+            details=details,
+            should_retry=False
+        )
