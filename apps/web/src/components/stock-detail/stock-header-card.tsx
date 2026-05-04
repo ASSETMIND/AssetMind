@@ -1,29 +1,70 @@
-/*
-  상단 종목 표시 카드
-*/
+import { useParams } from 'react-router-dom';
+import { useStockDetail } from '../../hooks/stock-detail/use-stock-detail';
+
 export default function StockHeaderCard() {
+	const { id: stockCode = '' } = useParams<{ id: string }>();
+	const { data, isConnected } = useStockDetail(stockCode);
+
+	const isRise = (data?.changeRate ?? 0) > 0;
+	const isFall = (data?.changeRate ?? 0) < 0;
+	const changeColor = isRise ? '#EA580C' : isFall ? '#256AF4' : '#9194A1';
+
+	const formattedPrice = data
+		? data.currentPrice.toLocaleString('ko-KR') + '원'
+		: '--';
+
+	const formattedChange = data
+		? `${data.priceChange >= 0 ? '+' : ''}${data.priceChange.toLocaleString('ko-KR')}원 (${data.changeRate >= 0 ? '+' : ''}${data.changeRate.toFixed(2)}%)`
+		: '--';
+
 	return (
-		<div className='flex items-center gap-3 pr-8'>
-			<div className='w-12 h-12 bg-gray-300 rounded-lg shrink-0' />
+		<div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+			{/* 로고 */}
+			<div style={{
+				width: '48px', height: '48px',
+				backgroundColor: '#21242C',
+				borderRadius: '8px',
+				flexShrink: 0,
+			}} />
 
-			{/* 텍스트 정보 영역 */}
-			<div className='flex flex-col justify-center'>
-				{/* 종목명 및 종목코드 */}
-				<div className='flex items-baseline gap-2'>
-					<h1 className='text-lg font-bold text-white'>종목명</h1>
-					<span className='text-sm text-gray-400'>000000</span>
+			{/* 종목 정보 */}
+			<div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+				{/* 종목명 + 코드 */}
+				<div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+					<h1 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
+						종목명
+					</h1>
+					<span style={{ fontSize: '13px', fontWeight: 400, color: '#9194A1' }}>
+						{stockCode}
+					</span>
 				</div>
 
-				{/* 가격 및 등락률 정보 */}
-				<div className='flex items-baseline gap-1.5'>
-					<span className='text-xl font-bold text-white tracking-tight'>
-						00,000원
+				{/* 현재가 + 등락 */}
+				<div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+					<span style={{
+						fontSize: '22px', fontWeight: 700, color: '#FFFFFF',
+						fontVariantNumeric: 'tabular-nums',
+					}}>
+						{formattedPrice}
 					</span>
-					<span className='text-xs text-gray-400'>어제보다</span>
-					<span className='text-xs font-medium text-orange-500'>
-						+00,000원 (00.00%)
+					<span style={{ fontSize: '12px', fontWeight: 400, color: '#9194A1' }}>
+						어제보다
+					</span>
+					<span style={{
+						fontSize: '13px', fontWeight: 500,
+						color: changeColor,
+						fontVariantNumeric: 'tabular-nums',
+					}}>
+						{formattedChange}
 					</span>
 				</div>
+
+				{/* 연결 상태 표시 */}
+				{!isConnected && (
+					<span style={{ fontSize: '11px', color: '#9194A1' }}>
+						실시간 연결 중...
+					</span>
+				)}
 			</div>
 		</div>
 	);

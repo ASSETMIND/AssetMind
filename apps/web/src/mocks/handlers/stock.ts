@@ -207,6 +207,28 @@ export const stockHandlers = [
 							});
 							sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
 						}
+
+						// 개별 종목 실시간 데이터 (/topic/stocks/{stockCode})
+						if (destination.startsWith('/topic/stocks/')) {
+							const code = destination.split('/').pop() ?? '';
+							const stock = fullStockData.find((s) => s.stockCode === code);
+							if (stock) {
+								const payload = JSON.stringify({
+									stockCode:        stock.stockCode,
+									currentPrice:     String(stock.currentPrice),
+									priceChange:      String(stock.priceChange),
+									changeRate:       String(stock.changeRate),
+									openPrice:        String(stock.basePrice),
+									highPrice:        String(Math.floor(stock.currentPrice * 1.02)),
+									lowPrice:         String(Math.floor(stock.currentPrice * 0.98)),
+									executionVolume:  String(Math.floor(Math.random() * 10000)),
+									cumulativeAmount: String(stock.cumulativeAmount),
+									cumulativeVolume: String(stock.cumulativeVolume),
+									time:             new Date().toTimeString().slice(0, 8).replace(/:/g, ''),
+								});
+								sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
+							}
+						}
 					}, 1000);
 					subscriptionIntervals.set(subId, interval);
 				}
