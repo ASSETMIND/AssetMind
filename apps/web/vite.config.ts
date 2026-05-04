@@ -6,16 +6,14 @@ export default defineConfig({
 	define: {
 		global: 'window',
 	},
+	worker: {
+		format: 'es',
+	},
 	server: {
 		proxy: {
 			'/api': {
 				target: 'http://localhost:8080',
 				changeOrigin: true,
-			},
-			'/ws-stock': {
-				target: 'http://localhost:8080',
-				changeOrigin: true,
-				ws: true,
 			},
 		},
 	},

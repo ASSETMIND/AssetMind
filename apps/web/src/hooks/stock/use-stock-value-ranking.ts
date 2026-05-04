@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useWebSocket } from '../web-socket/use-web-socket';
 import { useStockStore } from '../../store/use-stock-store';
@@ -8,23 +8,16 @@ import { usePageVisibility } from '../common/use-page-visibility';
 
 export type { RankingType };
 
-// 데이터 포맷팅 유틸리티
-const formatStockData = (item: StockRankingDto): StockRankingDto => ({
-	stockCode: item.stockCode,
-	stockName: item.stockName,
-	currentPrice: Number(item.currentPrice) || 0,
-	priceChange: Number(item.priceChange) || 0,
-	changeRate: Number(item.changeRate) || 0,
-	cumulativeAmount: Number(item.cumulativeAmount) || 0,
-	cumulativeVolume: Number(item.cumulativeVolume) || 0,
+const formatStockData = (item: any): StockRankingDto => ({
+	stockCode:        item.stockCode,
+	stockName:        item.stockName,
+	currentPrice:     Number(item.currentPrice)     || 0,
+	priceChange:      Number(item.priceChange)       || 0,
+	changeRate:       Number(item.changeRate)        || 0,
+	cumulativeAmount: Number(item.cumulativeAmount)  || 0,
+	cumulativeVolume: Number(item.cumulativeVolume)  || 0,
 });
 
-/**
- * 주식 랭킹 데이터를 관리하는 훅 (최적화 버전)
- * - Page Visibility API: 탭 비활성화 시 소켓 연결 해제 및 연산 중지
- * - Throttling & Batching: 300ms 주기로 일괄 업데이트하여 렌더링 부하 감소
- * - Resume Sync: 포그라운드 전환 시 최신 데이터 재조회
- */
 export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 	const isVisible = usePageVisibility();
 
@@ -33,11 +26,9 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 	});
 
 	const { setInitialStocks, updateStocks } = useStockStore();
-
 	const messageBuffer = useRef<StockRankingDto[]>([]);
 	const queryKey = ['stockRanking', type, limit];
 
-	// 초기 데이터 로드 (React Query)
 	const { isLoading, refetch } = useQuery<StockRankingDto[]>({
 		queryKey,
 		queryFn: async () => {
@@ -52,7 +43,6 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 	const refetchRef = useRef(refetch);
 	refetchRef.current = refetch;
 
-	// 탭이 다시 활성화될 때 최신 데이터 동기화 (Resume logic)
 	useEffect(() => {
 		if (isVisible) {
 			console.log('Tab visible: Refreshing stock ranking data...');
@@ -64,15 +54,24 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 		if (!isConnected || !isVisible) return;
 
 		const topic = `/topic/ranking/${type.toLowerCase()}`;
-		const subscription = subscribe(topic, (data: unknown) => {
-			const rawList = Array.isArray(data) ? data : [data];
-			const parsedList = (rawList as StockRankingDto[]).map(formatStockData);
-			messageBuffer.current.push(...parsedList);
+		const subscription = subscribe(topic, (raw: unknown) => {
+			console.log('[subscribe] raw message received:', raw);
+			// MSW mock: { type: 'RANKING_VALUE_UPDATE', data: [...] }
+			const msg = raw as { type?: string; data?: any[] };
+			const list = Array.isArray(msg.data)
+				? msg.data
+				: Array.isArray(raw)
+					? (raw as any[])
+					: [raw];
+
+			console.log('[subscribe] parsed list length:', list.length);
+			const parsed = list.map(formatStockData);
+			messageBuffer.current.push(...parsed);
 		});
 
-		// 배치 처리 타이머: 300ms마다 버퍼를 비우고 전역 스토어 업데이트
 		const batchInterval = setInterval(() => {
 			if (messageBuffer.current.length === 0) return;
+			console.log('[batchInterval] flushing', messageBuffer.current.length, 'items');
 			const currentBuffer = [...messageBuffer.current];
 			messageBuffer.current = [];
 			updateStocks(currentBuffer, type, limit);

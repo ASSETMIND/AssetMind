@@ -4,42 +4,42 @@ import type { StockRankingDto } from '../types/stock';
 interface StockState {
 	stockMap: Map<string, StockRankingDto>;
 	stockCodes: string[];
-	
+	mapVersion: number;
 	setInitialStocks: (stocks: StockRankingDto[]) => void;
 	updateStocks: (updates: StockRankingDto[], type: 'VALUE' | 'VOLUME', limit: number) => void;
 }
 
-// Web Worker 인스턴스 생성 (Vite 전용 URL 문법)
-const stockWorker = new Worker(new URL('../workers/stock-worker.ts', import.meta.url), {
-	type: 'module'
-});
+export const useStockStore = create<StockState>((set, get) => ({
+	stockMap: new Map(),
+	stockCodes: [],
+	mapVersion: 0,
 
-export const useStockStore = create<StockState>((set, get) => {
-	// Worker 결과 수신 리스너 등록
-	stockWorker.onmessage = (e) => {
-		const { newMap, sortedCodes } = e.data;
-		set({ stockMap: newMap, stockCodes: sortedCodes });
-	};
+	setInitialStocks: (stocks) => set({
+		stockMap: new Map(stocks.map((s) => [s.stockCode, s])),
+		stockCodes: stocks.map((s) => s.stockCode),
+	}),
 
-	return {
-		stockMap: new Map(),
-		stockCodes: [],
+	updateStocks: (updates, type, limit) => {
+		const { stockMap } = get();
 
-		setInitialStocks: (stocks) => set({
-			stockMap: new Map(stocks.map(s => [s.stockCode, s])),
-			stockCodes: stocks.map(s => s.stockCode)
-		}),
+		// Worker 없이 메인 스레드에서 직접 처리
+		const newMap = new Map(stockMap);
+		updates.forEach((s) => newMap.set(s.stockCode, s));
 
-		updateStocks: (updates, type, limit) => {
-			const { stockMap } = get();
-			
-			// 무거운 연산(정렬)을 Worker로 위임
-			stockWorker.postMessage({
-				updates,
-				stockMap,
-				type,
-				limit
-			});
-		}
-	};
-});
+		const sortedList = Array.from(newMap.values())
+			.sort((a, b) =>
+				type === 'VALUE'
+					? b.cumulativeAmount - a.cumulativeAmount
+					: b.cumulativeVolume - a.cumulativeVolume,
+			)
+			.slice(0, limit);
+
+		const sortedCodes = sortedList.map((s) => s.stockCode);
+
+		set((state) => ({
+			stockMap: newMap,
+			stockCodes: sortedCodes,
+			mapVersion: state.mapVersion + 1,
+		}));
+	},
+}));
