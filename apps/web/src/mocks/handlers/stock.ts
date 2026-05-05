@@ -32,48 +32,75 @@ const stockRankingResolver: HttpResponseResolver = ({ request }) => {
 	return HttpResponse.json({ success: true, message: null, data: sortedData }, { status: 200 });
 };
 
-const stockCandlesResolver: HttpResponseResolver = ({ request }) => {
+const stockCandlesResolver: HttpResponseResolver = ({ request, params }) => {
 	const url = new URL(request.url);
 	const timeframe = url.searchParams.get('timeframe') ?? '1d';
-	const limit = Number(url.searchParams.get('limit')) || 100;
+	const limit = Number(url.searchParams.get('limit')) || 200;
+	const stockCode = (params as any).stockCode as string;
+
 	const isIntraday = timeframe === '1m' || timeframe === '5m';
-	const intervalMs = timeframe === '1m' ? 60_000 : timeframe === '5m' ? 300_000
-		: timeframe === '1d' ? 86_400_000 : timeframe === '1w' ? 604_800_000 : 2_592_000_000;
+	const intervalMs = timeframe === '1m' ? 60_000
+		: timeframe === '5m' ? 300_000
+		: timeframe === '1d' ? 86_400_000
+		: timeframe === '1w' ? 604_800_000
+		: 2_592_000_000; // 1mo
 
 	const now = Date.now();
 	let price = 75000;
-	const data = Array.from({ length: limit }).map((_, i) => {
+
+	const candles = Array.from({ length: limit }).map((_, i) => {
 		const t = now - (limit - 1 - i) * intervalMs;
 		const open = price;
 		const change = (Math.random() - 0.48) * price * 0.02;
 		const close = Math.max(1000, Math.floor(open + change));
 		const high = Math.floor(Math.max(open, close) * (1 + Math.random() * 0.01));
-		const low = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
+		const low  = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
 		price = close;
-		return isIntraday
-			? { time: Math.floor(t / 1000), open, high, low, close }
-			: { time: new Date(t).toISOString().slice(0, 10), open, high, low, close };
+		const timestamp = isIntraday
+			? new Date(t).toISOString().slice(0, 19)
+			: new Date(t).toISOString().slice(0, 10) + 'T00:00:00';
+		return {
+			timestamp,
+			open:   String(open),
+			high:   String(high),
+			low:    String(low),
+			close:  String(close),
+			volume: String(Math.floor(Math.random() * 1000000 + 100000)),
+		};
 	});
 
-	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
+	return HttpResponse.json({
+		success: true, message: null,
+		data: { stockCode, timeframe, candles },
+	}, { status: 200 });
 };
 
-const stockHistoryResolver: HttpResponseResolver = ({ request }) => {
+const stockHistoryResolver: HttpResponseResolver = ({ request, params }) => {
 	const url = new URL(request.url);
 	const limit = Number(url.searchParams.get('limit')) || 20;
+	const stockCode = (params as any).stockCode as string;
 	const now = Date.now();
-	const DAY_MS = 86_400_000;
-	let price = 75000;
 
 	const data = Array.from({ length: limit }).map((_, i) => {
-		const t = now - (limit - 1 - i) * DAY_MS;
-		const open = price;
-		const change = (Math.random() - 0.48) * price * 0.02;
-		const close = Math.max(1000, Math.floor(open + change));
-		const high = Math.floor(Math.max(open, close) * (1 + Math.random() * 0.01));
-		const low = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
-		price = close;
-		return { date: new Date(t).toISOString().slice(0, 10), open, high, low, close, volume: Math.floor(Math.random() * 1000000 + 100000) };
+		const t = now - (limit - 1 - i) * 3000; // 3초 간격 체결 틱
+		const currentPrice = String(75000 + Math.floor(Math.random() * 2000 - 1000));
+		const priceChange = String(Math.floor(Math.random() * 2000 - 1000));
+		const changeRate = (Math.random() * 4 - 2).toFixed(2);
+		const executionVolume = String(Math.floor(Math.random() * 1000 + 1));
+		const time = new Date(t).toTimeString().slice(0, 8).replace(/:/g, '');
+		return {
+			stockCode,
+			currentPrice,
+			openPrice: null,
+			highPrice: null,
+			lowPrice: null,
+			priceChange,
+			changeRate,
+			executionVolume,
+			cumulativeAmount: null,
+			cumulativeVolume: null,
+			time,
+		};
 	});
 
 	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
