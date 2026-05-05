@@ -332,3 +332,82 @@ class S3UploadError(LoaderError):
             original_exception=original_exception, 
             should_retry=True
         )
+
+# ==============================================================================
+# 7. Reader Layer Detailed Exceptions
+# ==============================================================================
+
+class ReaderError(ETLError):
+    """[R] 데이터 읽기(Reader) 단계 예외 Base."""
+    pass
+
+
+class ReaderInitializationError(ReaderError):
+    """AbstractReader 및 하위 구현체의 초기화 실패 시 발생하는 예외.
+    
+    클라이언트(Boto3, psycopg2 등) 생성 실패, 환경 변수 누락 등
+    데이터를 읽기 전 단계에서 발생하는 구성 오류를 처리합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        provider_name: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        details = {
+            "provider_name": provider_name
+        }
+        super().__init__(
+            message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class DataReadStreamError(ReaderError):
+    """스트리밍 방식으로 데이터를 읽는 과정에서 발생하는 예외.
+    
+    S3 파일 객체 파싱 에러, 네트워크 단절로 인한 스트림 끊김,
+    또는 압축 해제(Zstd) 실패 등 런타임 데이터 I/O 오류를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        source_path: str,
+        chunk_index: Optional[int] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        details = {
+            "source_path": source_path,
+            "chunk_index": chunk_index
+        }
+        # 스트림 읽기 중 발생한 일시적 네트워크 에러일 수 있으므로 재시도를 허용함
+        super().__init__(
+            message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=True
+        )
+
+
+class UnsupportedFormatError(ReaderError):
+    """Reader가 지원하지 않는 파일 포맷이나 스키마를 만났을 때 발생하는 예외.
+    
+    예를 들어, S3ZstdStreamingReader가 .parquet 파일을 처리하려고 하거나,
+    PostgresReader가 예상치 못한 테이블 스키마를 반환받았을 때 발생합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        expected_format: str,
+        actual_format: str
+    ) -> None:
+        details = {
+            "expected_format": expected_format,
+            "actual_format": actual_format
+        }
+        super().__init__(message, details=details, should_retry=False)
