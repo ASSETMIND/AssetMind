@@ -69,3 +69,56 @@ export async function getStockHistory(stockCode: string, limit = 20) {
 	);
 	return data.data;
 }
+
+// ─── 호가 (Orderbook) ─────────────────────────────────────────
+
+/** 개별 호가 행 */
+export interface OrderbookRowDto {
+	price: number;
+	changeRate: number;
+	quantity: number;
+}
+
+export interface TradeTickDto {
+	price: number;
+	quantity: number;
+	isBuy: boolean;
+	time: string;
+}
+
+export interface MarketInfoDto {
+	weekHigh: number;
+	weekLow: number;
+	upperLimit: number;
+	lowerLimit: number;
+	riseVI?: number;
+	fallVI?: number;
+	open: number;
+	high: number;
+	low: number;
+	volume: number;
+	volumeUnit: string;
+	changeFromYesterday: number;
+	midPrice?: number;
+}
+
+export interface OrderbookDto {
+	stockCode: string;
+	currentPrice: number;
+	currentChangeRate: number;
+	asks: OrderbookRowDto[];
+	bids: OrderbookRowDto[];
+	trades: TradeTickDto[];
+	tradeStrength: number;
+	marketInfo: MarketInfoDto;
+}
+
+export async function getOrderbook(stockCode: string): Promise<OrderbookDto> {
+	const { data } = await axiosInstance.get<{ data: OrderbookDto }>(
+		`/stocks/${stockCode}/orderbook`,
+	);
+	return data.data;
+}
+
+export const getOrderbookTopic = (stockCode: string) =>
+	`/topic/orderbook/${stockCode}`;

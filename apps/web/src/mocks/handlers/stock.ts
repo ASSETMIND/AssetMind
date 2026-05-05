@@ -79,6 +79,59 @@ const stockHistoryResolver: HttpResponseResolver = ({ request }) => {
 	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
 };
 
+// ─── 호가 핸들러 ──────────────────────────────────────────────
+
+const orderbookResolver: HttpResponseResolver = ({ params }) => {
+	const stockCode = params.stockCode as string;
+	const basePrice = 75000 + Math.floor(Math.random() * 10000);
+
+	const asks = Array.from({ length: 10 }).map((_, i) => ({
+		price: basePrice + (10 - i) * 100,
+		changeRate: Number((((basePrice + (10 - i) * 100 - 70000) / 70000) * 100).toFixed(2)),
+		quantity: Math.floor(Math.random() * 5000 + 500),
+	}));
+
+	const bids = Array.from({ length: 10 }).map((_, i) => ({
+		price: basePrice - (i + 1) * 100,
+		changeRate: Number((((basePrice - (i + 1) * 100 - 70000) / 70000) * 100).toFixed(2)),
+		quantity: Math.floor(Math.random() * 5000 + 500),
+	}));
+
+	const trades = Array.from({ length: 14 }).map((_, i) => ({
+		price: basePrice + Math.floor(Math.random() * 200 - 100),
+		quantity: Math.floor(Math.random() * 100 + 1),
+		isBuy: Math.random() > 0.5,
+		time: new Date(Date.now() - i * 3000).toTimeString().slice(0, 8).replace(/:/g, ''),
+	}));
+
+	const data = {
+		stockCode,
+		currentPrice: basePrice,
+		currentChangeRate: Number((((basePrice - 70000) / 70000) * 100).toFixed(2)),
+		asks,
+		bids,
+		trades,
+		tradeStrength: Math.floor(Math.random() * 100),
+		marketInfo: {
+			weekHigh: basePrice + 15000,
+			weekLow: basePrice - 20000,
+			upperLimit: Math.floor(basePrice * 1.3),
+			lowerLimit: Math.floor(basePrice * 0.7),
+			riseVI: Math.floor(basePrice * 1.1),
+			fallVI: Math.floor(basePrice * 0.9),
+			open: basePrice - 500,
+			high: basePrice + 1200,
+			low: basePrice - 800,
+			volume: 3240000,
+			volumeUnit: '백만주',
+			changeFromYesterday: 2.34,
+			midPrice: basePrice + 50,
+		},
+	};
+
+	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
+};
+
 // ─── WebSocket 핸들러 ─────────────────────────────────────────
 // brokerURL: ws://localhost:5173/ws-stock 으로 직접 연결
 
@@ -88,6 +141,7 @@ export const stockHandlers = [
 	http.get('*/api/stocks/ranking/:type', stockRankingResolver),
 	http.get('*/api/stocks/:stockCode/charts/candles', stockCandlesResolver),
 	http.get('*/api/stocks/:stockCode/history', stockHistoryResolver),
+	http.get('*/api/stocks/:stockCode/orderbook', orderbookResolver),
 
 	stockSocket.addEventListener('connection', ({ client }) => {
 		console.log('[MSW] WebSocket connected');
@@ -164,6 +218,31 @@ export const stockHandlers = [
 						const payload = JSON.stringify({
 							type: isVolumeTopic ? 'RANKING_VOLUME_UPDATE' : 'RANKING_VALUE_UPDATE',
 							data: sortedData,
+						});
+						sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
+					}
+
+					// 호가 실시간 업데이트 (/topic/orderbook/{stockCode})
+					if (destination.startsWith('/topic/orderbook/')) {
+						const code = destination.split('/').pop() ?? '';
+						const basePrice = 75000 + Math.floor(Math.random() * 2000 - 1000);
+						const asks = Array.from({ length: 10 }).map((_, i) => ({
+							price: basePrice + (10 - i) * 100,
+							changeRate: Number((((basePrice + (10 - i) * 100 - 70000) / 70000) * 100).toFixed(2)),
+							quantity: Math.floor(Math.random() * 5000 + 500),
+						}));
+						const bids = Array.from({ length: 10 }).map((_, i) => ({
+							price: basePrice - (i + 1) * 100,
+							changeRate: Number((((basePrice - (i + 1) * 100 - 70000) / 70000) * 100).toFixed(2)),
+							quantity: Math.floor(Math.random() * 5000 + 500),
+						}));
+						const payload = JSON.stringify({
+							stockCode: code,
+							currentPrice: basePrice,
+							currentChangeRate: Number((((basePrice - 70000) / 70000) * 100).toFixed(2)),
+							asks,
+							bids,
+							tradeStrength: Math.floor(Math.random() * 100),
 						});
 						sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
 					}
