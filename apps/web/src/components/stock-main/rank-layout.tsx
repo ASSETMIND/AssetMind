@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useStockRankLogic } from '../../hooks/stock/use-stock-rank-logic';
 import { useLatestSurgeAlert } from '../../hooks/stock/use-stock-alerts';
 import { useStockStore } from '../../store/use-stock-store';
@@ -9,22 +9,17 @@ import Toast from '../common/toast';
 
 export default function RankLayout() {
 	const [rankingType, setRankingType] = useState<RankingType>('VALUE');
-	const { stockCodes, isLoading, sortType } = useStockRankLogic(rankingType);
+	const { stockCodes, isLoading, sortType, mapVersion } = useStockRankLogic(rankingType);
 	const { latestAlert, clearAlert } = useLatestSurgeAlert();
 
-	const stockMapRef = useRef(useStockStore.getState().stockMap);
+	const stockMap = useStockStore.getState().stockMap;
 
-	useEffect(() => {
-		const unsub = useStockStore.subscribe((state) => {
-			stockMapRef.current = state.stockMap;
-		});
-		return () => unsub();
-	}, []);
+	console.log('mapVersion:', mapVersion, 'stockCodes.length:', stockCodes.length);
 
 	const rows: StockRow[] = useMemo(() => {
 		return stockCodes
 			.map((code, index) => {
-				const stock = stockMapRef.current.get(code);
+				const stock = stockMap.get(code);
 				if (!stock) return null;
 
 				let buyRatio = 50 + stock.changeRate * 2;
@@ -50,7 +45,7 @@ export default function RankLayout() {
 				return row;
 			})
 			.filter((row): row is StockRow => row !== null);
-	}, [stockCodes, rankingType]);
+	}, [stockCodes, mapVersion, rankingType]);
 
 	return (
 		<div className='w-full max-w-6xl mx-auto px-4'>

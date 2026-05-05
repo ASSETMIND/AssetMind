@@ -1,7 +1,14 @@
 import { axiosInstance } from '../libs/axios';
 
-const baseUrl = import.meta.env.VITE_WS_URL || '';
-export const STOCK_WS_URL = `${baseUrl.replace(/^ws/, 'http')}/ws-stock`;
+// ─── WebSocket URL ────────────────────────────────────────────
+// 항상 ws:// 프로토콜로 생성
+// VITE_WS_URL 없으면 현재 호스트 기반으로 생성
+const rawWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
+
+export const STOCK_WS_URL = rawWsUrl
+	? rawWsUrl.replace(/^http/, 'ws') + '/ws-stock'
+	: `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/ws-stock`;
+
 export const SURGE_ALERTS_TOPIC = '/topic/surge-alerts';
 
 // ─── 랭킹 ────────────────────────────────────────────────────
@@ -23,7 +30,7 @@ export async function getStockRanking(
 export type CandleTimeframe = '1m' | '5m' | '1d' | '1w' | '1M';
 
 export interface CandleDto {
-	time: string;   // ISO 8601 또는 Unix timestamp (서버 응답 형식)
+	time: string | number;
 	open: number;
 	high: number;
 	low: number;
@@ -39,13 +46,7 @@ export async function getStockCandles(
 ) {
 	const { data } = await axiosInstance.get<{ data: CandleDto[] }>(
 		`/stocks/${stockCode}/charts/candles`,
-		{
-			params: {
-				timeframe,
-				limit,
-				...(endTime ? { endTime } : {}),
-			},
-		},
+		{ params: { timeframe, limit, ...(endTime ? { endTime } : {}) } },
 	);
 	return data.data;
 }
@@ -61,10 +62,7 @@ export interface StockHistoryDto {
 	volume: number;
 }
 
-export async function getStockHistory(
-	stockCode: string,
-	limit = 20,
-) {
+export async function getStockHistory(stockCode: string, limit = 20) {
 	const { data } = await axiosInstance.get<{ data: StockHistoryDto[] }>(
 		`/stocks/${stockCode}/history`,
 		{ params: { limit } },
