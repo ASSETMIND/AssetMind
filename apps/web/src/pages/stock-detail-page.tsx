@@ -22,7 +22,7 @@ export default function StockDetailPage() {
 
 	return (
 		<div className='w-full min-h-screen text-gray-200'>
-			<div className='max-w-6xl mx-auto px-4'>
+			<div className='max-w-[1400px] mx-auto px-4'>
 				<div className='pt-10'>
 					{/* 종목 헤더 */}
 					<StockHeaderCard />
@@ -58,14 +58,17 @@ export default function StockDetailPage() {
 
 					{/* ── 차트·호가 탭 ── */}
 					{activeTab === 'chart' && (
-						<div className='grid grid-cols-12 gap-4'>
-							<div className='col-span-12 xl:col-span-6 flex flex-col gap-4'>
+						<div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+							{/* 차트 — 나머지 공간 */}
+							<div style={{ flex: 1, minWidth: 0 }}>
 								<ChartSection />
 							</div>
-							<div className='col-span-12 md:col-span-6 xl:col-span-3'>
+							{/* 호가창 — 340px 고정 */}
+							<div style={{ flexShrink: 0 }}>
 								<OrderbookSection />
 							</div>
-							<div className='col-span-12 md:col-span-6 xl:col-span-3'>
+							{/* AI 예측 — 340px 고정 */}
+							<div style={{ flexShrink: 0 }}>
 								<AIPredictionSection />
 							</div>
 						</div>

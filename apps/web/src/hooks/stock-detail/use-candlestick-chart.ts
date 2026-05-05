@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts';
 import type { Time } from 'lightweight-charts';
-import { getStockCandles, getStockHistory } from '../../api/stock';
-import type { CandleTimeframe, CandleDto, StockHistoryDto } from '../../api/stock';
+import { getStockCandles } from '../../api/stock';
+import type { CandleTimeframe, CandleDto } from '../../api/stock';
 
 // ─── 색상 ─────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ export const PERIOD_TO_TIMEFRAME: Record<PeriodTab, CandleTimeframe> = {
 	'5분': '5m',
 	'일':  '1d',
 	'주':  '1w',
-	'월':  '1M',
+	'월':  '1mo',
 };
 
 // ─── 공통 차트 캔들 타입 ──────────────────────────────────────
@@ -40,33 +40,32 @@ interface ChartCandle {
 }
 
 // ─── 데이터 변환 ──────────────────────────────────────────────
+// 실제 API: timestamp(ISO-8601 string), open/high/low/close 모두 string
 
 function candlesToChartData(raw: CandleDto[]): ChartCandle[] {
+	const isIntraday = raw.length > 0 && raw[0].timestamp.includes('T') &&
+		!raw[0].timestamp.endsWith('T00:00:00');
+
 	return raw
-		.map((d) => ({
-			time:  (typeof d.time === 'number' ? d.time : d.time.slice(0, 10)) as Time,
-			open:  d.open,
-			high:  d.high,
-			low:   d.low,
-			close: d.close,
-		}))
+		.map((d) => {
+			const time = isIntraday
+				? Math.floor(new Date(d.timestamp).getTime() / 1000) as unknown as Time
+				: d.timestamp.slice(0, 10) as Time;
+
+			return {
+				time,
+				open:  Number(d.open),
+				high:  Number(d.high),
+				low:   Number(d.low),
+				close: Number(d.close),
+			};
+		})
+		.filter((d) => !isNaN(d.open) && !isNaN(d.close))
 		.sort((a, b) => {
 			const ta = typeof a.time === 'number' ? a.time : new Date(a.time as string).getTime();
 			const tb = typeof b.time === 'number' ? b.time : new Date(b.time as string).getTime();
 			return ta - tb;
 		});
-}
-
-function historyToChartData(raw: StockHistoryDto[]): ChartCandle[] {
-	return raw
-		.map((d) => ({
-			time:  d.date.slice(0, 10) as Time,
-			open:  d.open,
-			high:  d.high,
-			low:   d.low,
-			close: d.close,
-		}))
-		.sort((a, b) => (a.time as string).localeCompare(b.time as string));
 }
 
 // ─── useCandlestickChart ──────────────────────────────────────
@@ -83,35 +82,23 @@ export function useCandlestickChart(stockCode: string): UseCandlestickChartRetur
 	const chartContainerRef = useRef<HTMLDivElement>(null);
 	const [period, setPeriod] = useState<PeriodTab>('일');
 
-	const timeframe  = PERIOD_TO_TIMEFRAME[period];
-	const isIntraday = period === '1분' || period === '5분';
+	const timeframe = PERIOD_TO_TIMEFRAME[period];
 
-	const candleQuery = useQuery<CandleDto[]>({
+	// 모든 기간 → candles API 사용 (history는 체결 틱이라 차트에 부적합)
+	const { data: candleData, isLoading, isError } = useQuery<CandleDto[]>({
 		queryKey: ['stockCandles', stockCode, timeframe],
 		queryFn:  () => getStockCandles(stockCode, timeframe, 200),
-		enabled:  !!stockCode && isIntraday,
+		enabled:  !!stockCode,
 		staleTime: 1000 * 30,
 	});
-
-	const historyQuery = useQuery<StockHistoryDto[]>({
-		queryKey: ['stockHistory', stockCode, timeframe],
-		queryFn:  () => getStockHistory(stockCode, 200),
-		enabled:  !!stockCode && !isIntraday,
-		staleTime: 1000 * 30,
-	});
-
-	const isLoading = isIntraday ? candleQuery.isLoading : historyQuery.isLoading;
-	const isError   = isIntraday ? candleQuery.isError   : historyQuery.isError;
 
 	const chartData: ChartCandle[] = useMemo(() =>
-		isIntraday
-			? candlesToChartData(candleQuery.data ?? [])
-			: historyToChartData(historyQuery.data ?? []),
-		[isIntraday, candleQuery.data, historyQuery.data],
+		candlesToChartData(candleData ?? []),
+		[candleData],
 	);
 
 	useEffect(() => {
-		if (!chartContainerRef.current || chartData.length === 0) return;
+		if (!chartContainerRef.current) return;
 
 		const chart = createChart(chartContainerRef.current, {
 			layout: {
@@ -134,8 +121,10 @@ export function useCandlestickChart(stockCode: string): UseCandlestickChartRetur
 			wickDownColor: CHART_COLORS.fall,
 		});
 
-		candlestickSeries.setData(chartData);
-		chart.timeScale().fitContent();
+		if (chartData.length > 0) {
+			candlestickSeries.setData(chartData);
+			chart.timeScale().fitContent();
+		}
 
 		const handleResize = () => {
 			if (chartContainerRef.current) {
@@ -148,7 +137,7 @@ export function useCandlestickChart(stockCode: string): UseCandlestickChartRetur
 			window.removeEventListener('resize', handleResize);
 			chart.remove();
 		};
-	}, [chartData]);
+	}, [chartData, period]);
 
 	return { chartContainerRef, period, setPeriod, isLoading, isError };
 }

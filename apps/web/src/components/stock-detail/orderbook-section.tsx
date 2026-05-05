@@ -1,20 +1,23 @@
-/*
-	호가창 리스트 
-*/
-export default function OrderbookSection() {
-	return (
-		<div className='bg-gray-600 p-4 h-166.5 flex flex-col'>
-			<div className='flex justify-between items-center mb-4'>
-				<h3 className='font-bold text-gray-200'>호가</h3>
-				<button className='text-xs px-2 py-1 text-gray-300 border'>
-					빠른 주문
-				</button>
-			</div>
+import { useParams } from 'react-router-dom';
+import { useOrderbook } from '../../hooks/stock-detail/use-orderbook';
+import { OrderbookTable } from './orderbook-table';
 
-			{/* 호가 리스트 영역 */}
-			<div className='flex-1 flex flex-col text-sm items-center justify-center'>
-				호가리스트 영역
-			</div>
-		</div>
+export default function OrderbookSection() {
+	const { id: stockCode = '' } = useParams<{ id: string }>();
+	const { data, status } = useOrderbook(stockCode);
+
+	return (
+		<OrderbookTable
+			status={status as any}
+			viewport='desktop'
+			currentPrice={data?.currentPrice}
+			currentChangeRate={data?.currentChangeRate}
+			asks={data?.asks}
+			bids={data?.bids}
+			trades={data?.trades?.map((t, i) => ({ ...t, id: `trade-${i}` }))}
+			tradeStrength={data?.tradeStrength}
+			marketInfo={data?.marketInfo}
+			onRetry={() => window.location.reload()}
+		/>
 	);
 }

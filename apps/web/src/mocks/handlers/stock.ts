@@ -32,49 +32,129 @@ const stockRankingResolver: HttpResponseResolver = ({ request }) => {
 	return HttpResponse.json({ success: true, message: null, data: sortedData }, { status: 200 });
 };
 
-const stockCandlesResolver: HttpResponseResolver = ({ request }) => {
+const stockCandlesResolver: HttpResponseResolver = ({ request, params }) => {
 	const url = new URL(request.url);
 	const timeframe = url.searchParams.get('timeframe') ?? '1d';
-	const limit = Number(url.searchParams.get('limit')) || 100;
+	const limit = Number(url.searchParams.get('limit')) || 200;
+	const stockCode = (params as any).stockCode as string;
+
 	const isIntraday = timeframe === '1m' || timeframe === '5m';
-	const intervalMs = timeframe === '1m' ? 60_000 : timeframe === '5m' ? 300_000
-		: timeframe === '1d' ? 86_400_000 : timeframe === '1w' ? 604_800_000 : 2_592_000_000;
+	const intervalMs = timeframe === '1m' ? 60_000
+		: timeframe === '5m' ? 300_000
+		: timeframe === '1d' ? 86_400_000
+		: timeframe === '1w' ? 604_800_000
+		: 2_592_000_000; // 1mo
 
 	const now = Date.now();
 	let price = 75000;
-	const data = Array.from({ length: limit }).map((_, i) => {
+
+	const candles = Array.from({ length: limit }).map((_, i) => {
 		const t = now - (limit - 1 - i) * intervalMs;
 		const open = price;
 		const change = (Math.random() - 0.48) * price * 0.02;
 		const close = Math.max(1000, Math.floor(open + change));
 		const high = Math.floor(Math.max(open, close) * (1 + Math.random() * 0.01));
-		const low = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
+		const low  = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
 		price = close;
-		return isIntraday
-			? { time: Math.floor(t / 1000), open, high, low, close }
-			: { time: new Date(t).toISOString().slice(0, 10), open, high, low, close };
+		const timestamp = isIntraday
+			? new Date(t).toISOString().slice(0, 19)
+			: new Date(t).toISOString().slice(0, 10) + 'T00:00:00';
+		return {
+			timestamp,
+			open:   String(open),
+			high:   String(high),
+			low:    String(low),
+			close:  String(close),
+			volume: String(Math.floor(Math.random() * 1000000 + 100000)),
+		};
+	});
+
+	return HttpResponse.json({
+		success: true, message: null,
+		data: { stockCode, timeframe, candles },
+	}, { status: 200 });
+};
+
+const stockHistoryResolver: HttpResponseResolver = ({ request, params }) => {
+	const url = new URL(request.url);
+	const limit = Number(url.searchParams.get('limit')) || 20;
+	const stockCode = (params as any).stockCode as string;
+	const now = Date.now();
+
+	const data = Array.from({ length: limit }).map((_, i) => {
+		const t = now - (limit - 1 - i) * 3000; // 3초 간격 체결 틱
+		const currentPrice = String(75000 + Math.floor(Math.random() * 2000 - 1000));
+		const priceChange = String(Math.floor(Math.random() * 2000 - 1000));
+		const changeRate = (Math.random() * 4 - 2).toFixed(2);
+		const executionVolume = String(Math.floor(Math.random() * 1000 + 1));
+		const time = new Date(t).toTimeString().slice(0, 8).replace(/:/g, '');
+		return {
+			stockCode,
+			currentPrice,
+			openPrice: null,
+			highPrice: null,
+			lowPrice: null,
+			priceChange,
+			changeRate,
+			executionVolume,
+			cumulativeAmount: null,
+			cumulativeVolume: null,
+			time,
+		};
 	});
 
 	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
 };
 
-const stockHistoryResolver: HttpResponseResolver = ({ request }) => {
-	const url = new URL(request.url);
-	const limit = Number(url.searchParams.get('limit')) || 20;
-	const now = Date.now();
-	const DAY_MS = 86_400_000;
-	let price = 75000;
+// ─── 호가 핸들러 ──────────────────────────────────────────────
 
-	const data = Array.from({ length: limit }).map((_, i) => {
-		const t = now - (limit - 1 - i) * DAY_MS;
-		const open = price;
-		const change = (Math.random() - 0.48) * price * 0.02;
-		const close = Math.max(1000, Math.floor(open + change));
-		const high = Math.floor(Math.max(open, close) * (1 + Math.random() * 0.01));
-		const low = Math.floor(Math.min(open, close) * (1 - Math.random() * 0.01));
-		price = close;
-		return { date: new Date(t).toISOString().slice(0, 10), open, high, low, close, volume: Math.floor(Math.random() * 1000000 + 100000) };
-	});
+const orderbookResolver: HttpResponseResolver = ({ params }) => {
+	const stockCode = params.stockCode as string;
+	const basePrice = 75000 + Math.floor(Math.random() * 10000);
+
+	const asks = Array.from({ length: 10 }).map((_, i) => ({
+		price: basePrice + (10 - i) * 100,
+		changeRate: Number((((basePrice + (10 - i) * 100 - 70000) / 70000) * 100).toFixed(2)),
+		quantity: Math.floor(Math.random() * 5000 + 500),
+	}));
+
+	const bids = Array.from({ length: 10 }).map((_, i) => ({
+		price: basePrice - (i + 1) * 100,
+		changeRate: Number((((basePrice - (i + 1) * 100 - 70000) / 70000) * 100).toFixed(2)),
+		quantity: Math.floor(Math.random() * 5000 + 500),
+	}));
+
+	const trades = Array.from({ length: 14 }).map((_, i) => ({
+		price: basePrice + Math.floor(Math.random() * 200 - 100),
+		quantity: Math.floor(Math.random() * 100 + 1),
+		isBuy: Math.random() > 0.5,
+		time: new Date(Date.now() - i * 3000).toTimeString().slice(0, 8).replace(/:/g, ''),
+	}));
+
+	const data = {
+		stockCode,
+		currentPrice: basePrice,
+		currentChangeRate: Number((((basePrice - 70000) / 70000) * 100).toFixed(2)),
+		asks,
+		bids,
+		trades,
+		tradeStrength: Math.floor(Math.random() * 100),
+		marketInfo: {
+			weekHigh: basePrice + 15000,
+			weekLow: basePrice - 20000,
+			upperLimit: Math.floor(basePrice * 1.3),
+			lowerLimit: Math.floor(basePrice * 0.7),
+			riseVI: Math.floor(basePrice * 1.1),
+			fallVI: Math.floor(basePrice * 0.9),
+			open: basePrice - 500,
+			high: basePrice + 1200,
+			low: basePrice - 800,
+			volume: 3240000,
+			volumeUnit: '백만주',
+			changeFromYesterday: 2.34,
+			midPrice: basePrice + 50,
+		},
+	};
 
 	return HttpResponse.json({ success: true, message: null, data }, { status: 200 });
 };
@@ -88,6 +168,7 @@ export const stockHandlers = [
 	http.get('*/api/stocks/ranking/:type', stockRankingResolver),
 	http.get('*/api/stocks/:stockCode/charts/candles', stockCandlesResolver),
 	http.get('*/api/stocks/:stockCode/history', stockHistoryResolver),
+	http.get('*/api/stocks/:stockCode/orderbook', orderbookResolver),
 
 	stockSocket.addEventListener('connection', ({ client }) => {
 		console.log('[MSW] WebSocket connected');
@@ -164,6 +245,31 @@ export const stockHandlers = [
 						const payload = JSON.stringify({
 							type: isVolumeTopic ? 'RANKING_VOLUME_UPDATE' : 'RANKING_VALUE_UPDATE',
 							data: sortedData,
+						});
+						sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
+					}
+
+					// 호가 실시간 업데이트 (/topic/orderbook/{stockCode})
+					if (destination.startsWith('/topic/orderbook/')) {
+						const code = destination.split('/').pop() ?? '';
+						const basePrice = 75000 + Math.floor(Math.random() * 2000 - 1000);
+						const asks = Array.from({ length: 10 }).map((_, i) => ({
+							price: basePrice + (10 - i) * 100,
+							changeRate: Number((((basePrice + (10 - i) * 100 - 70000) / 70000) * 100).toFixed(2)),
+							quantity: Math.floor(Math.random() * 5000 + 500),
+						}));
+						const bids = Array.from({ length: 10 }).map((_, i) => ({
+							price: basePrice - (i + 1) * 100,
+							changeRate: Number((((basePrice - (i + 1) * 100 - 70000) / 70000) * 100).toFixed(2)),
+							quantity: Math.floor(Math.random() * 5000 + 500),
+						}));
+						const payload = JSON.stringify({
+							stockCode: code,
+							currentPrice: basePrice,
+							currentChangeRate: Number((((basePrice - 70000) / 70000) * 100).toFixed(2)),
+							asks,
+							bids,
+							tradeStrength: Math.floor(Math.random() * 100),
 						});
 						sendStomp(`MESSAGE\ndestination:${destination}\nsubscription:${subId}\nmessage-id:${now}\ncontent-type:application/json\n\n${payload}\0`);
 					}
