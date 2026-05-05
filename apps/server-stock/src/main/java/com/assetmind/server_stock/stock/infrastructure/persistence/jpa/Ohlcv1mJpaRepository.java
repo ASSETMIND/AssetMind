@@ -45,4 +45,17 @@ public interface Ohlcv1mJpaRepository extends JpaRepository<Ohlcv1mJpaEntity, Oh
             @Param("endTime") LocalDateTime endTime,
             @Param("limit") int limit
     );
+
+    @Query(value = """
+        SELECT o FROM Ohlcv1mJpaEntity o
+        WHERE o.stockCode = :stockCode 
+            AND o.candleTimestamp <= :endTime
+        ORDER BY o.candleTimestamp DESC
+        LIMIT :limit
+      """)
+    List<Ohlcv1mJpaEntity> findRawCandles(
+            @Param("stockCode") String stockCode,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("limit") int limit
+    );
 }
