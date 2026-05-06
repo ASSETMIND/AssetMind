@@ -14,7 +14,7 @@ export default function ChartSection() {
 				display: 'flex',
 				flexDirection: 'column',
 				gap: '12px',
-				height: '400px',
+				height: '500px',
 			}}
 		>
 			{/* 기간 탭 */}
@@ -22,10 +22,7 @@ export default function ChartSection() {
 				{PERIOD_TABS.map((tab) => (
 					<button
 						key={tab}
-						onClick={() => {
-						console.log('탭 클릭:', tab);
-						setPeriod(tab);
-					}}
+						onClick={() => setPeriod(tab)}
 						style={{
 							padding: '4px 12px',
 							borderRadius: '6px',

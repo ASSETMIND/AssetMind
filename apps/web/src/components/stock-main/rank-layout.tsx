@@ -14,8 +14,6 @@ export default function RankLayout() {
 
 	const stockMap = useStockStore.getState().stockMap;
 
-	console.log('mapVersion:', mapVersion, 'stockCodes.length:', stockCodes.length);
-
 	const rows: StockRow[] = useMemo(() => {
 		return stockCodes
 			.map((code, index) => {
@@ -77,23 +75,22 @@ export default function RankLayout() {
 					duration={2500}
 					onClose={clearAlert}
 				>
-					<div className='flex flex-col gap-1'>
-						<div className='text-sm flex items-center gap-2'>
-							<strong className='text-white text-base'>
-								{latestAlert.stockName}
-							</strong>
-							<span
-								style={{
-									fontWeight: 600,
-									color: latestAlert.changeRate.startsWith('-')
-										? '#256AF4'
-										: '#EA580C',
-								}}
-							>
-								{latestAlert.changeRate}
-							</span>
-						</div>
-					</div>
+					<span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+						<strong style={{ color: '#FFFFFF', fontSize: '15px' }}>
+							{latestAlert.stockName}
+						</strong>
+						<span
+							style={{
+								fontWeight: 600,
+								fontSize: '14px',
+								color: latestAlert.changeRate.startsWith('-')
+									? '#256AF4'
+									: '#EA580C',
+							}}
+						>
+							{latestAlert.changeRate}
+						</span>
+					</span>
 				</Toast>
 			)}
 		</div>
