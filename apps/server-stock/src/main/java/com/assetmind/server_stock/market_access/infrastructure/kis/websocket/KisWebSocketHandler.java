@@ -9,6 +9,7 @@ import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.par
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +53,7 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     // 연결 전 요청을 임시 저장할 대기열 (동기화 리스트)
     private final List<String> pendingSubscriptionList = Collections.synchronizedList(new ArrayList<>());
 
-    // HearBeat(Ping) 타이머 관리 변수
+    // Heartbeat(Ping) 타이머 관리 변수
     private ScheduledFuture<?> pingTask;
 
     public KisWebSocketHandler(String approveKey, Account account, List<String> chunk, ObjectMapper objectMapper, KisRealTimeDataParser dataParser,
@@ -108,7 +109,7 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         log.info("[KIS WS Handler] 세션 연결 성공 (Session ID : {})", session.getId());
         this.currentSession = session;
 
-        // HeartBeat(Ping) 스케줄러 등록 60초마다 실행
+        // Heartbeat(Ping) 스케줄러 등록 60초마다 실행
         startHeartbeatTimer();
 
         // 대기중인 요청 일괄 처리
@@ -141,7 +142,7 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
                         log.error("[KIS WS Handler] HeartBeat(Ping) 전송 실패", e);
                     }
                 }
-            }, 60000); // 60초
+            }, Duration.ofMinutes(1)); // 60초
         }
     }
 
@@ -196,6 +197,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        // 연결 종료 시 Heartbeat 타이머 해제
+        stopHeartbeatTimer();
+
         log.warn("[KIS WS Handler] 연결 종료됨. Code: {}, Reason: {}", status.getCode(), status.getReason());
         this.currentSession = null;
 
@@ -234,6 +238,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
      */
     public void closeConnection() {
         try {
+            // 외부 종료시 Heartbeat 타이머 해제
+            stopHeartbeatTimer();
+
             if (currentSession != null && currentSession.isOpen()) {
                 log.info("[KIS WS] 웹소켓 세션을 정상 종료합니다.");
                 currentSession.close(CloseStatus.NORMAL);
@@ -244,6 +251,14 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
             // 명시적으로 한 번 더 정리
             this.currentSession = null;
             this.subscribedStock.clear();
+        }
+    }
+
+    // Ping 전송 타이머 중지 메서드
+    private void stopHeartbeatTimer() {
+        if (this.pingTask != null && !this.pingTask.isCancelled()) {
+            this.pingTask.cancel(false); // 실행 중인 작업은 강제 중단 X
+            this.pingTask = null;
         }
     }
 }
