@@ -54,6 +54,10 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
     public void prepareConnection() {
         log.info("[KIS Adapter] 웹소켓 클라이언트 초기화");
 
+        if (!activeHandlers.isEmpty()) {
+            disconnect();
+        }
+
         this.webSocketClient = new StandardWebSocketClient();
     }
 
