@@ -7,6 +7,7 @@ import CombinedTradeInfoSection from '../components/stock-detail/combine-trade-i
 import CompanyNavSection from '../components/stock-detail/company-nav-section';
 import CompanyInfoSection from '../components/stock-detail/company-info-section';
 import StockHeaderCard from '../components/stock-detail/stock-header-card';
+import ErrorBoundary from '../components/common/error-boundary';
 
 type TabType = 'chart' | 'info' | 'trade';
 
@@ -59,17 +60,20 @@ export default function StockDetailPage() {
 					{/* ── 차트·호가 탭 ── */}
 					{activeTab === 'chart' && (
 						<div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-							{/* 차트 — 나머지 공간 */}
 							<div style={{ flex: 1, minWidth: 0 }}>
-								<ChartSection />
+								<ErrorBoundary>
+									<ChartSection />
+								</ErrorBoundary>
 							</div>
-							{/* 호가창 — 340px 고정 */}
 							<div style={{ flexShrink: 0 }}>
-								<OrderbookSection />
+								<ErrorBoundary>
+									<OrderbookSection />
+								</ErrorBoundary>
 							</div>
-							{/* AI 예측 — 340px 고정 */}
 							<div style={{ flexShrink: 0 }}>
-								<AIPredictionSection />
+								<ErrorBoundary>
+									<AIPredictionSection />
+								</ErrorBoundary>
 							</div>
 						</div>
 					)}
@@ -78,13 +82,19 @@ export default function StockDetailPage() {
 					{activeTab === 'info' && (
 						<div className='grid grid-cols-12 gap-4'>
 							<div className='col-span-12 md:col-span-3 xl:col-span-2'>
-								<CompanyNavSection />
+								<ErrorBoundary>
+									<CompanyNavSection />
+								</ErrorBoundary>
 							</div>
 							<div className='col-span-12 md:col-span-9 xl:col-span-7 flex flex-col gap-4'>
-								<CompanyInfoSection />
+								<ErrorBoundary>
+									<CompanyInfoSection />
+								</ErrorBoundary>
 							</div>
 							<div className='col-span-12 xl:col-span-3'>
-								<AIPredictionSection />
+								<ErrorBoundary>
+									<AIPredictionSection />
+								</ErrorBoundary>
 							</div>
 						</div>
 					)}
@@ -93,10 +103,14 @@ export default function StockDetailPage() {
 					{activeTab === 'trade' && (
 						<div className='grid grid-cols-12 gap-4'>
 							<div className='col-span-12 xl:col-span-9 flex flex-col gap-4'>
-								<CombinedTradeInfoSection />
+								<ErrorBoundary>
+									<CombinedTradeInfoSection />
+								</ErrorBoundary>
 							</div>
 							<div className='col-span-12 xl:col-span-3'>
-								<AIPredictionSection />
+								<ErrorBoundary>
+									<AIPredictionSection />
+								</ErrorBoundary>
 							</div>
 						</div>
 					)}
