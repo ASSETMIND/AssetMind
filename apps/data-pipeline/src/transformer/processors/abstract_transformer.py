@@ -1,26 +1,30 @@
 """
-[AbstractTransformer 모듈]
-
-ITransformer 인터페이스를 구현하며, 모든 구체적인 변환기(Concrete Transformer)들이
-공통적으로 가져야 할 실행 흐름(Template Method Pattern)과 로깅/에러 핸들링 로직을 제공합니다.
+Reader 계층과의 유연한 결합(List[Dict] 지원), 메타데이터 파라미터 수용(**kwargs), 
+그리고 Silver 데이터 레이어의 핵심인 출력 스키마 강제화(_enforce_schema) 훅을 템플릿에 추가합니다.
 
 [전체 데이터 흐름 설명 (Input -> Output)]
-Input DataFrame -> [_validate: 스키마/데이터 무결성 검증] -> [_apply_transform: 실제 알고리즘 적용] -> Output DataFrame
+1. Input: Reader에서 넘어온 List[Dict] 또는 DataFrame 데이터, 그리고 메타데이터(**kwargs).
+2. Convert: List[Dict]인 경우 OOM 방지를 고려하며 내부적으로 DataFrame으로 변환.
+3. Template Execution: _validate -> _apply_transform -> _enforce_schema 순차 실행.
+4. Output: 사내 DW의 표준 데이터 규격(컬럼, 타입)에 완벽히 맞추어진 DataFrame 반환.
 
 주요 기능:
-- [기능 1] Template Method (`transform`): 검증 -> 변환 -> 로깅으로 이어지는 표준화된 파이프라인 실행 흐름 강제
-- [기능 2] 예외 포착 및 래핑: 하위 클래스에서 발생하는 예측 불가능한 런타임 에러를 도메인 예외(TransformerError)로 규격화
-- [기능 3] 로깅 내장: 모든 변환기의 실행 시작/종료 및 에러 발생 시점을 자동으로 추적
+- Input Flexibility: 상위 파이프라인에서 데이터 타입 캐스팅을 신경 쓰지 않도록 추상화.
+- Schema Enforcement: Silver 데이터의 무결성을 보장하는 마지막 방어선(Hook) 추가.
 
-Trade-off: 
-- 장점: 중복되는 로깅 및 예외 처리(Try-Catch) 보일러플레이트를 부모 클래스로 끌어올려, 하위 클래스 개발자는 순수 데이터 변환 알고리즘(`_apply_transform`)과 검증(`_validate`)에만 집중할 수 있습니다.
-- 단점: 파이썬의 동적 타이핑 특성상, 추상 클래스의 보호 속성(Protected Attributes) 접근이나 오버라이딩을 문법적으로 완벽히 강제하기는 어렵습니다.
-- 근거: 실제 프로덕션 파이프라인에서는 "어떤 변환기에서 에러가 터졌는가?"를 즉시 추적하는 것이 생명입니다. 모든 구체 클래스가 각자 로깅과 에러 핸들링을 구현하면 반드시 누락이 발생하므로, 중앙 집중식 에러 핸들링을 제공하는 템플릿 메서드 패턴 도입이 필수적입니다.
+Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약. 반드시 모든 코드 내용을 작성. 가혹할정도로 코드를 재확인하면서 작성.
+1. 템플릿 내 입력 타입 변환(List[Dict] -> DataFrame) 내장화:
+   - 장점: 파이프라인 제어기(Airflow/Service) 코드가 얇아지고, 변환기가 다양한 입력에 유연하게 대응함.
+   - 단점: Transformer 객체가 DataFrame 초기화 오버헤드를 일정 부분 부담하게 됨.
+   - 근거: 데이터를 가장 잘 아는 도메인 객체(Transformer)가 자신의 입력 규격 변환을 스스로 책임지는 것이 응집도(Cohesion) 측면에서 유리함.
+2. _enforce_schema 단계 분리:
+   - 장점: '데이터 값을 조작하는 로직(_apply_transform)'과 '데이터 그릇의 형태를 맞추는 로직(_enforce_schema)'이 철저히 분리되어 단일 책임 원칙(SRP) 준수.
+   - 단점: 구체화된 변환기(Concrete Class)를 만들 때 구현해야 할 의무 추상 메서드가 1개 더 늘어남.
+   - 근거: API 공급자마다 데이터의 중첩(Nested) 정도나 키값이 달라지더라도, 최종 타겟(DW/S3)에 적재되는 Silver 스키마는 반드시 동일해야 함. 스키마 강제 로직을 별도의 훅으로 분리하는 것이 장기적인 유지보수성과 데이터 정합성(Data Integrity) 확보에 절대적으로 유리함.
 """
 
-import logging
 from abc import abstractmethod
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -59,13 +63,20 @@ class AbstractTransformer(ITransformer):
         self.logger = LogManager.get_logger(self.__class__.__name__)
 
     @log_decorator()
-    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        self, 
+        data: Union[pd.DataFrame, List[Dict[str, Any]]],
+        enforce_schema: bool = True,
+        **kwargs: Any
+    ) -> pd.DataFrame:
         """데이터 변환 파이프라인의 뼈대(Template)를 실행합니다.
         
         로깅, 검증, 실제 변환, 에러 핸들링의 순서를 엄격하게 제어합니다.
 
         Args:
             data (pd.DataFrame): 변환을 수행할 원본 데이터프레임.
+            enforce_schema (bool): 스키마 강제화를 적용할지 여부.
+            **kwargs (Any): 추가적인 메타데이터 파라미터.
 
         Returns:
             pd.DataFrame: 변환이 완료된 데이터프레임.
@@ -76,28 +87,44 @@ class AbstractTransformer(ITransformer):
         transformer_name = self.__class__.__name__
 
         try:
-            # 1. 사전 검증: 입력 데이터의 스키마 및 무결성 사전 검증
-            self._validate(data)
-
-            # 2. 변환 로직: 하위 클래스에서 구현한 실제 변환 로직 실행
-            transformed_data = self._apply_transform(data)
-
-            # 3. 결과 검증: 변환 로직의 반환값이 정상적인 DataFrame인지 확인
-            if not isinstance(transformed_data, pd.DataFrame):
+            # 0. 데이터 타입 유연화 (Reader의 List[Dict] 출력을 DataFrame으로 자동 수용)
+            if isinstance(data, list):
+                df_data = pd.DataFrame(data)
+            elif isinstance(data, pd.DataFrame):
+                df_data = data.copy()
+            else:
                 raise TransformerError(
-                    message=f"[{transformer_name}] 반환 타입 오류: DataFrame이 아닙니다. (Type: {type(transformed_data)})",
+                    message=f"[{transformer_name}] 지원하지 않는 입력 타입입니다. (Type: {type(data)})",
+                    should_retry=False
+                )
+
+            # 1. 사전 검증: 입력 데이터와 주입된 메타데이터(**kwargs) 검증
+            self._validate(df_data, **kwargs)
+
+            # 2. 변환 로직: 실제 값과 구조를 변환(Flatten 등)하는 알고리즘 실행
+            transformed_data = self._apply_transform(df_data, **kwargs)
+
+            # 3. 스키마 강제화: 적재를 위한 최종 타입/컬럼명 캐스팅
+            if enforce_schema:
+                final_data = self._enforce_schema(transformed_data, **kwargs)
+                self.logger.debug(f"[{transformer_name}] Production 모드: Schema Enforcement 적용 완료")
+            else:
+                final_data = transformed_data
+                self.logger.info(f"[{transformer_name}] EDA 탐색 모드: Schema Enforcement 건너뜀 (Bypass)")
+
+            # 4. 결과 검증
+            if not isinstance(final_data, pd.DataFrame):
+                raise TransformerError(
+                    message=f"[{transformer_name}] 반환 타입 오류: DataFrame이 아닙니다. (Type: {type(final_data)})",
                     should_retry=False
                 )
             
-            return transformed_data
+            return final_data
 
         except ETLError as e:
-            # 이미 도메인 에러로 규격화되었으므로 그대로 전파
             raise e
             
         except Exception as e:
-            # 판다스 내부 C엔진 에러(MemoryError 등)와 같은 예측 불가능한 예외를 
-            # 파이프라인 공통 규격인 TransformerError로 래핑하여 추적성 확보
             error_msg = f"[{transformer_name}] 변환 로직 수행 중 예기치 않은 오류 발생"
             self.logger.error(f"{error_msg} | Error: {e}", exc_info=True)
             raise TransformerError(
@@ -108,7 +135,7 @@ class AbstractTransformer(ITransformer):
             ) from e
 
     @abstractmethod
-    def _validate(self, data: pd.DataFrame) -> None:
+    def _validate(self, data: pd.DataFrame, **kwargs: Any) -> None:
         """데이터 변환 전 입력 DataFrame과 설정의 무결성을 검증합니다.
         
         구현체는 `self.config`를 참조하여 필수 파라미터 유무를 확인하고,
@@ -123,7 +150,7 @@ class AbstractTransformer(ITransformer):
         pass
 
     @abstractmethod
-    def _apply_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _apply_transform(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
         """실제 데이터 변환 알고리즘을 수행합니다.
         
         모든 구체 클래스는 이 메서드 내부에 벡터화된(Vectorized) 
@@ -134,5 +161,18 @@ class AbstractTransformer(ITransformer):
 
         Returns:
             pd.DataFrame: 변환이 완료된 데이터프레임.
+        """
+        pass
+
+    @abstractmethod
+    def _enforce_schema(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
+        """최종 데이터프레임의 컬럼명과 데이터 타입을 표준 스키마에 맞게 강제합니다.
+        
+        Args:
+            data (pd.DataFrame): 비즈니스 변환(_apply_transform)이 끝난 데이터프레임.
+            **kwargs (Any): 파이프라인 실행 메타데이터.
+            
+        Returns:
+            pd.DataFrame: 최종 검수 및 캐스팅이 완료된 데이터프레임.
         """
         pass
