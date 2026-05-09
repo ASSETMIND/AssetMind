@@ -15,7 +15,7 @@ const HeartIcon = ({ active }: { active: boolean }) => (
 
 // ─── SlotPrice ────────────────────────────────────────────────
 
-const SlotPrice = ({ value }: { value: number }) => {
+const SlotPrice = ({ value, fontSize = '15px' }: { value: number; fontSize?: string }) => {
 	const [display, setDisplay] = useState(value.toLocaleString('ko-KR') + '원');
 	const [animating, setAnimating] = useState(false);
 	const prevRef = useRef(value);
@@ -32,7 +32,7 @@ const SlotPrice = ({ value }: { value: number }) => {
 	}, [value]);
 
 	return (
-		<span style={{ display: 'inline-block', overflow: 'hidden', height: '1.2em', fontSize: '15px', fontWeight: 500, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: '#FFFFFF', position: 'relative' }}>
+		<span style={{ display: 'inline-block', overflow: 'hidden', height: '1.2em', fontSize, fontWeight: 500, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: '#FFFFFF', position: 'relative' }}>
 			<span style={{ display: 'inline-block', animation: animating ? 'slotEnter 200ms ease-out forwards' : 'none' }}>
 				{display}
 			</span>
@@ -74,30 +74,49 @@ const StockTableRow = ({ row, sortType, isMobile, isTablet, onFavoriteToggle }: 
 			? `${row.tradeAmount.toLocaleString('ko-KR')}주`
 			: `${Math.floor(row.tradeAmount / 100000000).toLocaleString('ko-KR')}억원`;
 
-	// ── 모바일 레이아웃 (종목명 + 현재가 + 등락률만) ──────────
+	// ── 모바일: 순위 / 종목명 / 현재가 / 등락률 가로 배치 ────
 	if (isMobile) {
 		return (
 			<div
 				onClick={() => navigate(`/stock/${row.id}`)}
-				style={{ display: 'flex', alignItems: 'center', height: '60px', paddingLeft: '12px', paddingRight: '12px', backgroundColor: bgColor, transition: 'background-color 150ms', cursor: 'pointer', boxSizing: 'border-box' }}
+				style={{ display: 'flex', alignItems: 'center', height: '56px', paddingLeft: '12px', paddingRight: '12px', backgroundColor: bgColor, transition: 'background-color 150ms', cursor: 'pointer', boxSizing: 'border-box' }}
 			>
-				<button onClick={(e) => { e.stopPropagation(); onFavoriteToggle?.(row.id); }} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginRight: '8px' }}>
-					<HeartIcon active={row.isFavorite} />
-				</button>
-				<span style={{ fontSize: '13px', fontWeight: 700, color: '#9194A1', minWidth: '20px', marginRight: '8px' }}>{row.rank}</span>
-				<div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#21242C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: '8px' }}>
-					<span style={{ fontSize: '10px', color: '#9194A1' }}>{row.name[0]}</span>
+				{/* 즐겨찾기 + 순위 — 40px */}
+				<div style={{ width: '40px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+					<button onClick={(e) => { e.stopPropagation(); onFavoriteToggle?.(row.id); }} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
+						<HeartIcon active={row.isFavorite} />
+					</button>
+					<span style={{ fontSize: '13px', fontWeight: 700, color: '#9194A1' }}>{row.rank}</span>
 				</div>
-				<span style={{ flex: 1, fontSize: '14px', fontWeight: 500, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-				<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-					<span style={{ fontSize: '14px', fontWeight: 500, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums' }}>{row.price.toLocaleString('ko-KR')}원</span>
+
+				{/* 로고 + 종목명 — 나머지 공간 */}
+				<div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+					{row.logoUrl ? (
+						<img src={row.logoUrl} alt={row.name} style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+					) : (
+						<div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#21242C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+							<span style={{ fontSize: '10px', color: '#9194A1' }}>{row.name[0]}</span>
+						</div>
+					)}
+					<span style={{ fontSize: '14px', fontWeight: 500, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+						{row.name}
+					</span>
+				</div>
+
+				{/* 현재가 — 80px */}
+				<div style={{ width: '80px', flexShrink: 0, textAlign: 'right' }}>
+					<SlotPrice value={row.price} fontSize='14px' />
+				</div>
+
+				{/* 등락률 — 60px */}
+				<div style={{ width: '60px', flexShrink: 0, textAlign: 'right' }}>
 					<PriceChangeToken value={row.changeRate} />
 				</div>
 			</div>
 		);
 	}
 
-	// ── 태블릿 레이아웃 (거래비율 바 숨김) ───────────────────
+	// ── 태블릿: 거래비율 바 숨김 ──────────────────────────────
 	if (isTablet) {
 		return (
 			<div
@@ -116,16 +135,16 @@ const StockTableRow = ({ row, sortType, isMobile, isTablet, onFavoriteToggle }: 
 					</div>
 					<span style={{ fontSize: '14px', fontWeight: 500, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
 				</div>
-				<div style={{ width: '90px', display: 'flex', justifyContent: 'flex-end' }}><SlotPrice value={row.price} /></div>
-				<div style={{ width: '90px', display: 'flex', justifyContent: 'flex-end' }}><PriceChangeToken value={row.changeRate} /></div>
-				<div style={{ width: '110px', display: 'flex', justifyContent: 'flex-end' }}>
+				<div style={{ width: '90px', display: 'flex', justifyContent: 'flex-end' }}><SlotPrice value={row.price} fontSize='14px' /></div>
+				<div style={{ width: '80px', display: 'flex', justifyContent: 'flex-end' }}><PriceChangeToken value={row.changeRate} /></div>
+				<div style={{ width: '100px', display: 'flex', justifyContent: 'flex-end' }}>
 					<span style={{ fontSize: '13px', fontWeight: 500, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums' }}>{tradeAmountStr}</span>
 				</div>
 			</div>
 		);
 	}
 
-	// ── 데스크톱 레이아웃 ─────────────────────────────────────
+	// ── 데스크톱 ──────────────────────────────────────────────
 	return (
 		<div
 			onClick={() => navigate(`/stock/${row.id}`)}
@@ -175,19 +194,40 @@ export default function StockTable({ rows, sortType, onFavoriteToggle, className
 
 	return (
 		<div className={className ?? ''} style={{ width: '100%' }}>
-			{/* 헤더 — 모바일은 간소화 */}
-			{!isMobile && (
+			{/* 헤더 */}
+			{isMobile ? (
+				// 모바일 헤더 — 순위 / 종목명 / 현재가 / 등락률 각각 별도 컬럼
+				<div style={{ display: 'flex', alignItems: 'center', padding: '0 12px 4px', boxSizing: 'border-box' }}>
+					{/* 순위 — 40px */}
+					<div style={{ width: '40px', flexShrink: 0 }}>
+						<span style={{ fontSize: '12px', color: '#9194A1' }}>순위</span>
+					</div>
+					{/* 종목명 — 나머지 */}
+					<div style={{ flex: 1 }}>
+						<span style={{ fontSize: '12px', color: '#9194A1' }}>종목명</span>
+					</div>
+					{/* 현재가 — 80px */}
+					<div style={{ width: '80px', flexShrink: 0, textAlign: 'right' }}>
+						<span style={{ fontSize: '12px', color: '#9194A1' }}>현재가</span>
+					</div>
+					{/* 등락률 — 60px */}
+					<div style={{ width: '60px', flexShrink: 0, textAlign: 'right' }}>
+						<span style={{ fontSize: '12px', color: '#9194A1' }}>등락률</span>
+					</div>
+				</div>
+			) : (
+				// 태블릿/데스크톱 헤더
 				<div style={{ width: '100%', height: '26px', display: 'flex', alignItems: 'center', paddingLeft: isTablet ? '12px' : '16px', paddingRight: isTablet ? '12px' : '16px', boxSizing: 'border-box' }}>
 					<div style={{ flex: 1 }}>
-						<span style={{ fontSize: '13px', fontWeight: 400, color: '#9194A1' }}>순위</span>
+						<span style={{ fontSize: '13px', color: '#9194A1' }}>순위</span>
 					</div>
 					<div style={{ width: isTablet ? '90px' : '100px', display: 'flex', justifyContent: 'flex-end' }}>
 						<span style={{ fontSize: '13px', color: '#9194A1' }}>현재가</span>
 					</div>
-					<div style={{ width: isTablet ? '90px' : '100px', display: 'flex', justifyContent: 'flex-end' }}>
+					<div style={{ width: isTablet ? '80px' : '100px', display: 'flex', justifyContent: 'flex-end' }}>
 						<span style={{ fontSize: '13px', color: '#9194A1' }}>등락률</span>
 					</div>
-					<div style={{ width: isTablet ? '110px' : '130px', display: 'flex', justifyContent: 'flex-end' }}>
+					<div style={{ width: isTablet ? '100px' : '130px', display: 'flex', justifyContent: 'flex-end' }}>
 						<span style={{ fontSize: '13px', color: '#9194A1' }}>{sortType === 'volume' ? '거래량 순' : '거래대금 순'}</span>
 					</div>
 					{!isTablet && (
@@ -195,12 +235,6 @@ export default function StockTable({ rows, sortType, onFavoriteToggle, className
 							<span style={{ fontSize: '13px', color: '#9194A1' }}>거래 비율</span>
 						</div>
 					)}
-				</div>
-			)}
-			{isMobile && (
-				<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 12px', boxSizing: 'border-box' }}>
-					<span style={{ fontSize: '12px', color: '#9194A1' }}>순위 / 종목명</span>
-					<span style={{ fontSize: '12px', color: '#9194A1' }}>현재가 / 등락률</span>
 				</div>
 			)}
 
