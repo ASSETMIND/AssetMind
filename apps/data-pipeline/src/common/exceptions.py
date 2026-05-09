@@ -152,6 +152,30 @@ class AuthError(HttpError):
 # 5. Transformer Layer Detailed Exceptions
 # ==============================================================================
 
+class TransformerInitializationError(ETLError):
+    """Transformer 구체 클래스의 지연 초기화, 동적 임포트, 정책 바인딩 중 발생하는 오류.
+    
+    [설계 의도] 
+    데이터를 실제로 변환(Transform)하기 전, 파이프라인 준비 단계에서 발생하는 
+    오류를 `TransformerError`(런타임 변환 오류)와 분리하여 추적성(Observability)을 높입니다.
+    """
+    
+    def __init__(
+        self, 
+        message: str, 
+        original_exception: Exception = None
+    ):
+        """
+        Args:
+            message (str): 에러 발생 상세 사유.
+            original_exception (Exception, optional): 근본 원인이 된 파이썬 네이티브 예외.
+        """
+        super().__init__(
+            message=message, 
+            should_retry=False, # 초기화 에러는 코드/설정 문제이므로 재시도(Retry)하지 않음
+            original_exception=original_exception
+        )
+
 class MergeKeyNotFoundError(TransformerError):
     """병합 기준 키(Join Keys)가 대상 데이터프레임에 존재하지 않을 때 발생하는 예외.
     
