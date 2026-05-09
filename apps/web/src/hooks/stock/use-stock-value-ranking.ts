@@ -45,7 +45,6 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 
 	useEffect(() => {
 		if (isVisible) {
-			console.log('Tab visible: Refreshing stock ranking data...');
 			refetchRef.current();
 		}
 	}, [isVisible]);
@@ -55,7 +54,6 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 
 		const topic = `/topic/ranking/${type.toLowerCase()}`;
 		const subscription = subscribe(topic, (raw: unknown) => {
-			console.log('[subscribe] raw message received:', raw);
 			// MSW mock: { type: 'RANKING_VALUE_UPDATE', data: [...] }
 			const msg = raw as { type?: string; data?: any[] };
 			const list = Array.isArray(msg.data)
@@ -64,14 +62,12 @@ export const useStockRanking = (type: RankingType = 'VALUE', limit = 40) => {
 					? (raw as any[])
 					: [raw];
 
-			console.log('[subscribe] parsed list length:', list.length);
 			const parsed = list.map(formatStockData);
 			messageBuffer.current.push(...parsed);
 		});
 
 		const batchInterval = setInterval(() => {
 			if (messageBuffer.current.length === 0) return;
-			console.log('[batchInterval] flushing', messageBuffer.current.length, 'items');
 			const currentBuffer = [...messageBuffer.current];
 			messageBuffer.current = [];
 			updateStocks(currentBuffer, type, limit);

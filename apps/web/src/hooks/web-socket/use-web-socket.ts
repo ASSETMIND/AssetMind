@@ -119,7 +119,6 @@ export const useWebSocket = (
 
 	const subscribe = useCallback(
 		(destination: string, callback?: (msg: unknown) => void) => {
-			console.log('[subscribe] called, connected:', client.current?.connected, 'destination:', destination);
 			if (!client.current?.connected) return;
 			return client.current.subscribe(destination, (message: IMessage) => {
 				if (callback) {
