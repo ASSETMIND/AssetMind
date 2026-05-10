@@ -251,10 +251,15 @@ export const OrderbookTable = ({
 	const maxAskQty = Math.max(...asks.map((a) => a.quantity), 1);
 	const maxBidQty = Math.max(...bids.map((b) => b.quantity), 1);
 
+	const isMobile = viewport === 'mobile';
+	const isTablet = viewport === 'tablet';
+	const containerWidth = isMobile || isTablet ? '100%' : '340px';
+	const containerHeight = isMobile ? 'auto' : '820px';
+
 	return (
 		<div
 			className={className}
-			style={{ width: '340px', height: '820px', backgroundColor: '#1C1D21', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', overflow: 'hidden', boxSizing: 'border-box' }}
+			style={{ width: containerWidth, height: containerHeight, backgroundColor: '#1C1D21', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', overflow: 'hidden', boxSizing: 'border-box' }}
 		>
 			{/* 배경 그라디언트 */}
 			<div style={{ position: 'absolute', top: 0, left: 0, width: '200px', height: '200px', background: 'radial-gradient(ellipse at top left, rgba(37,106,244,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
