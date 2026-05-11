@@ -25,6 +25,7 @@ dependencies = [
     "pendulum (>=3.2.0,<4.0.0)",
     "apache-airflow-providers-postgres (>=6.6.3,<7.0.0)",
     "psycopg2-binary (>=2.9.12,<3.0.0)",
+    "ipykernel (>=7.2.0,<8.0.0)",
 ]
 
 
@@ -35,6 +36,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
 apache-airflow = "^3.2.0"
+ipykernel = "^7.2.0"
 
 [tool.pytest.ini_options]
 pythonpath = [
