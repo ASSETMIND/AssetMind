@@ -55,7 +55,6 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
     volumes:
-      # [수정 완료] 언더스코어(_)로 통일된 정확한 경로 매핑
       - ./scripts/init_aws.sh:/tmp/init_aws.sh
     entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
 
@@ -87,6 +86,9 @@ services:
     ports:
       - "8080:8080"
     restart: always
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__WEBSERVER__SHOW_TRIGGER_FORM_IF_NO_PARAMS: "True"
     depends_on:
       airflow-postgres:
         condition: service_healthy
