@@ -9,24 +9,31 @@ import CompanyInfoSection from '../components/stock-detail/company-info-section'
 import StockHeaderCard from '../components/stock-detail/stock-header-card';
 import ErrorBoundary from '../components/common/error-boundary';
 import { useViewport } from '../hooks/common/use-viewport';
+import MobileTabSwitcher from '../components/common/mobile-tab-switcher';
+import {
+	ChartIcon,
+	StockInfoIcon,
+	TradeStatusIcon,
+	AIPredictionIcon,
+} from '../components/common/mobile-tab-icons';
 
 // ─── 탭 정의 ──────────────────────────────────────────────────
 
 type TabType = 'chart' | 'info' | 'trade' | 'ai';
 
-// 데스크톱/태블릿: 3탭 (AI는 각 탭에 사이드로 표시)
+// 데스크톱/태블릿: 3탭
 const TABS_DESKTOP: { value: TabType; label: string }[] = [
 	{ value: 'chart', label: '차트·호가' },
 	{ value: 'info',  label: '종목정보' },
 	{ value: 'trade', label: '거래현황' },
 ];
 
-// 모바일: 4탭 (AI 별도 탭)
-const TABS_MOBILE: { value: TabType; label: string }[] = [
-	{ value: 'chart', label: '차트·호가' },
-	{ value: 'info',  label: '종목정보' },
-	{ value: 'trade', label: '거래현황' },
-	{ value: 'ai',    label: 'AI 예측' },
+// 모바일: MobileTabSwitcher용 4탭
+const TABS_MOBILE = [
+	{ label: '차트·호가', value: 'chart', icon: <ChartIcon color='currentColor' /> },
+	{ label: '종목정보',  value: 'info',  icon: <StockInfoIcon color='currentColor' /> },
+	{ label: '거래현황',  value: 'trade', icon: <TradeStatusIcon color='currentColor' /> },
+	{ label: 'AI 예측',   value: 'ai',    icon: <AIPredictionIcon color='currentColor' /> },
 ];
 
 // ─── StockDetailPage ───────────────────────────────────────────
@@ -38,53 +45,52 @@ export default function StockDetailPage() {
 	const isMobile = viewport === 'mobile';
 	const isTablet = viewport === 'tablet';
 
-	const tabs = isMobile ? TABS_MOBILE : TABS_DESKTOP;
-
 	return (
 		<div className='w-full min-h-screen text-gray-200'>
 			<div style={{
 				maxWidth: isMobile || isTablet ? '100%' : '1400px',
 				margin: '0 auto',
 				padding: isMobile ? '0 12px' : '0 16px',
+				// 모바일에서 하단 탭 바(64px) 가려지지 않도록 패딩 확보
+				paddingBottom: isMobile ? '80px' : '0',
 			}}>
 				<div style={{ paddingTop: isMobile ? '16px' : '40px' }}>
 					{/* 종목 헤더 */}
 					<StockHeaderCard />
 
-					{/* 탭 */}
-					<div style={{
-						display: 'flex',
-						gap: isMobile ? '12px' : '32px',
-						paddingTop: '16px',
-						paddingBottom: '8px',
-						borderBottom: '1px solid #2F3037',
-						overflowX: 'auto',
-						scrollbarWidth: 'none',
-					}}>
-						{tabs.map((tab) => (
-							<button
-								key={tab.value}
-								onClick={() => setActiveTab(tab.value)}
-								style={{
-									background: 'none',
-									border: 'none',
-									cursor: 'pointer',
-									paddingBottom: '8px',
-									fontSize: isMobile ? '14px' : '16px',
-									fontWeight: activeTab === tab.value ? 700 : 400,
-									color: activeTab === tab.value ? '#FFFFFF' : '#9194A1',
-									borderBottom: activeTab === tab.value
-										? '2px solid #FFFFFF'
-										: '2px solid transparent',
-									transition: 'color 0.15s, border-color 0.15s',
-									whiteSpace: 'nowrap',
-									flexShrink: 0,
-								}}
-							>
-								{tab.label}
-							</button>
-						))}
-					</div>
+					{/* 데스크톱/태블릿 상단 탭 */}
+					{!isMobile && (
+						<div style={{
+							display: 'flex',
+							gap: '32px',
+							paddingTop: '16px',
+							paddingBottom: '8px',
+							borderBottom: '1px solid #2F3037',
+						}}>
+							{TABS_DESKTOP.map((tab) => (
+								<button
+									key={tab.value}
+									onClick={() => setActiveTab(tab.value)}
+									style={{
+										background: 'none',
+										border: 'none',
+										cursor: 'pointer',
+										paddingBottom: '8px',
+										fontSize: '16px',
+										fontWeight: activeTab === tab.value ? 700 : 400,
+										color: activeTab === tab.value ? '#FFFFFF' : '#9194A1',
+										borderBottom: activeTab === tab.value
+											? '2px solid #FFFFFF'
+											: '2px solid transparent',
+										transition: 'color 0.15s, border-color 0.15s',
+										whiteSpace: 'nowrap',
+									}}
+								>
+									{tab.label}
+								</button>
+							))}
+						</div>
+					)}
 				</div>
 
 				{/* 탭 콘텐츠 */}
@@ -119,7 +125,7 @@ export default function StockDetailPage() {
 									</div>
 								</div>
 							)}
-							{/* 모바일: 차트 + 호가만 (AI는 별도 탭) */}
+							{/* 모바일 */}
 							{isMobile && (
 								<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 									<ErrorBoundary><ChartSection /></ErrorBoundary>
@@ -181,6 +187,15 @@ export default function StockDetailPage() {
 					)}
 				</div>
 			</div>
+
+			{/* 모바일 하단 고정 탭 바 */}
+			{isMobile && (
+				<MobileTabSwitcher
+					items={TABS_MOBILE}
+					value={activeTab}
+					onChange={(val) => setActiveTab(val as TabType)}
+				/>
+			)}
 		</div>
 	);
 }
