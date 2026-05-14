@@ -1,10 +1,12 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
+import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisSubscriptionRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +41,7 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final KisRealTimeDataParser dataParser;
+    private final KisOrderBookParser orderBookParser;
     private final KisEventMapper eventMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final TaskScheduler taskScheduler;
@@ -57,12 +60,13 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     private ScheduledFuture<?> pingTask;
 
     public KisWebSocketHandler(String approveKey, Account account, List<String> chunk, ObjectMapper objectMapper, KisRealTimeDataParser dataParser,
-            KisEventMapper eventMapper, ApplicationEventPublisher eventPublisher, TaskScheduler taskScheduler) {
+            KisOrderBookParser orderBookParser, KisEventMapper eventMapper, ApplicationEventPublisher eventPublisher, TaskScheduler taskScheduler) {
         this.approveKey = approveKey;
         this.account = account;
         this.chunk = chunk;
         this.objectMapper = objectMapper;
         this.dataParser = dataParser;
+        this.orderBookParser = orderBookParser;
         this.eventMapper = eventMapper;
         this.eventPublisher = eventPublisher;
         this.taskScheduler = taskScheduler;
@@ -176,18 +180,34 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         log.info(">>> [KIS WS Handler] 제어 메시지: {}", payload);
     }
 
-    // 실시간 주식 데이터 처리
+    // 실시간 체결 데이터 처리
     private void handleRealTimeData(String payload) {
-        List<KisRealTimeData> dataList = dataParser.parse(payload);
+        String[] parts = payload.split("\\|");
+        String trId = parts[1];
 
-        dataList.forEach(data -> {
-            try {
-                log.info("[KIS WS Handler] 실시간 체결 데이터 : {}", data.toString());
-                eventPublisher.publishEvent(eventMapper.toEvent(data));
-            } catch (Exception e) {
-                log.error("[KIS WS Handler] 개별 체결 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
-            }
-        });
+        if ("H0STCNT0".equals(trId)) {
+            List<KisRealTimeData> dataList = dataParser.parse(payload);
+
+            dataList.forEach(data -> {
+                try {
+                    log.info("[KIS WS Handler] 실시간 체결 데이터 : {}", data.toString());
+                    eventPublisher.publishEvent(eventMapper.toStockTradeEvent(data));
+                } catch (Exception e) {
+                    log.error("[KIS WS Handler] 개별 체결 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
+                }
+            });
+        } else if ("H0STASP0".equals(trId)) {
+            List<OrderBook> dataList = orderBookParser.parse(payload);
+
+            dataList.forEach(data -> {
+                try {
+                    log.info("[KIS WS Handler] 실시간 호가 데이터: {}", data.toString());
+                    eventPublisher.publishEvent(eventMapper.toOrderBookEvent(data));
+                } catch (Exception e) {
+                    log.error("[KIS WS Handler] 호가 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
+                }
+            });
+        }
     }
 
     @Override
@@ -214,22 +234,27 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         if (subscribedStock.contains(stockCode)) return;
 
         try {
-            KisSubscriptionRequest request = KisSubscriptionRequest.of(approveKey, stockCode);
-            String jsonPayload = objectMapper.writeValueAsString(request);
-
             if (currentSession != null && currentSession.isOpen()) {
-                currentSession.sendMessage(new TextMessage(jsonPayload));
+                // 체결 데이터 (H0STCNT0) 구독 요청
+                KisSubscriptionRequest executionRequest = KisSubscriptionRequest.of(approveKey, stockCode, "H0STCNT0");
+                currentSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(executionRequest)));
+
+                Thread.sleep(20);
+
+                KisSubscriptionRequest orderBookRequest = KisSubscriptionRequest.of(approveKey, stockCode, "H0STASP0");
+                currentSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(orderBookRequest)));
 
                 subscribedStock.add(stockCode);
+
+                log.info("[KIS WS] 구독 요청 전송 완료 (체결/호가): {}", stockCode);
             }
-            log.info("[KIS WS] 구독 요청 전송 완료: {}", stockCode);
 
         } catch (JsonProcessingException e) {
             log.error("[KIS WS] JSON 변환 오류. 종목코드: {} (구독 건너뜀)", stockCode, e);
         } catch (IOException e) {
             log.error("[KIS WS] 메시지 전송 실패 (I/O Error). 종목코드: {}", stockCode, e);
         } catch (Exception e) {
-            log.error("[KIS WS] 알 수 없는 오류 발생. 종목코드: {}", stockCode, e);
+            log.error("[KIS WS] 구독 요청 중 알 수 없는 오류 발생. 종목코드: {}", stockCode, e);
         }
     }
 
