@@ -15,6 +15,14 @@ routing:
   - prefix: "kis_vkospi_"
     schema: "kis_domestic_schema"
 
+    # 2. KIS 해외 지수/원자재/환율
+  - prefix: "kis_nasdaq_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_snp500_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_dow_"
+    schema: "kis_overseas_schema"
+
 policy:
   # ----------------------------------------------------------------------------
   # [그룹 1] KIS 국내 지수 일별 데이터 (kospi, kosdaq 공통)
@@ -49,3 +57,29 @@ policy:
       futs_prdy_oprc: { name: "futures_prev_open", type: "float32" } # 선물 전일 시가
       futs_prdy_hgpr: { name: "futures_prev_high", type: "float32" } # 선물 전일 최고가
       futs_prdy_lwpr: { name: "futures_prev_low", type: "float32" } # 선물 전일 최저가
+
+  # ----------------------------------------------------------------------------
+  # [그룹 2] KIS 해외 지수 (Nasdaq 등)
+  # 대상: KIS 해외 주식/지수 API 응답 (국내와 prefix가 다름)
+  # ----------------------------------------------------------------------------
+  kis_overseas_schema:
+    provider: "kis"
+    explode_target: ["output1", "output2"]
+    drop_columns: ["rt_cd", "msg_cd", "msg1", "msg_detail"]
+    schema:
+      # 1. 일자 및 식별 정보 (String)
+      stck_bsop_date: { name: "trade_date", type: "string" } # 영업 일자
+      hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
+      stck_shrn_iscd: { name: "ticker_code", type: "string" } # 단축 종목코드
+      prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
+      # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
+      ovrs_nmix_prpr: { name: "close", type: "float32" } # 현재가 (종가)
+      ovrs_nmix_oprc: { name: "open", type: "float32" } # 시가 (배열 데이터 기준)
+      ovrs_nmix_hgpr: { name: "high", type: "float32" } # 최고가 (배열 데이터 기준)
+      ovrs_nmix_lwpr: { name: "low", type: "float32" } # 최저가 (배열 데이터 기준)
+      ovrs_nmix_prdy_clpr: { name: "prev_price", type: "float32" } # 전일 종가
+      ovrs_nmix_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭
+      prdy_ctrt: { name: "price_change_rate", type: "float32" } # 전일 대비율
+      # 3. 거래량 (Float32)
+      acml_vol: { name: "volume", type: "float32" } # 누적 거래량
+      prdy_vol: { name: "prev_volume", type: "float32" } # 전일 거래량
