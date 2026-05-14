@@ -154,9 +154,10 @@ class S3ZstdStreamingReader(AbstractReader):
                 provider_name=self.provider_name
             )
         
-        # [설계 의도] 스트리밍 파이프라인의 오작동을 막기 위해 파일 포맷 제약(Contract)을 강제함.
-        if not source_path.endswith(".jsonl.zst"):
-            self.logger.warning(f"[{self.provider_name}] 경고: 표준 확장자(.jsonl.zst)가 아닌 파일을 시도합니다: {source_path}")
+        # [설계 의도] 단일 파일이 아닌 파티션 디렉토리(Prefix)도 허용해야 하므로
+        # 기존의 엄격한 파일 확장자 검사 대신 가벼운 정보성 로그만 남깁니다.
+        if not source_path.endswith(".zst"):
+            self.logger.debug(f"[{self.provider_name}] 파티션 Prefix 형태의 경로를 감지했습니다: {source_path}")
 
     def _generate_chunks(self, source_path: str, batch_size: int, **kwargs: Any) -> Iterator[List[Dict[str, Any]]]:
         """S3에서 Zstandard 스트림을 읽어 압축을 해제하고 JSONL을 파싱하여 리스트 형태로 순차 반환합니다.
@@ -175,86 +176,82 @@ class S3ZstdStreamingReader(AbstractReader):
         self.logger.info(f"[{self.provider_name}] S3 스트리밍 읽기 시작 - Bucket: {self._bucket_name}, Key: {source_path}")
         
         try:
-            # 1. S3 StreamingBody 요청
-            # [설계 의도] 전체 파일을 다운로드하지 않고 HTTP Socket 커넥션을 유지하며 Byte 단위로 당겨옴.
-            response = self._client.get_object(Bucket=self._bucket_name, Key=source_path)
-            streaming_body = response['Body']
-            
-            # 2. Zstandard 스트림 리더 연결
-            # [설계 의도] 빅데이터 처리 도구들이 병렬로 압축한 zstd 파일은 멀티 프레임(Multi-frame) 구조를 가질 수 있으므로,
-            # read_across_frames=True 옵션을 반드시 활성화하여 중간에 압축 해제가 끊기는 버그를 원천 차단함.
-            dctx = zstd.ZstdDecompressor()
-            zstd_reader = dctx.stream_reader(
-                streaming_body, 
-                read_across_frames=True,
-                read_size=ZSTD_READ_BUFFER_BYTES
-            )
-            
-            # 3. Text & Line 파싱 파이프라인 구축
-            # [설계 의도] C 레벨의 바이트 스트림을 파이썬 내장 TextIOWrapper로 감싸 개행문자 처리를 위임함.
-            text_stream = io.TextIOWrapper(zstd_reader, encoding='utf-8')
-            
-            batch_buffer: List[Dict[str, Any]] = []
+            # 1. Paginator를 사용하여 Prefix 하위의 모든 객체 목록 순회
+            paginator = self._client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=self._bucket_name, Prefix=source_path)
+
             total_records = 0
-            
-            # 4. 실시간 라인 파싱 및 배치 버퍼링
-            for line_number, line in enumerate(text_stream, start=1):
-                stripped_line = line.strip()
-                if not stripped_line:
-                    continue  # 빈 줄 무시
-                    
-                try:
-                    record = json.loads(stripped_line)
-                    batch_buffer.append(record)
-                    total_records += 1
-                except json.JSONDecodeError as e:
-                    # [설계 의도] 단일 라인의 JSON 파싱 에러로 전체 100GB 파이프라인이 중단되는 것은 치명적이므로,
-                    # 에러를 로깅하고 해당 라인만 스킵(Skip)하는 방어적 정책을 채택함.
-                    self.logger.error(f"[{self.provider_name}] JSON 파싱 오류 스킵 (Line {line_number}): {e} | Data: {stripped_line[:100]}...")
+            file_count = 0
+            batch_buffer: List[Dict[str, Any]] = []
+
+            for page in pages:
+                if 'Contents' not in page:
                     continue
-                
-                # 5. 메모리 보호를 위한 배치 반환 (Yield)
-                if len(batch_buffer) >= batch_size:
-                    yield batch_buffer
-                    # [설계 의도] 참조 끊기 및 GC(가비지 컬렉터) 활성화를 위해 기존 리스트를 비우고 새로 할당함
-                    batch_buffer = [] 
+
+                for obj in page['Contents']:
+                    key = obj['Key']
                     
-            # 6. 루프 종료 후 잔여 데이터 반환
+                    # 2. 파일 확장자 필터링 (가비지 파일 무시)
+                    if not (key.endswith('.jsonl.zst') or key.endswith('.json.zst')):
+                        continue
+
+                    file_count += 1
+                    self.logger.debug(f"[{self.provider_name}] 파티션 파일 처리 중: {key}")
+
+                    # 3. 개별 파일 스트리밍 파이프라인
+                    response = self._client.get_object(Bucket=self._bucket_name, Key=key)
+                    streaming_body = response['Body']
+
+                    dctx = zstd.ZstdDecompressor()
+                    zstd_reader = dctx.stream_reader(
+                        streaming_body, 
+                        read_across_frames=True, 
+                        read_size=16 * 1024 * 1024
+                    )
+                    text_stream = io.TextIOWrapper(zstd_reader, encoding='utf-8')
+
+                    for line_number, line in enumerate(text_stream, start=1):
+                        stripped_line = line.strip()
+                        if not stripped_line:
+                            continue
+                            
+                        try:
+                            batch_buffer.append(json.loads(stripped_line))
+                            total_records += 1
+                        except json.JSONDecodeError as e:
+                            self.logger.error(f"[{self.provider_name}] JSON 파싱 스킵 (Line {line_number} in {key}): {e}")
+                            continue
+
+                        # 4. 버퍼가 설정된 배치 사이즈에 도달하면 즉시 Yield
+                        if len(batch_buffer) >= batch_size:
+                            yield batch_buffer
+                            batch_buffer = []
+
+                    # 리소스 릭(Leak) 방지 명시적 종료
+                    text_stream.close()
+                    zstd_reader.close()
+                    streaming_body.close()
+
+            # 5. 모든 파티션 파일을 순환한 후 잔여 버퍼 반환
             if batch_buffer:
                 yield batch_buffer
                 
-            self.logger.info(f"[{self.provider_name}] S3 스트리밍 완료 - 총 레코드 수: {total_records}건")
+            if file_count == 0:
+                self.logger.warning(f"[{self.provider_name}] 지정된 파티션({source_path}) 내부에 처리할 '.zst' 파일이 없습니다.")
+            else:
+                self.logger.info(f"[{self.provider_name}] S3 파티션 스트리밍 완료 - 처리된 파일: {file_count}개, 총 레코드: {total_records}건")
 
         except ClientError as e:
-            # S3 권한 오류, 404 Not Found 등 AWS 인프라 에러
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             raise DataReadStreamError(
-                message=f"S3 객체 접근 실패 (Code: {error_code})",
-                source_path=source_path,
-                original_exception=e
-            ) from e
-            
-        except zstd.ZstdError as e:
-            # zstd 파일이 손상되었거나 압축 형식이 맞지 않는 경우
-            raise DataReadStreamError(
-                message="Zstandard 압축 해제 중 런타임 오류가 발생했습니다. 파일이 손상되었을 수 있습니다.",
+                message=f"S3 파티션 접근 실패 (Code: {error_code})",
                 source_path=source_path,
                 original_exception=e
             ) from e
             
         except Exception as e:
-            # 스트림 I/O 단절 등 예기치 않은 시스템 에러
             raise DataReadStreamError(
-                message="S3 스트리밍 제너레이터 실행 중 예기치 않은 오류가 발생했습니다.",
+                message="S3 파티션 스트리밍 제너레이터 실행 중 예기치 않은 오류가 발생했습니다.",
                 source_path=source_path,
                 original_exception=e
             ) from e
-        finally:
-            # [설계 의도] 제너레이터 실행 도중 외부 요인으로 중단되더라도,
-            # 열려있는 네트워크 소켓(StreamingBody)과 C 확장 메모리 리소스를 명시적으로 해제(Close)하여 리소스 릭(Leak) 방지.
-            if 'text_stream' in locals():
-                text_stream.close()
-            elif 'zstd_reader' in locals():
-                zstd_reader.close()
-            elif 'streaming_body' in locals():
-                streaming_body.close()

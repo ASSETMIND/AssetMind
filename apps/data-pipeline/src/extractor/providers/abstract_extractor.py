@@ -134,15 +134,20 @@ class AbstractExtractor(IExtractor, ABC):
         # [설계 의도] Airflow에서 명시적으로 모드를 주입하지 않으면 데일리 배치(TODAY)로 안전하게 폴백(Fallback)함.
         extract_mode = runtime_params.get("EXTRACT_MODE", "TODAY")
         
-        # 시스템 로컬 시간이 아닌, 스케줄러가 보장하는 논리적 실행일(Logical Date)을 최우선 기준으로 삼음.
-        execution_date_str = runtime_params.get("EXECUTION_DATE", datetime.now().strftime("%Y%m%d"))
-        end_dt = datetime.strptime(execution_date_str, "%Y%m%d")
+        # [설계 의도] 시스템 로컬 시간이 아닌, 스케줄러가 보장하는 실행 시점의 '어제' 날짜를 데이터 기준일로 삼음.
+        fallback_yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+        execution_date_str = runtime_params.get("EXECUTION_DATE", fallback_yesterday)
+        target_dt = datetime.strptime(execution_date_str, "%Y%m%d")
 
         if extract_mode == "LEGACY":
             start_dt = datetime.strptime(policy.base_date, "%Y%m%d")
+            end_dt = target_dt
         else:
-            # TODAY 모드: 시작일과 종료일이 동일 (하루치)
-            start_dt = end_dt
+            # [설계 의도] KIS API 등 일부 금융 API의 '시작일==종료일' 시 데이터 누락 버그를 근본적으로 해결하기 위해 
+            # 조회 범위를 [T, T+1]로 설정하여 명시적인 구간(Range)을 형성함. 
+            # 00시 실행 시 T+1 데이터는 존재하지 않으므로, API 버그를 우회하면서 정확히 T일의 데이터만 수집 가능함.
+            start_dt = target_dt - timedelta(days=1)
+            end_dt = target_dt
 
         # YAML에 정의된 원본 정책 파라미터를 복사하여 베이스 생성
         base_params = policy.params.copy()
