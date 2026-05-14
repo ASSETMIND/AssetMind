@@ -1,48 +1,113 @@
-import CloseIcon from '../icon/close';
+import { type ReactNode, useEffect, useRef, useCallback } from 'react';
 import Portal from './portal';
 
-// props로 클로즈 버튼과 내용을 정의
-type Props = {
-	children: React.ReactNode;
-	onClose?: () => void;
-};
+interface ModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+	children: ReactNode;
+	className?: string;
+	title?: string;
+	description?: string;
+}
 
-/*
-	공통 모달 스타일 컴포넌트
-	실제 컨텐츠는 children으로 주입받으며, 레이아웃과 오버레이, 블러 처리만 담당
- */
+export default function Modal({
+	isOpen,
+	onClose,
+	children,
+	className,
+	title,
+	description,
+}: ModalProps) {
+	const previousFocusRef = useRef<HTMLElement | null>(null);
+	const modalRef = useRef<HTMLDivElement>(null);
+	const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-export default function Modal({ children, onClose }: Props) {
-	/*
-      Portal을 사용해 모달을 DOM 트리의 최상위(보통 document.body)로 이동시켜 렌더링
-      부모 컴포넌트의 z-index 속성에 의해 모달이 잘리는 문제를 방지
-    */
+	const handleEscapeKey = useCallback((event: KeyboardEvent) => {
+		if (event.key === 'Escape') onClose();
+	}, [onClose]);
+
+	const handleTabKey = useCallback((event: KeyboardEvent) => {
+		if (event.key !== 'Tab' || !modalRef.current) return;
+
+		const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+			'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+		);
+
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		if (event.shiftKey) {
+			if (document.activeElement === firstElement) {
+				lastElement?.focus();
+				event.preventDefault();
+			}
+		} else {
+			if (document.activeElement === lastElement) {
+				firstElement?.focus();
+				event.preventDefault();
+			}
+		}
+	}, []);
+
+	useEffect(() => {
+		if (isOpen) {
+			previousFocusRef.current = document.activeElement as HTMLElement;
+			document.body.style.overflow = 'hidden';
+			setTimeout(() => { closeButtonRef.current?.focus(); }, 0);
+			document.addEventListener('keydown', handleEscapeKey);
+			document.addEventListener('keydown', handleTabKey);
+		} else {
+			document.body.style.overflow = '';
+			previousFocusRef.current?.focus();
+			document.removeEventListener('keydown', handleEscapeKey);
+			document.removeEventListener('keydown', handleTabKey);
+		}
+
+		return () => {
+			document.body.style.overflow = '';
+			document.removeEventListener('keydown', handleEscapeKey);
+			document.removeEventListener('keydown', handleTabKey);
+		};
+	}, [isOpen, handleEscapeKey, handleTabKey]);
+
+	if (!isOpen) return null;
+
 	return (
 		<Portal>
-			<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 transition-opacity'>
+			{/* 오버레이 */}
+			<div
+				style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }}
+			>
+				{/* 백드롭 클릭 닫기 */}
+				<div style={{ position: 'absolute', inset: 0 }} onClick={onClose} aria-hidden='true' />
+
+				{/* 모달 컨테이너 */}
 				<div
-					className='
-          relative 
-					min-w-md
-					px-8
-					py-10
-          overflow-hidden 
-          border
-          bg-bg-modal 
-          font-poppins
-          mx-4
-        '
+					ref={modalRef}
+					className={className}
+					role='dialog'
+					aria-modal='true'
+					aria-labelledby={title ? 'modal-title' : undefined}
+					aria-describedby={description ? 'modal-description' : undefined}
+					style={{ position: 'relative', zIndex: 1 }}
 				>
+					{/* 닫기 버튼 */}
 					<button
+						ref={closeButtonRef}
+						type='button'
 						onClick={onClose}
-						className='absolute top-6 right-6 cursor-pointer' // 절대위치 정의로 자리고정
-						aria-label='Close modal'
+						aria-label='모달 닫기'
+						style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: '#9194A1', display: 'flex', alignItems: 'center' }}
 					>
-						<CloseIcon />
+						<svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
+							<path d='M18 6L6 18M6 6l12 12' stroke='currentColor' strokeWidth='2' strokeLinecap='round' />
+						</svg>
 					</button>
 
-					{/* 자식 컨텐츠 영역 */}
-					<div>{children}</div>
+					{title && <h2 id='modal-title' className='sr-only'>{title}</h2>}
+					{description && <p id='modal-description' className='sr-only'>{description}</p>}
+
+					{children}
 				</div>
 			</div>
 		</Portal>
