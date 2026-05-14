@@ -7,6 +7,7 @@ import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -39,6 +40,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
     // KisWebSocketHandler 생성을 위한 의존객체들
     private final ObjectMapper objectMapper;
     private final KisRealTimeDataParser dataParser;
+    private final KisOrderBookParser orderBookParser;
     private final KisEventMapper eventMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -163,7 +165,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
         // 핸들러 생성
         KisWebSocketHandler handler = new KisWebSocketHandler(
                 approvalKey.value(), account, chunk,
-                objectMapper, dataParser, eventMapper, eventPublisher, taskScheduler
+                objectMapper, dataParser, orderBookParser, eventMapper, eventPublisher, taskScheduler
         );
 
         // 관리 리스트에 추가 및 물리적 연결 실행

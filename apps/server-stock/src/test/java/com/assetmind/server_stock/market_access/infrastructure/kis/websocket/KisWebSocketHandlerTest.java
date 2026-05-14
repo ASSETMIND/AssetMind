@@ -1,9 +1,12 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
+import com.assetmind.server_stock.market_access.domain.OrderBook;
+import com.assetmind.server_stock.market_access.domain.event.OrderBookReceivedEvent;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -54,6 +57,9 @@ class KisWebSocketHandlerTest {
     private KisRealTimeDataParser dataParser;
 
     @Mock
+    private KisOrderBookParser orderBookParser;
+
+    @Mock
     private KisEventMapper eventMapper;
 
     @Mock
@@ -78,6 +84,7 @@ class KisWebSocketHandlerTest {
                 TEST_CHUNK,
                 objectMapper,
                 dataParser,
+                orderBookParser,
                 eventMapper,
                 eventPublisher,
                 taskScheduler
@@ -115,8 +122,9 @@ class KisWebSocketHandlerTest {
             when(session.isOpen()).thenReturn(true);
             runnableCaptor.getAllValues().forEach(Runnable::run);
 
-            // Then 3: 최종적으로 메시지가 2번 전송되었는지 확인하고 대기열 비워짐 확인
-            verify(session, times(2)).sendMessage(any(TextMessage.class));
+            // Then 3: 최종적으로 메시지가 4번 전송되었는지 확인하고 대기열 비워짐 확인
+            // 2종목에 대한 체결가, 호가 메세지를 전송해야하므로 4개
+            verify(session, times(4)).sendMessage(any(TextMessage.class));
             assertThat(pendingList).isEmpty();
         }
 
@@ -131,7 +139,7 @@ class KisWebSocketHandlerTest {
             handler.subscribeNewStock(List.of("035420"));
 
             // Then: 즉시 전송 확인
-            verify(session, times(1)).sendMessage(any(TextMessage.class));
+            verify(session, times(2)).sendMessage(any(TextMessage.class));
         }
     }
 
@@ -154,6 +162,25 @@ class KisWebSocketHandlerTest {
 
             // Then
             verify(dataParser, times(1)).parse(payload);
+        }
+
+        @Test
+        @DisplayName("성공: 실시간 호가 데이터 수신 시 호가 파서를 호출하고 이벤트를 발행해야 한다.")
+        void givenOrderBookPayload_whenHandleMessage_thenInvokeOrderBookParser() throws Exception {
+            // Given
+            String payload = "0|H0STASP0|001|005930^093015^0^81000...";
+            OrderBook mockOrderBook = new OrderBook("005930", java.time.LocalTime.now(), 100L, 200L, java.util.List.of());
+            when(orderBookParser.parse(payload)).thenReturn(java.util.List.of(mockOrderBook));
+
+            OrderBookReceivedEvent mockEvent = new OrderBookReceivedEvent(mockOrderBook);
+            when(eventMapper.toOrderBookEvent(mockOrderBook)).thenReturn(mockEvent);
+
+            // When
+            handler.handleMessage(session, new TextMessage(payload));
+
+            // Then
+            verify(orderBookParser, times(1)).parse(payload);
+            verify(eventPublisher, times(1)).publishEvent(mockEvent);
         }
     }
 
@@ -191,7 +218,7 @@ class KisWebSocketHandlerTest {
             handler.subscribeNewStock(List.of("FAIL_STOCK", "SUCCESS_STOCK"));
 
             // Then
-            verify(session, times(2)).sendMessage(any(TextMessage.class));
+            verify(session, times(3)).sendMessage(any(TextMessage.class));
         }
 
         @Test
@@ -207,8 +234,8 @@ class KisWebSocketHandlerTest {
             when(dataParser.parse(payload)).thenReturn(List.of(failData, successData));
 
             RealTimeStockTradeEvent dummyEvent = RealTimeStockTradeEvent.builder().stockCode("005930").build();
-            when(eventMapper.toEvent(failData)).thenThrow(new RuntimeException("매핑 도중 에러 발생"));
-            when(eventMapper.toEvent(successData)).thenReturn(dummyEvent);
+            when(eventMapper.toStockTradeEvent(failData)).thenThrow(new RuntimeException("매핑 도중 에러 발생"));
+            when(eventMapper.toStockTradeEvent(successData)).thenReturn(dummyEvent);
 
             // When
             assertDoesNotThrow(() -> handler.handleMessage(session, new TextMessage(payload)));
@@ -222,7 +249,7 @@ class KisWebSocketHandlerTest {
         @DisplayName("실패: 수신 메시지 파싱 중 치명적 에러가 발생해도 세션이 죽지 않아야 한다")
         void givenFatalError_whenHandleMessage_thenCatchAndLog(CapturedOutput output) throws Exception {
             // Given
-            String badPayload = "CRITICAL_BAD_PAYLOAD";
+            String badPayload = "0|H0STCNT0|001|DummyData...";
             when(dataParser.parse(badPayload)).thenThrow(new NullPointerException("Parser Crashed!"));
 
             // When
