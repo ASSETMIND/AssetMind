@@ -3,6 +3,7 @@ package com.assetmind.server_stock.market_access.infrastructure.kis.websocket.pa
 import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.market_access.domain.OrderBook.Level;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,8 @@ public class KisOrderBookParser {
 
     private static final String FIRST_DELIMITER = "\\|";
     private static final String SECOND_DELIMITER = "\\^";
+
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HHmmss");
 
     public List<OrderBook> parse(String payload) {
         List<OrderBook> resultList = new ArrayList<>();
@@ -86,9 +89,10 @@ public class KisOrderBookParser {
 
         return OrderBook.builder()
                 .stockCode(stockCode)
-                .marketTime(LocalTime.parse(timeStr))
+                .marketTime(LocalTime.parse(timeStr, TIME_FORMATTER))
                 .totalAskSize(totalAskSize)
                 .totalBidSize(totalBidSize)
+                .levels(levels)
                 .build();
     }
 }
