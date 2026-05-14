@@ -7,6 +7,7 @@ import com.assetmind.server_stock.market_access.domain.MarketTokenProvider;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -39,6 +40,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
     // KisWebSocketHandler 생성을 위한 의존객체들
     private final ObjectMapper objectMapper;
     private final KisRealTimeDataParser dataParser;
+    private final KisOrderBookParser orderBookParser;
     private final KisEventMapper eventMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -48,7 +50,8 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
     // 활성화된 핸들러(세션)들을 추적 및 관리
     private final List<KisWebSocketHandler> activeHandlers = new CopyOnWriteArrayList<>();
 
-    private static final int MAX_SUBSCRIBE_PER_SESSION = 40;
+    // 1종목당 체결, 호가를 동시에 구독해야하므로, 계좌 앱키 유량한계 때문에 세션당 최대 할당 종목 수는 20개
+    private static final int MAX_SUBSCRIBE_PER_SESSION = 20;
 
     @Override
     public void prepareConnection() {
@@ -69,7 +72,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
 
         List<Account> accounts = kisProperties.getAccounts();
 
-        // KIS 웹소켓 요청 한도에 맞춰 40개씩 분할
+        // KIS 웹소켓 요청 한도에 맞춰 20개씩 분할
         List<List<String>> partitionedStocks = partitionList(stockCodes, MAX_SUBSCRIBE_PER_SESSION);
 
         for (int i = 0; i < partitionedStocks.size(); i++) {
@@ -162,7 +165,7 @@ public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
         // 핸들러 생성
         KisWebSocketHandler handler = new KisWebSocketHandler(
                 approvalKey.value(), account, chunk,
-                objectMapper, dataParser, eventMapper, eventPublisher, taskScheduler
+                objectMapper, dataParser, orderBookParser, eventMapper, eventPublisher, taskScheduler
         );
 
         // 관리 리스트에 추가 및 물리적 연결 실행
