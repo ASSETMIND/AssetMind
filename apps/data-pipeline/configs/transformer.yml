@@ -1,0 +1,51 @@
+# ==============================================================================
+# 데이터 정제 정책 (Transformer Policy)
+#
+# 설계 원칙:
+# 1. API 공급자(Provider) 및 데이터의 응답 형태(Schema Family)를 기준으로 그룹핑
+# 2. 코드 수정 없이 YAML 설정만으로 평탄화(Flatten), 컬럼 제거, 타입 캐스팅을 제어
+# ==============================================================================
+
+routing:
+  # 1. KIS 국내 지수
+  - prefix: "kis_kospi_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_kosdaq_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_vkospi_"
+    schema: "kis_domestic_schema"
+
+policy:
+  # ----------------------------------------------------------------------------
+  # [그룹 1] KIS 국내 지수 일별 데이터 (kospi, kosdaq 공통)
+  # 대상: KIS 국내 주식/지수 API 응답 형태
+  # ----------------------------------------------------------------------------
+  kis_domestic_schema:
+    provider: "kis"
+    # 1. 평탄화(Flattening) 대상 타겟 컬럼
+    # 이 컬럼 내부의 딕셔너리 키들이 새로운 컬럼으로 전개됩니다.
+    explode_target: ["output1", "output2"]
+    # 2. 적재 전 제거할 불필요한 원본 컬럼명 (API 메타데이터 등)
+    drop_columns: ["rt_cd", "msg_cd", "msg1", "msg_detail"]
+    # 3. Silver 계층 표준 스키마 매핑 및 데이터 타입 강제 (Data Contract)
+    schema:
+      # 1. 일자 및 식별 정보 (String)
+      stck_bsop_date: { name: "trade_date", type: "string" } # 주식 영업 일자
+      hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
+      bstp_cls_code: { name: "sector_code", type: "string" } # 업종 구분 코드
+      prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
+      # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
+      bstp_nmix_prpr: { name: "close", type: "float32" } # 업종 지수 현재가 (종가)
+      bstp_nmix_oprc: { name: "open", type: "float32" } # 업종 지수 시가
+      bstp_nmix_hgpr: { name: "high", type: "float32" } # 업종 지수 최고가
+      bstp_nmix_lwpr: { name: "low", type: "float32" } # 업종 지수 최저가
+      prdy_nmix: { name: "prev_price", type: "float32" } # 전일 지수
+      bstp_nmix_prdy_ctrt: { name: "price_change_rate", type: "float32" } # 업종 지수 전일 대비율
+      # 3. 거래량 및 거래 대금 (Float32)
+      acml_vol: { name: "volume", type: "float32" } # 누적 거래량
+      prdy_vol: { name: "prev_volume", type: "float32" } # 전일 거래량
+      acml_tr_pbmn: { name: "trading_value", type: "float32" } # 누적 거래 대금
+      # 4. 선물 관련 정보 (Float32)
+      futs_prdy_oprc: { name: "futures_prev_open", type: "float32" } # 선물 전일 시가
+      futs_prdy_hgpr: { name: "futures_prev_high", type: "float32" } # 선물 전일 최고가
+      futs_prdy_lwpr: { name: "futures_prev_low", type: "float32" } # 선물 전일 최저가
