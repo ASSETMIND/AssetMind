@@ -134,17 +134,35 @@ class KISExtractor(AbstractExtractor):
         # 4. 헤더 구성
         # [설계 의도] KIS 명세에 따라 App Key, Secret, Token, TR_ID를 모두 HTTP Header에 주입.
         headers = {
-            "content-type": "application/json; charset=utf-8",
+            "content-type": "application/json",
             "authorization": token,
             "appkey": self.app_key,
             "appsecret": self.app_secret,
-            "tr_id": policy.tr_id
+            "tr_id": policy.tr_id,
+            "custtype": "P"
         }
 
         # 5. 파라미터 병합
         # [설계 의도] 정적 설정(policy.params)을 기본값으로 깔고, 스케줄러 등이 주입한
         # 동적 설정(request.params)으로 덮어쓰기하여 런타임 유연성을 극대화함.
         merged_params = {**policy.params, **request.params}
+
+        if "FID_INPUT_ISCD" in merged_params:
+            iscd = str(merged_params["FID_INPUT_ISCD"])
+            
+            # 5-1. 국내 지수: KIS 규격은 4자리(예: 0021)입니다. YAML에 5자리(예: 00021)로 인입될 경우 보정합니다.
+            if policy.domain == "domestic-stock" and len(iscd) == 5 and iscd.startswith("0"):
+                merged_params["FID_INPUT_ISCD"] = iscd[1:]
+                
+            # 5-2. 해외 지수: QNDAQ 등 타사 범용 규격을 KIS 전용 티커 규격으로 강제 맵핑합니다.
+            elif policy.domain == "overseas-price":
+                ticker_map = {
+                    "QNDAQ": "COMP",  # 나스닥 종합
+                    "PSPX": "SPX",    # S&P 500
+                    "P.DJI": "DJI"    # 다우존스
+                }
+                if iscd in ticker_map:
+                    merged_params["FID_INPUT_ISCD"] = ticker_map[iscd]
 
         # 6. 비동기 호출 수행
         return await self.http_client.get(url, headers=headers, params=merged_params)

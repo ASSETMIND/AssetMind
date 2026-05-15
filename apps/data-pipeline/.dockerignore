@@ -1,0 +1,10 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+
+# Data & Logs (빌드 시 불필요한 대용량 파일들)
+.localstack/
+logs/
+postgres-db-volume/
+airflow-db-volume/

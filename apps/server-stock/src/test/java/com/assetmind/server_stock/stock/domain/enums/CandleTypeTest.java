@@ -2,8 +2,7 @@ package com.assetmind.server_stock.stock.domain.enums;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.assetmind.server_stock.stock.exception.InvalidStockParameterException;
-import org.assertj.core.api.Assertions;
+import com.assetmind.server_stock.stock.exception.InvalidChartParameterException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,11 +38,11 @@ public class CandleTypeTest {
 
         // When & Then
         assertThatThrownBy(() -> CandleType.from(invalidInput))
-                .isInstanceOf(InvalidStockParameterException.class)
+                .isInstanceOf(InvalidChartParameterException.class)
                 .hasMessageContaining("지원하지 않는 캔들 타입입니다");
 
         assertThatThrownBy(() -> CandleType.from(weirdInput))
-                .isInstanceOf(InvalidStockParameterException.class);
+                .isInstanceOf(InvalidChartParameterException.class);
     }
 
     @Test
@@ -51,6 +50,6 @@ public class CandleTypeTest {
     void givenNull_whenFrom_thenThrowsException() {
         // When & Then
         assertThatThrownBy(() -> CandleType.from(null))
-                .isInstanceOf(InvalidStockParameterException.class);
+                .isInstanceOf(InvalidChartParameterException.class);
     }
 }

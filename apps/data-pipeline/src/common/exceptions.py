@@ -152,6 +152,30 @@ class AuthError(HttpError):
 # 5. Transformer Layer Detailed Exceptions
 # ==============================================================================
 
+class TransformerInitializationError(ETLError):
+    """Transformer 구체 클래스의 지연 초기화, 동적 임포트, 정책 바인딩 중 발생하는 오류.
+    
+    [설계 의도] 
+    데이터를 실제로 변환(Transform)하기 전, 파이프라인 준비 단계에서 발생하는 
+    오류를 `TransformerError`(런타임 변환 오류)와 분리하여 추적성(Observability)을 높입니다.
+    """
+    
+    def __init__(
+        self, 
+        message: str, 
+        original_exception: Exception = None
+    ):
+        """
+        Args:
+            message (str): 에러 발생 상세 사유.
+            original_exception (Exception, optional): 근본 원인이 된 파이썬 네이티브 예외.
+        """
+        super().__init__(
+            message=message, 
+            should_retry=False, # 초기화 에러는 코드/설정 문제이므로 재시도(Retry)하지 않음
+            original_exception=original_exception
+        )
+
 class MergeKeyNotFoundError(TransformerError):
     """병합 기준 키(Join Keys)가 대상 데이터프레임에 존재하지 않을 때 발생하는 예외.
     
@@ -331,4 +355,109 @@ class S3UploadError(LoaderError):
             details=details, 
             original_exception=original_exception, 
             should_retry=True
+        )
+
+# ==============================================================================
+# 7. Reader Layer Detailed Exceptions
+# ==============================================================================
+
+class ReaderError(ETLError):
+    """[R] 데이터 읽기(Reader) 단계 예외 Base."""
+    pass
+
+
+class ReaderInitializationError(ReaderError):
+    """AbstractReader 및 하위 구현체의 초기화 실패 시 발생하는 예외.
+    
+    클라이언트(Boto3, psycopg2 등) 생성 실패, 환경 변수 누락 등
+    데이터를 읽기 전 단계에서 발생하는 구성 오류를 처리합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        provider_name: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        details = {
+            "provider_name": provider_name
+        }
+        super().__init__(
+            message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class DataReadStreamError(ReaderError):
+    """스트리밍 방식으로 데이터를 읽는 과정에서 발생하는 예외.
+    
+    S3 파일 객체 파싱 에러, 네트워크 단절로 인한 스트림 끊김,
+    또는 압축 해제(Zstd) 실패 등 런타임 데이터 I/O 오류를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        source_path: str,
+        chunk_index: Optional[int] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        details = {
+            "source_path": source_path,
+            "chunk_index": chunk_index
+        }
+        # 스트림 읽기 중 발생한 일시적 네트워크 에러일 수 있으므로 재시도를 허용함
+        super().__init__(
+            message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=True
+        )
+
+
+class UnsupportedFormatError(ReaderError):
+    """Reader가 지원하지 않는 파일 포맷이나 스키마를 만났을 때 발생하는 예외.
+    
+    예를 들어, S3ZstdStreamingReader가 .parquet 파일을 처리하려고 하거나,
+    PostgresReader가 예상치 못한 테이블 스키마를 반환받았을 때 발생합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        expected_format: str,
+        actual_format: str
+    ) -> None:
+        details = {
+            "expected_format": expected_format,
+            "actual_format": actual_format
+        }
+        super().__init__(message, details=details, should_retry=False)
+
+class ReaderServiceError(ReaderError):
+    """ReaderService 계층의 파라미터 유효성 및 라우팅 단계에서 발생하는 예외.
+    
+    데이터 I/O 물리 계층(AbstractReader)으로 넘어가기 전, Entry Point에서 
+    잘못된 스토리지 식별자나 유효하지 않은 source_path가 유입되는 것을 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        target_reader: Optional[str] = None,
+        invalid_path: Optional[str] = None
+    ) -> None:
+        details = {}
+        if target_reader:
+            details["target_reader"] = target_reader
+        if invalid_path:
+            details["invalid_path"] = invalid_path
+            
+        # 파라미터 누락/오류는 재시도해도 실패하므로 should_retry=False로 강제함
+        super().__init__(
+            message,
+            details=details,
+            should_retry=False
         )
