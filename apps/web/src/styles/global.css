@@ -90,29 +90,29 @@
 	--text-b2:   14px;
 	--text-l3:   14px;
 	--text-l4:   14px;
+}
 
-	/* ── Modal ── */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 50;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--color-background-overlay);
-		backdrop-filter: blur(2px);
-	}
-	.modal-container {
-		position: relative;
-		width: 100%;
-		max-width: 480px;
-		padding: 50px 40px;
-		border-radius: 40px;
-		background: var(--color-background-surface);
-		box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-		display: flex;
-		flex-direction: column;
-	}
+/* ── Modal ── */
+.modal-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--color-background-overlay);
+	backdrop-filter: blur(2px);
+}
+.modal-container {
+	position: relative;
+	width: 100%;
+	max-width: 480px;
+	padding: 50px 40px;
+	border-radius: 40px;
+	background: var(--color-background-surface);
+	box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+	display: flex;
+	flex-direction: column;
 }
 
 @layer base {

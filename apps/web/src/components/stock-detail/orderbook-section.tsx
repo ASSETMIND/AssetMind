@@ -5,20 +5,27 @@ import { useViewport } from '../../hooks/common/use-viewport';
 
 export default function OrderbookSection() {
 	const { id: stockCode = '' } = useParams<{ id: string }>();
-	const { data, status } = useOrderbook(stockCode);
+	const { viewModel, status } = useOrderbook(stockCode);
 	const viewport = useViewport();
 
 	return (
 		<OrderbookTable
-			status={status as any}
+			status={status}
 			viewport={viewport}
-			currentPrice={data?.currentPrice}
-			currentChangeRate={data?.currentChangeRate}
-			asks={data?.asks}
-			bids={data?.bids}
-			trades={data?.trades?.map((t, i) => ({ ...t, id: `trade-${i}` }))}
-			tradeStrength={data?.tradeStrength}
-			marketInfo={data?.marketInfo}
+			asks={viewModel?.asks}
+			bids={viewModel?.bids}
+			marketInfo={{
+				weekHigh: 0,
+				weekLow: 0,
+				upperLimit: 0,
+				lowerLimit: 0,
+				open: 0,
+				high: 0,
+				low: 0,
+				volume: 0,
+				volumeUnit: '',
+				changeFromYesterday: 0,
+			}}
 			onRetry={() => window.location.reload()}
 		/>
 	);
