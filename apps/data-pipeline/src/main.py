@@ -4,25 +4,27 @@ Main Execution Entrypoint Module
 
 [모듈 목적 및 상세 설명]
 데이터 수집 및 적재(EL) 파이프라인 서비스를 비동기적으로 실행하는 최상위 애플리케이션 진입점입니다.
-환경 변수를 로드하고, 스케줄러(Cron/Airflow) 또는 사용자가 정의한 파이프라인 태스크(Task)의 이름을 주입하여 전체 배치를 가동합니다.
+환경 변수를 로드하고, 스케줄러(Airflow)로부터 주입받은 파이프라인 태스크(Task)를 실행합니다.
 
 [전체 데이터 흐름 설명 (Input -> Output)]
-1. Initialization: `.env` 파일로부터 시스템 구동에 필요한 환경 변수 로드.
-2. Task Injection: `pipeline.yml`에 정의된 타겟 태스크 이름(`TARGET_TASK`) 식별 및 주입.
-3. Orchestration: `PipelineService` 인스턴스화 및 비동기 컨텍스트 매니저 진입.
-4. Execution: `run_batch()` 호출을 통해 전체 데이터 파이프라인 가동.
-5. Output: 실행 결과 메타데이터 획득 및 시스템 로그 출력, 사용된 네트워크 리소스 안전 종료.
+1. Initialization: `.env` 파일 로드 및 필수 환경 변수(TARGET_TASK) 검증.
+2. Orchestration: `PipelineService` 인스턴스화 및 비동기 컨텍스트 매니저 진입.
+3. Execution: `run_batch()` 호출을 통해 전체 데이터 파이프라인 가동.
+4. Output: 실행 결과 메타데이터 획득 및 시스템 로그 출력, 자원 안전 종료.
 
 주요 기능:
-- [Environment Bootstrapping] `dotenv`를 활용하여 런타임에 필요한 민감 정보(API 키, DB 접속 정보 등)를 메모리에 안전하게 적재.
-- [Task Injection] 실행할 파이프라인의 구체적인 작업명(예: 'daily_macro_batch')을 동적으로 주입하여 유연성 확보.
-- [Async Entrypoint] `asyncio.run()`을 통해 비동기 이벤트 루프를 생성하고 메인 코루틴 실행.
+- [Fail-Fast Bootstrapping] 필수 환경 변수 누락 시 즉시 에러를 발생시켜 잘못된 배치 실행 방지.
+- [Global Error Handling] `@log_decorator`를 활용하여 최상위 레벨의 예외 포착 및 규격화.
+- [Async Entrypoint] 비동기 이벤트 루프 생성 및 메인 코루틴 실행.
 
 Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단점, 근거) 요약.
-- Hardcoded Target Task (`TARGET_TASK`) vs CLI Arguments (`argparse`):
-  - 장점: 로컬 개발 환경이나 고정된 컨테이너 환경에서 실행 파일(`python main.py`)만으로 즉각적인 테스트와 실행이 가능하여 초기 개발 생산성이 매우 높음.
-  - 단점: 다양한 태스크를 동적으로 분기 실행해야 하는 멀티 테넌트(Multi-tenant) 환경이나 복잡한 Airflow DAG 연동 시, 매번 소스 코드를 수정하거나 별도의 진입 래퍼(Wrapper)를 만들어야 하는 유연성 부족이 발생함.
-  - 근거: 현재 파이프라인의 주요 실행 단위가 'daily_macro_batch' 하나로 고정되어 작동하는 단계이므로, 불필요한 CLI 파싱 로직을 추가하여 코드 복잡도를 높이기보다 명확하고 단순한 상수를 사용하는 것이 유지보수에 유리함. 향후 동적 실행 요구사항이 발생할 때 `argparse` 또는 환경변수 오버라이딩을 도입하는 점진적 리팩토링이 바람직함.
+1. 기본값(Default) 제거 및 환경 변수 강제화:
+   - 장점: 파이프라인이 어떤 태스크를 실행하는지 명확히 강제하여, 설정 누락으로 인해 엉뚱한 배치가 도는 대형 사고(Silent Failure)를 원천 차단함.
+   - 단점: 로컬 테스트 시 매번 `export TARGET_TASK=...`를 입력해야 하는 번거로움이 생김.
+   - 근거: 데이터 파이프라인에서 정합성 훼손 복구 비용은 로컬 테스트의 번거로움보다 수백 배 크므로, 철저한 조기 실패(Fail-Fast) 원칙을 고수하는 것이 실무적으로 올바름.
+2. 최상위 함수에 @log_decorator 적용:
+   - 장점: try-except 보일러플레이트 없이도 파이프라인 서비스 구동 중 발생하는 치명적 에러를 표준 포맷으로 중앙 집중 로깅할 수 있음.
+   - 근거: 횡단 관심사인 로깅과 비즈니스 런타임을 완전히 분리(Decoupling)하여 가독성과 유지보수성을 극대화함.
 """
 
 import asyncio
@@ -31,27 +33,29 @@ import os
 from dotenv import load_dotenv
 
 from src.pipeline_service import PipelineService
+from src.common.exceptions import ConfigurationError
+from src.common.decorators.log_decorator import log_decorator
 
-# [설계 의도] 애플리케이션 진입 직후 최우선적으로 환경 변수를 로드하여,
-# 하위 모듈들이 임포트될 때 필수적인 환경 변수(API Key, 엔드포인트 등)가 누락되어 
-# 런타임 에러가 발생하는 것을 원천 방지함.
+# [설계 의도] 하위 모듈들이 임포트되기 전에 환경 변수를 가장 먼저 메모리에 적재
 load_dotenv()
 
 # ==============================================================================
 # [Configuration] Constants
 # ==============================================================================
-# [설계 의도] 실행할 기본 태스크 이름 지정. pipeline.yml 파일에 정의된 태스크 키와 
-# 정확히 일치해야 파이프라인이 구동됨. 향후 동적 실행 기능(argparse) 도입 시 기본값(Default)으로 활용 가능.
-TARGET_TASK: str = "bronze_daily_batch"
+# [설계 의도] 기본값을 배제하고 순수 환경 변수만 읽음
+TARGET_TASK: str = os.environ.get("TARGET_TASK")
 
-# ==============================================================================
-# Custom Exceptions
-# ==============================================================================
-# Main 레벨의 전용 예외는 정의하지 않음 (하위 도메인 예외를 그대로 수용)
+# 빈 값(None 또는 빈 문자열) 검증 후 조기 종료(Fail-Fast)
+if not TARGET_TASK:
+    raise ConfigurationError(
+        "치명적 설정 오류: 'TARGET_TASK' 환경 변수가 설정되지 않았습니다. "
+        "Airflow BashOperator의 env 설정이나 로컬 환경 변수 주입을 확인하세요."
+    )
 
 # ==============================================================================
 # [Main Class/Functions]
 # ==============================================================================
+@log_decorator()
 async def main() -> None:
     """지정된 태스크명으로 파이프라인 오케스트레이션 서비스를 비동기 실행합니다.
     
@@ -59,24 +63,20 @@ async def main() -> None:
     하위 네트워크 리소스(HTTP Session 등)가 누수 없이 안전하게 할당 및 해제되도록 보장합니다.
     """
 
-  # [설계 의도] Airflow BashOperator가 환경변수로 주입한 논리적 실행 날짜(YYYYMMDD)를 획득.
+    # [설계 의도] Airflow BashOperator가 환경변수로 주입한 논리적 실행 날짜(YYYYMMDD)를 획득.
     # Airflow 환경이 아닌 로컬 직접 실행 시에는 None이 되어 파이프라인 서비스 내부의 Fallback(오늘 날짜)이 작동함.
     airflow_exec_date = os.environ.get("AIRFLOW_EXECUTION_DATE")
     
     if airflow_exec_date:
-        logging.getLogger("main").info(f"Airflow 스케줄러 기준 실행일({airflow_exec_date})로 백필(Backfill) 수집을 진행합니다.")
+        logging.getLogger("main").info(f"Airflow 스케줄러 기준 실행일({airflow_exec_date})로 수집을 진행합니다.")
 
-    # [설계 의도] 기존 "pipeline"이라는 잘못된 범용 명칭 대신, 
-    # pipeline.yml에 실제로 존재하는 "bronze_daily_batch"를 명시적으로 주입하여 
-    # 초기화 시점의 설정 에러(ConfigurationError) 및 빈 작업(EMPTY_JOBS) 상태를 조기 방지함.
+    # [설계 의도] 주입된 TARGET_TASK에 따라 pipeline.yml의 해당 정책을 로드함
     async with PipelineService(TARGET_TASK) as pipeline:
-        # 실행 날짜를 명시적으로 파이프라인에 주입
         result = await pipeline.run_batch(
             execution_date=airflow_exec_date,
             extract_mode="TODAY" 
         )
-        
-        logging.getLogger("main").info(f"파이프라인 최종 결과: {result}")
+        logging.getLogger("main").info(f"[{TARGET_TASK}] 실행 완료. 상태: {result.get('status')}")
 
 if __name__ == "__main__":
     # [설계 의도] 파이썬 비동기 생태계의 최상위 이벤트 루프 생성 및 메인 코루틴 진입점.
