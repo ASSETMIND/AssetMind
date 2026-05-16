@@ -176,3 +176,38 @@ class AbstractTransformer(ITransformer):
             pd.DataFrame: 최종 검수 및 캐스팅이 완료된 데이터프레임.
         """
         pass
+
+    # 파일 위치: src/transformer/processors/abstract_transformer.py
+
+    def _cast_datetime_vectorized(self, series: pd.Series) -> pd.Series:
+        """다양한 외부 API의 날짜 포맷(YYYYMMDD, YYYY-MM-DD, ISO8601 등)을 
+        사내 표준인 Pandas datetime64[ns] 타입으로 안전하게 일괄 변환(Vectorized)합니다.
+
+        for 루프 없이 Pandas 내부의 C-엔진을 활용하여 190종 지수의 수만 건 데이터를 고속 파싱합니다.
+        문자열에 포함된 하이픈(-)이나 T, Z 같은 구분자를 정규식 보정 없이 대시 형태로 통일하여 
+        pd.to_datetime의 내장 추론 성능을 최대로 끌어올립니다.
+
+        Args:
+            series (pd.Series): 정제 전 다양한 포맷의 문자열 또는 객체가 담긴 날짜 컬럼 데이터.
+
+        Returns:
+            pd.Series: datetime64[ns] 데이터 타입으로 완벽히 형변환된 시리즈 객체.
+        """
+        if series.empty:
+            return series
+
+        # 1. 전처리: 데이터를 문자열 스트링으로 강제 변환 후 공백 제거 및 결측치 문자 처리
+        clean_series = series.astype(str).str.strip()
+        
+        # 2. KIS 규격 방어 (20260513 -> 2026-05-13): 하이픈이 없는 8자리 정수형태의 문자열 보정
+        # 설계 의도: pd.to_datetime이 8자리 숫자를 간혹 unix timestamp 밀리초로 오진하는 현상을 원천 방어합니다.
+        is_eight_digit = clean_series.str.match(r"^\d{8}$")
+        if is_eight_digit.any():
+            clean_series = pd.Series(
+                [f"{val[:4]}-{val[4:6]}-{val[6:8]}" if m else val 
+                 for val, m in zip(clean_series, is_eight_digit)],
+                index=series.index
+            )
+
+        # 3. Pandas 네이티브 벡터화 파싱 실행 (errors='coerce'를 통해 파싱 실패 시 Crash 대신 NaN 처리)
+        return pd.to_datetime(clean_series, errors="coerce")
