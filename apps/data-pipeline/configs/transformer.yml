@@ -15,13 +15,17 @@ routing:
   - prefix: "kis_vkospi_"
     schema: "kis_domestic_schema"
 
-    # 2. KIS 해외 지수/원자재/환율
+  # 2. KIS 해외 지수/원자재/환율
   - prefix: "kis_nasdaq_"
     schema: "kis_overseas_schema"
   - prefix: "kis_snp500_"
     schema: "kis_overseas_schema"
   - prefix: "kis_dow_"
     schema: "kis_overseas_schema"
+
+  # 3. FRED 미국 채권 금리
+  - prefix: "fred_"
+    schema: "fred_base_schema"
 
 policy:
   # ----------------------------------------------------------------------------
@@ -38,7 +42,7 @@ policy:
     # 3. Silver 계층 표준 스키마 매핑 및 데이터 타입 강제 (Data Contract)
     schema:
       # 1. 일자 및 식별 정보 (String)
-      stck_bsop_date: { name: "trade_date", type: "string" } # 주식 영업 일자
+      stck_bsop_date: { name: "trade_date", type: "date" } # 주식 영업 일자
       hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
       bstp_cls_code: { name: "sector_code", type: "string" } # 업종 구분 코드
       prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
@@ -68,7 +72,7 @@ policy:
     drop_columns: ["rt_cd", "msg_cd", "msg1", "msg_detail"]
     schema:
       # 1. 일자 및 식별 정보 (String)
-      stck_bsop_date: { name: "trade_date", type: "string" } # 영업 일자
+      stck_bsop_date: { name: "trade_date", type: "date" } # 영업 일자
       hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
       stck_shrn_iscd: { name: "ticker_code", type: "string" } # 단축 종목코드
       prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
@@ -83,3 +87,28 @@ policy:
       # 3. 거래량 (Float32)
       acml_vol: { name: "volume", type: "float32" } # 누적 거래량
       prdy_vol: { name: "prev_volume", type: "float32" } # 전일 거래량
+
+  # ----------------------------------------------------------------------------
+  # [그룹 3] FRED 시계열 데이터 공통
+  # ----------------------------------------------------------------------------
+  fred_base_schema:
+    provider: "fred"
+    explode_target: "observations"
+    drop_columns:
+      [
+        "realtime_start",
+        "realtime_end",
+        "observation_start",
+        "observation_end",
+        "units",
+        "output_type",
+        "file_type",
+        "order_by",
+        "sort_order",
+        "count",
+        "offset",
+        "limit",
+      ]
+    schema:
+      date: { name: "trade_date", type: "date" }
+      value: { name: "value", type: "float32" }
