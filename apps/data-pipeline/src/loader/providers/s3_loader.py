@@ -203,18 +203,33 @@ class S3Loader(AbstractLoader):
         Returns:
             str: 계층적 파티션과 고유 파일명이 결합된 S3 Object Key.
         """
-        now = datetime.datetime.now(datetime.timezone.utc)
-        date_path = now.strftime("year=%Y/month=%m/day=%d")
+        # [설계 의도] 시스템 시간이 아닌 환경변수에 주입된 '데이터 대상 날짜(YYYYMMDD)'를 우선 파싱
+        # 글로벌 파이프라인(미국 시간 기준)이 한국 시간 다음날 낮에 실행되더라도, 
+        # 대상 데이터 일자는 전일(예: 15일)로 완벽하게 라우팅되도록 보장함.
+        execution_date_str = os.environ.get("AIRFLOW_EXECUTION_DATE")
+        
+        if execution_date_str and len(execution_date_str) == 8:
+            # "20260515" 형식을 "year=2026/month=05/day=15"로 파싱
+            year = execution_date_str[:4]
+            month = execution_date_str[4:6]
+            day = execution_date_str[6:8]
+            date_path = f"year={year}/month={month}/day={day}"
+        else:
+            # 로컬 수동 테스트 등 환경변수가 없을 때만 동작하는 Fallback (물리적 시간)
+            self._logger.warning("AIRFLOW_EXECUTION_DATE가 누락되어 시스템 현재 시간으로 파티션을 생성합니다.")
+            now = datetime.datetime.now(datetime.timezone.utc)
+            date_path = now.strftime("year=%Y/month=%m/day=%d")
         
         # `_validate_dto`를 통과했으므로 meta 내부의 source, job_id 속성 존재가 완벽히 보장됨.
         provider = str(dto.meta.get("source")).lower()
         job_id = str(dto.meta.get("job_id")).lower()
         
-        # 밀리초 수준의 동시 수집 충돌을 피하기 위해 난수 기반 UUID 짧은 식별자 추가
+        # 밀리초 수준의 동시 수집 충돌을 피하기 위해 난수 기반 UUID 추가
         unique_id = uuid.uuid4().hex[:8]
+        timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
         
-        return f"raw/provider={provider}/job={job_id}/{date_path}/{now.timestamp()}_{unique_id}.json.zst"
-
+        return f"raw/provider={provider}/job={job_id}/{date_path}/{timestamp}_{unique_id}.json.zst"
+    
     def _upload_stream(self, dto: ExtractedDTO, s3_key: str) -> bool:
         """데이터 객체의 원본을 압축 스트림으로 변환하고 S3 네트워크 I/O를 수행하도록 조율합니다.
 

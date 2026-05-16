@@ -78,7 +78,10 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
             task_id=f"run_bronze_{task_key}",
             bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
             env={
-                "AIRFLOW_EXECUTION_DATE": "{{ ds_nodash }}",
+                # [설계 의도] 무조건 UTC로 파싱되는 {{ ds_nodash }} 대신, 
+                # DAG에 할당된 타임존(dag.timezone)을 기준으로 논리적 실행일(data_interval_start)을 포맷팅합니다.
+                # 이를 통해 KST, EST 등 타임존과 무관하게 데이터의 "목표 대상일(Target Date)"이 정확히 주입됩니다.
+                "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
                 "TARGET_TASK": f"{task_key}"
             },
             append_env=True,
