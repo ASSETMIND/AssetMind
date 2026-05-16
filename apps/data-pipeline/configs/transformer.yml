@@ -27,6 +27,10 @@ routing:
   - prefix: "fred_"
     schema: "fred_base_schema"
 
+  # 4. ECOS 한국 채권 금리
+  - prefix: "ecos_"
+    schema: "ecos_base_schema"
+
 policy:
   # ----------------------------------------------------------------------------
   # [그룹 1] KIS 국내 지수 일별 데이터 (kospi, kosdaq 공통)
@@ -112,3 +116,14 @@ policy:
     schema:
       date: { name: "trade_date", type: "date" }
       value: { name: "value", type: "float32" }
+
+  # ----------------------------------------------------------------------------
+  # [그룹 4] ECOS 시계열 데이터 공통
+  # ----------------------------------------------------------------------------
+  ecos_base_schema:
+    provider: "ecos"
+    explode_target: "StatisticSearch"
+    drop_columns: []
+    schema:
+      TIME: { name: "trade_date", type: "date" }
+      DATA_VALUE: { name: "value", type: "float32" }
