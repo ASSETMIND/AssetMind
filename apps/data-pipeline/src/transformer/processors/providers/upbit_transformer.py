@@ -71,7 +71,7 @@ class UPBITTransformer(AbstractTransformer):
             )
 
     def _apply_transform(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
-        """불필요한 컬럼을 제거합니다. (Upbit 데이터는 이미 1D 배열 구조이므로 Flattening 연산은 통과)
+        """단일 컬럼 내부에 래핑된 업비트 딕셔너리 데이터를 가로로 평탄화(Flattening)합니다.
         
         Args:
             data (pd.DataFrame): 변환할 대상 원본 데이터프레임.
@@ -82,18 +82,34 @@ class UPBITTransformer(AbstractTransformer):
         """
         df = data.copy()
         
-        # 1. 불필요한 메타데이터 컬럼 제거 (메모리 최적화)
-        # yml에 명시된 제거 대상 중 실제 데이터프레임에 존재하는 컬럼만 필터링하여 드롭
+        # 1. 불필요한 메타데이터 드롭
         drop_cols = self.policy.get("drop_columns", [])
-        if drop_cols:
-            existing_drop_cols = [col for col in drop_cols if col in df.columns]
-            if existing_drop_cols:
-                df = df.drop(columns=existing_drop_cols)
+        existing_drop_cols = [col for col in drop_cols if col in df.columns]
+        if existing_drop_cols:
+            df = df.drop(columns=existing_drop_cols)
+            
+        # 2. 타겟 컬럼 전개 (가로 평탄화)
+        explode_target = self.policy.get("explode_target")
+        
+        if explode_target is not None:
+            # [설계 의도] Pandas가 "0"을 문자열(str)로 읽을지 정수(int)로 읽을지 
+            # 런타임 환경에 따라 다르므로 안전한 바인딩(Safe Binding)을 수행합니다.
+            target_col = None
+            if explode_target in df.columns:
+                target_col = explode_target
+            elif str(explode_target) in df.columns:
+                target_col = str(explode_target)
+            elif str(explode_target).isdigit() and int(explode_target) in df.columns:
+                target_col = int(explode_target)
                 
-        # [설계 의도] Upbit API 캔들 데이터는 기본적으로 평탄화된 List[Dict] 형태를 띱니다.
-        # ReaderService로부터 전달받아 상위 클래스의 pd.DataFrame 변환만으로 이미 2D 형태를 갖추므로,
-        # KIS, FRED 등에서 수행되는 별도의 pd.json_normalize()나 explode()를 생략하여 성능을 극대화합니다.
+            if target_col is not None and not df[target_col].empty:
+                # 컬럼 내부의 딕셔너리 리스트를 가로(Column) 축으로 평탄화
+                exploded_df = pd.json_normalize(df[target_col].tolist())
                 
+                # 껍데기 컬럼(0)을 버리고 전개된 데이터를 병합
+                df = df.drop(columns=[target_col]).reset_index(drop=True)
+                df = pd.concat([df, exploded_df], axis=1)
+
         return df
 
     def _enforce_schema(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
@@ -133,9 +149,9 @@ class UPBITTransformer(AbstractTransformer):
         for col, dtype in type_map.items():
             if col in df.columns:
                 try:
-                    # [설계 의도] 코인 거래 데이터 특성 상 null 값에 대비해 pd.to_numeric의 errors='coerce' 활용.
-                    # 숫자가 아닌 값이 포함되어도 에러 없이 NaN으로 처리하여 파이프라인의 결함 저항성(Fault Tolerance)을 높임.
-                    if dtype in ["float32", "float64", "int32", "int64"]:
+                    if dtype in ["date", "datetime", "datetime64[ns]"]:
+                        df[col] = self._cast_datetime_vectorized(df[col])
+                    elif dtype in ["float32", "float64", "int32", "int64"]:
                         df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
                     else:
                         df[col] = df[col].astype(dtype)
