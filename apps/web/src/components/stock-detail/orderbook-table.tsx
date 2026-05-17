@@ -144,6 +144,31 @@ const DesktopOrderbookSkeleton = () => (
 	</div>
 );
 
+const MobileOrderbookSkeleton = () => (
+	<div style={{ display: 'flex', flexDirection: 'column' }}>
+		<div style={{ display: 'flex', alignItems: 'center', height: '32px' }}>
+			<div style={{ flex: 1 }} />
+			<div style={{ width: '110px', display: 'flex', justifyContent: 'center' }}>
+				<SkeletonBox width={76} height={20} />
+			</div>
+			<div style={{ flex: 1 }} />
+		</div>
+		{Array.from({ length: 10 }).map((_, i) => (
+			<div key={i} style={{ display: 'flex', alignItems: 'center', height: '32px', width: '100%' }}>
+				<div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', paddingRight: '8px' }}>
+					<SkeletonBox width='80%' height={20} />
+				</div>
+				<div style={{ width: '110px', display: 'flex', justifyContent: 'center' }}>
+					<SkeletonBox width={76} height={20} />
+				</div>
+				<div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', paddingLeft: '8px' }}>
+					<SkeletonBox width='80%' height={20} />
+				</div>
+			</div>
+		))}
+	</div>
+);
+
 // ─── Error ────────────────────────────────────────────────────
 
 const OrderbookError = ({ onRetry }: { onRetry?: () => void }) => (
@@ -229,6 +254,102 @@ const MarketInfoPanel = ({ info }: { info: MarketInfo }) => {
 	);
 };
 
+// ─── Mobile: AskQuantityCell ──────────────────────────────────
+
+const MobileAskQtyCell = ({ row, maxQty }: { row: OrderbookRow; maxQty: number }) => {
+	const barWidth = Math.round((row.quantity / maxQty) * 100);
+	return (
+		<div style={{ position: 'relative', flex: 1, height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', overflow: 'hidden' }}>
+			<div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(to left, rgba(255,255,255,0.15), transparent)' }} />
+			<div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', right: 0, width: `${barWidth}%`, height: '20px', background: 'linear-gradient(to left, rgba(37,106,244,0.3), rgba(37,106,244,0.05))', borderRadius: '2px 0 0 2px' }} />
+			<span style={{ position: 'relative', fontSize: '13px', fontWeight: 400, color: '#256AF4', fontVariantNumeric: 'tabular-nums' }}>{fmt(row.quantity)}</span>
+		</div>
+	);
+};
+
+// ─── Mobile: BidQuantityCell ──────────────────────────────────
+
+const MobileBidQtyCell = ({ row, maxQty }: { row: OrderbookRow; maxQty: number }) => {
+	const barWidth = Math.round((row.quantity / maxQty) * 100);
+	return (
+		<div style={{ position: 'relative', flex: 1, height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: '8px', overflow: 'hidden' }}>
+			<div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(to right, rgba(255,255,255,0.15), transparent)' }} />
+			<div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0, width: `${barWidth}%`, height: '20px', background: 'linear-gradient(to right, rgba(234,88,12,0.3), rgba(234,88,12,0.05))', borderRadius: '0 2px 2px 0' }} />
+			<span style={{ position: 'relative', fontSize: '13px', fontWeight: 400, color: '#EA580C', fontVariantNumeric: 'tabular-nums' }}>{fmt(row.quantity)}</span>
+		</div>
+	);
+};
+
+// ─── Mobile: PriceCell ───────────────────────────────────────
+
+const MobilePriceCell = ({ price, changeRate, isCurrent }: { price: number; changeRate: number; isCurrent?: boolean }) => (
+	<div style={{ width: '110px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '32px' }}>
+		<span style={{ fontSize: isCurrent ? '14px' : '13px', fontWeight: 400, color: isCurrent ? '#FFFFFF' : '#256AF4', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+			{fmt(price)}
+		</span>
+		<span style={{ fontSize: '8px', fontWeight: 500, color: isCurrent ? '#EA580C' : '#256AF4', lineHeight: 1.2 }}>
+			{fmtRate(changeRate)}
+		</span>
+	</div>
+);
+
+// ─── Mobile: EmptyCell ───────────────────────────────────────
+
+const MobileEmptyCell = ({ direction }: { direction: 'ask' | 'bid' }) => (
+	<div style={{ position: 'relative', flex: 1, height: '32px', overflow: 'hidden' }}>
+		<div style={{
+			position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px',
+			background: direction === 'ask'
+				? 'linear-gradient(to right, rgba(255,255,255,0.15), transparent)'
+				: 'linear-gradient(to left, rgba(255,255,255,0.15), transparent)',
+		}} />
+	</div>
+);
+
+// ─── Mobile: CurrentPriceRow ──────────────────────────────────
+
+const MobileCurrentPriceRow = ({ price, changeRate }: { price: number; changeRate: number }) => (
+	<div style={{ display: 'flex', alignItems: 'center', height: '32px' }}>
+		<div style={{ flex: 1 }} />
+		<MobilePriceCell price={price} changeRate={changeRate} isCurrent />
+		<div style={{ flex: 1 }} />
+	</div>
+);
+
+// ─── Mobile Orderbook Body ────────────────────────────────────
+
+const MobileOrderbookBody: React.FC<{
+	currentPrice: number;
+	currentChangeRate: number;
+	asks: OrderbookRow[];
+	bids: OrderbookRow[];
+	maxAskQty: number;
+	maxBidQty: number;
+}> = ({ currentPrice, currentChangeRate, asks, bids, maxAskQty, maxBidQty }) => {
+	const displayAsks = asks.slice(0, 10);
+	const displayBids = bids.slice(0, 10);
+
+	return (
+		<div style={{ display: 'flex', flexDirection: 'column' }}>
+			<MobileCurrentPriceRow price={currentPrice} changeRate={currentChangeRate} />
+			{Array.from({ length: 10 }).map((_, i) => {
+				const ask = displayAsks[i];
+				const bid = displayBids[i];
+				const price = ask ? ask.price : (bid ? bid.price : 0);
+				const changeRate = ask ? ask.changeRate : (bid ? bid.changeRate : 0);
+
+				return (
+					<div key={i} style={{ display: 'flex', alignItems: 'center', height: '32px', width: '100%' }}>
+						{ask ? <MobileAskQtyCell row={ask} maxQty={maxAskQty} /> : <MobileEmptyCell direction='ask' />}
+						<MobilePriceCell price={price} changeRate={changeRate} />
+						{bid ? <MobileBidQtyCell row={bid} maxQty={maxBidQty} /> : <MobileEmptyCell direction='bid' />}
+					</div>
+				);
+			})}
+		</div>
+	);
+};
+
 // ─── OrderbookTable ───────────────────────────────────────────
 
 export const OrderbookTable = ({
@@ -247,12 +368,12 @@ export const OrderbookTable = ({
 	className,
 }: OrderbookTableProps) => {
 	const status: OrderbookStatus = statusProp ?? (isMarketClosed ? 'empty' : 'default');
+	const isMobile = viewport === 'mobile';
+	const isTablet = viewport === 'tablet';
 
 	const maxAskQty = Math.max(...asks.map((a) => a.quantity), 1);
 	const maxBidQty = Math.max(...bids.map((b) => b.quantity), 1);
 
-	const isMobile = viewport === 'mobile';
-	const isTablet = viewport === 'tablet';
 	const containerWidth = isMobile || isTablet ? '100%' : '340px';
 	const containerHeight = isMobile ? 'auto' : '820px';
 
@@ -268,15 +389,20 @@ export const OrderbookTable = ({
 			{/* 헤더 */}
 			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
 				<span style={{ fontSize: '14px', fontWeight: 400, color: '#FFFFFF' }}>호가</span>
-				{(status === 'default' || status === 'skeleton') && (
+				{(status === 'default' || status === 'skeleton') && !isMobile && (
 					<button onClick={onQuickOrder} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '79px', height: '24px', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '8px', background: 'transparent', cursor: 'pointer' }}>
 						<span style={{ fontSize: '14px', fontWeight: 400, color: '#9F9F9F' }}>빠른 주문</span>
+					</button>
+				)}
+				{(status === 'default' || status === 'skeleton') && isMobile && (
+					<button onClick={onQuickOrder} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 12px', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 400, color: '#9F9F9F' }}>
+						전체 보기
 					</button>
 				)}
 			</div>
 
 			{/* 상태별 렌더링 */}
-			{status === 'skeleton' && <DesktopOrderbookSkeleton />}
+			{status === 'skeleton' && (isMobile ? <MobileOrderbookSkeleton /> : <DesktopOrderbookSkeleton />)}
 			{status === 'error' && <OrderbookError onRetry={onRetry} />}
 			{status === 'empty' && (
 				<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#9F9F9F', fontSize: '14px' }}>
@@ -285,44 +411,56 @@ export const OrderbookTable = ({
 			)}
 
 			{status === 'default' && marketInfo && (
-				<div style={{ display: 'flex', position: 'relative' }}>
-					{/* 왼쪽: 매도 잔량 및 체결 목록 */}
-					<div style={{ display: 'flex', flexDirection: 'column' }}>
-						<AskRow isEmpty />
-						{asks.map((ask, i) => <AskRow key={i} row={ask} maxQty={maxAskQty} />)}
-						<TradeTickerList
-							trades={trades}
-							tradeStrength={tradeStrength}
-							height={trades.length * 32 + 24}
+				<>
+					{/* Mobile */}
+					{isMobile && (
+						<MobileOrderbookBody
+							currentPrice={currentPrice}
+							currentChangeRate={currentChangeRate}
+							asks={asks}
+							bids={bids}
+							maxAskQty={maxAskQty}
+							maxBidQty={maxBidQty}
 						/>
-					</div>
+					)}
 
-					{/* 중앙: 호가 가격 */}
-					<div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-						<div style={{ height: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-							<span style={{ fontSize: '14px', fontWeight: 400, color: '#256AF4', lineHeight: 1.2 }}>{fmt(currentPrice)}</span>
-							<span style={{ fontSize: '8px', fontWeight: 500, color: '#EA580C', lineHeight: 1.2 }}>{fmtRate(currentChangeRate)}</span>
+					{/* Desktop/Tablet */}
+					{!isMobile && (
+						<div style={{ display: 'flex', position: 'relative' }}>
+							<div style={{ display: 'flex', flexDirection: 'column' }}>
+								<AskRow isEmpty />
+								{asks.map((ask, i) => <AskRow key={i} row={ask} maxQty={maxAskQty} />)}
+								<TradeTickerList
+									trades={trades}
+									tradeStrength={tradeStrength}
+									height={trades.length * 32 + 24}
+								/>
+							</div>
+							<div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+								<div style={{ height: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+									<span style={{ fontSize: '14px', fontWeight: 400, color: '#256AF4', lineHeight: 1.2 }}>{fmt(currentPrice)}</span>
+									<span style={{ fontSize: '8px', fontWeight: 500, color: '#EA580C', lineHeight: 1.2 }}>{fmtRate(currentChangeRate)}</span>
+								</div>
+								{asks.map((ask, i) => (
+									<div key={i} style={{ height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+										<PriceCell price={ask.price} changeRate={ask.changeRate} />
+									</div>
+								))}
+								{bids.map((bid, i) => (
+									<div key={i} style={{ height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+										<PriceCell price={bid.price} changeRate={bid.changeRate} />
+									</div>
+								))}
+							</div>
+							<div style={{ display: 'flex', flexDirection: 'column' }}>
+								<div style={{ height: '32px' }} />
+								<MarketInfoPanel info={marketInfo} />
+								<div style={{ height: '50px' }} />
+								{bids.map((bid, i) => <BidRow key={i} row={bid} maxQty={maxBidQty} />)}
+							</div>
 						</div>
-						{asks.map((ask, i) => (
-							<div key={i} style={{ height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-								<PriceCell price={ask.price} changeRate={ask.changeRate} />
-							</div>
-						))}
-						{bids.map((bid, i) => (
-							<div key={i} style={{ height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-								<PriceCell price={bid.price} changeRate={bid.changeRate} />
-							</div>
-						))}
-					</div>
-
-					{/* 오른쪽: 시장 정보 및 매수 잔량 */}
-					<div style={{ display: 'flex', flexDirection: 'column' }}>
-						<div style={{ height: '32px' }} />
-						<MarketInfoPanel info={marketInfo} />
-						<div style={{ height: '50px' }} />
-						{bids.map((bid, i) => <BidRow key={i} row={bid} maxQty={maxBidQty} />)}
-					</div>
-				</div>
+					)}
+				</>
 			)}
 		</div>
 	);
