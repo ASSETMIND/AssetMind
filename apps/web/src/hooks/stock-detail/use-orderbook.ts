@@ -1,56 +1,95 @@
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useWebSocket } from '../web-socket/use-web-socket';
-import {
-	getOrderbook,
-	getOrderbookTopic,
-	STOCK_WS_URL,
-} from '../../api/stock';
-import type { OrderbookDto } from '../../api/stock';
+import { useEffect, useRef, useState } from 'react';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
+import { getOrderbookTopic } from '../../api/stock';
+import type { OrderbookDto, OrderbookLevelDto } from '../../api/stock';
+import type { OrderbookRow } from '../../components/stock-detail/orderbook-table';
 
-export function useOrderbook(stockCode: string) {
-	const [data, setData] = useState<OrderbookDto | null>(null);
+function levelToRow(price: string, size: string, baseRef: number): OrderbookRow {
+	const priceNum = Number(price);
+	const changeRate = baseRef > 0
+		? Number((((priceNum - baseRef) / baseRef) * 100).toFixed(2))
+		: 0;
+	return { price: priceNum, changeRate, quantity: Number(size) };
+}
 
-	// 초기 REST API 로드
-	const { data: queryData, isLoading, isError } = useQuery<OrderbookDto>({
-		queryKey: ['orderbook', stockCode],
-		queryFn: () => getOrderbook(stockCode),
-		enabled: !!stockCode,
-		staleTime: 1000 * 10,
-	});
+export interface OrderbookViewModel {
+	asks:         OrderbookRow[];
+	bids:         OrderbookRow[];
+	totalAskSize: number;
+	totalBidSize: number;
+	marketTime:   string;
+}
 
-	// queryData가 오면 로컬 state에 반영
+export type OrderbookStatus = 'skeleton' | 'error' | 'default';
+
+export function useOrderbook(stockCode: string, basePrice?: number) {
+	const [raw, setRaw] = useState<OrderbookDto | null>(null);
+	const [status, setStatus] = useState<OrderbookStatus>('skeleton');
+	const clientRef = useRef<Client | null>(null);
+
+	console.log('[useOrderbook] render - stockCode:', stockCode, 'basePrice:', basePrice);
+
 	useEffect(() => {
-		if (queryData) setData(queryData);
-	}, [queryData]);
+		if (!stockCode) return;
 
-	// WebSocket 실시간 업데이트
-	const { isConnected, subscribe } = useWebSocket(STOCK_WS_URL);
+		console.log('[useOrderbook] connecting to SockJS...');
 
-	useEffect(() => {
-		if (!isConnected || !stockCode) return;
-
-		const topic = getOrderbookTopic(stockCode);
-		const subscription = subscribe(topic, (raw: unknown) => {
-			const update = raw as Partial<OrderbookDto>;
-			setData((prev) => {
-				if (!prev) return prev;
-				return { ...prev, ...update };
-			});
+		const client = new Client({
+			webSocketFactory: () => new SockJS('http://localhost:9090/ws-stock'),
+			reconnectDelay: 5000,
+			onConnect: () => {
+				console.log('[useOrderbook] STOMP connected!');
+				client.subscribe(getOrderbookTopic(stockCode), (message) => {
+					try {
+						const dto = JSON.parse(message.body) as OrderbookDto;
+						console.log('[useOrderbook] received:', dto);
+						setRaw(dto);
+						setStatus('default');
+					} catch {
+						setStatus('error');
+					}
+				});
+			},
+			onStompError: (frame) => {
+				console.error('[useOrderbook] STOMP error:', frame);
+				setStatus('error');
+			},
+			onDisconnect: () => {
+				console.log('[useOrderbook] disconnected');
+				setStatus('skeleton');
+			},
+			onWebSocketError: (e) => console.error('[useOrderbook] WS error:', e),
 		});
 
+		client.activate();
+		clientRef.current = client;
+
 		return () => {
-			subscription?.unsubscribe();
+			client.deactivate();
+			clientRef.current = null;
 		};
-	}, [isConnected, stockCode, subscribe]);
+	}, [stockCode]);
 
-	const status = isLoading
-		? 'skeleton'
-		: isError
-			? 'error'
-			: !data
-				? 'skeleton'
-				: 'default';
+	const viewModel: OrderbookViewModel | null = raw
+		? (() => {
+				const ref = basePrice ?? 0;
+				const sorted = [...raw.levels].sort((a, b) => a.level - b.level);
+				const asks: OrderbookRow[] = sorted.map((l: OrderbookLevelDto) =>
+					levelToRow(l.askPrice, l.askSize, ref),
+				);
+				const bids: OrderbookRow[] = sorted.map((l: OrderbookLevelDto) =>
+					levelToRow(l.bidPrice, l.bidSize, ref),
+				);
+				return {
+					asks,
+					bids,
+					totalAskSize: Number(raw.totalAskSize),
+					totalBidSize: Number(raw.totalBidSize),
+					marketTime:   raw.marketTime,
+				};
+			})()
+		: null;
 
-	return { data, status, isConnected };
+	return { viewModel, status };
 }

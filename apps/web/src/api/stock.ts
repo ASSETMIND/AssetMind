@@ -1,13 +1,13 @@
 import { axiosInstance } from '../libs/axios';
 
 // ─── WebSocket URL ────────────────────────────────────────────
-// 항상 ws:// 프로토콜로 생성
-// VITE_WS_URL 없으면 현재 호스트 기반으로 생성
 const rawWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 
 export const STOCK_WS_URL = rawWsUrl
 	? rawWsUrl.replace(/^http/, 'ws') + '/ws-stock'
 	: `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/ws-stock`;
+
+export const ORDERBOOK_WS_URL = `ws://${typeof window !== 'undefined' ? window.location.host : 'localhost:5173'}/ws-orderbook`;
 
 export const SURGE_ALERTS_TOPIC = '/topic/surge-alerts';
 
@@ -29,9 +29,8 @@ export async function getStockRanking(
 
 export type CandleTimeframe = '1m' | '5m' | '1d' | '1w' | '1mo';
 
-/** 실제 API 응답: data.candles[] - 모든 필드가 String */
 export interface CandleDto {
-	timestamp: string; // ISO-8601 (예: "2026-04-01T10:00:00")
+	timestamp: string;
 	open:      string;
 	high:      string;
 	low:       string;
@@ -55,9 +54,7 @@ export async function getStockCandles(
 }
 
 // ─── 시계열 (history) ─────────────────────────────────────────
-// 체결 틱 데이터 — 캔들 차트에는 candles API 사용
 
-/** 실제 API 응답: data[] - 모든 필드가 String */
 export interface StockHistoryDto {
 	stockCode:        string;
 	currentPrice:     string;
@@ -69,7 +66,7 @@ export interface StockHistoryDto {
 	executionVolume:  string;
 	cumulativeAmount: string | null;
 	cumulativeVolume: string | null;
-	time:             string; // HHmmss
+	time:             string;
 }
 
 export async function getStockHistory(stockCode: string, limit = 20) {
@@ -82,52 +79,20 @@ export async function getStockHistory(stockCode: string, limit = 20) {
 
 // ─── 호가 (Orderbook) ─────────────────────────────────────────
 
-/** 개별 호가 행 */
-export interface OrderbookRowDto {
-	price: number;
-	changeRate: number;
-	quantity: number;
-}
-
-export interface TradeTickDto {
-	price: number;
-	quantity: number;
-	isBuy: boolean;
-	time: string;
-}
-
-export interface MarketInfoDto {
-	weekHigh: number;
-	weekLow: number;
-	upperLimit: number;
-	lowerLimit: number;
-	riseVI?: number;
-	fallVI?: number;
-	open: number;
-	high: number;
-	low: number;
-	volume: number;
-	volumeUnit: string;
-	changeFromYesterday: number;
-	midPrice?: number;
+export interface OrderbookLevelDto {
+	level:    number;
+	askPrice: string;
+	askSize:  string;
+	bidPrice: string;
+	bidSize:  string;
 }
 
 export interface OrderbookDto {
-	stockCode: string;
-	currentPrice: number;
-	currentChangeRate: number;
-	asks: OrderbookRowDto[];
-	bids: OrderbookRowDto[];
-	trades: TradeTickDto[];
-	tradeStrength: number;
-	marketInfo: MarketInfoDto;
-}
-
-export async function getOrderbook(stockCode: string): Promise<OrderbookDto> {
-	const { data } = await axiosInstance.get<{ data: OrderbookDto }>(
-		`/stocks/${stockCode}/orderbook`,
-	);
-	return data.data;
+	stockCode:    string;
+	marketTime:   string;
+	totalAskSize: string;
+	totalBidSize: string;
+	levels:       OrderbookLevelDto[];
 }
 
 export const getOrderbookTopic = (stockCode: string) =>

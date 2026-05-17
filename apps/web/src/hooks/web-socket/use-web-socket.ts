@@ -44,8 +44,6 @@ export const useWebSocket = (
 		if (client.current?.active) return;
 		if (autoDisconnectInBackground && !isVisibleRef.current) return;
 
-		// url이 ws:// 형태여야 함
-		// ws://host/ws-stock → ws://host/ws-stock (그대로 사용)
 		const brokerURL = url.startsWith('ws')
 			? url
 			: url.replace(/^http/, 'ws');
@@ -119,15 +117,16 @@ export const useWebSocket = (
 
 	const subscribe = useCallback(
 		(destination: string, callback?: (msg: unknown) => void) => {
-			if (!client.current?.connected) return;
-			return client.current.subscribe(destination, (message: IMessage) => {
+			const stompClient = client.current;
+			if (!stompClient?.connected) return;
+			return stompClient.subscribe(destination, (message: IMessage) => {
 				if (callback) {
 					try { callback(JSON.parse(message.body)); }
 					catch (e) { console.error('Failed to parse message body', e); }
 				}
 			});
 		},
-		[],
+		[isConnected],
 	);
 
 	return { isConnected, error, sendMessage, subscribe, connect, disconnect };
