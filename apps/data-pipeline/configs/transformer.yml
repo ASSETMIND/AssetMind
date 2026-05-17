@@ -31,6 +31,10 @@ routing:
   - prefix: "ecos_"
     schema: "ecos_base_schema"
 
+  # 5. 가상자산
+  - prefix: "upbit_"
+    schema: "upbit_base_schema"
+
 policy:
   # ----------------------------------------------------------------------------
   # [그룹 1] KIS 국내 지수 일별 데이터 (kospi, kosdaq 공통)
@@ -47,8 +51,8 @@ policy:
     schema:
       # 1. 일자 및 식별 정보 (String)
       stck_bsop_date: { name: "trade_date", type: "date" } # 주식 영업 일자
-      hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
-      bstp_cls_code: { name: "sector_code", type: "string" } # 업종 구분 코드
+      # hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
+      # bstp_cls_code: { name: "sector_code", type: "string" } # 업종 구분 코드
       prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
       # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
       bstp_nmix_prpr: { name: "close", type: "float32" } # 업종 지수 현재가 (종가)
@@ -77,8 +81,8 @@ policy:
     schema:
       # 1. 일자 및 식별 정보 (String)
       stck_bsop_date: { name: "trade_date", type: "date" } # 영업 일자
-      hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
-      stck_shrn_iscd: { name: "ticker_code", type: "string" } # 단축 종목코드
+      # hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
+      # stck_shrn_iscd: { name: "ticker_code", type: "string" } # 단축 종목코드
       prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
       # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
       ovrs_nmix_prpr: { name: "close", type: "float32" } # 현재가 (종가)
@@ -127,3 +131,29 @@ policy:
     schema:
       TIME: { name: "trade_date", type: "date" }
       DATA_VALUE: { name: "value", type: "float32" }
+
+  # ----------------------------------------------------------------------------
+  # [그룹 5] UPBIT 일별 캔들 데이터 공통
+  # ----------------------------------------------------------------------------
+  upbit_base_schema:
+    provider: "upbit"
+    explode_target: "0"
+    drop_columns: []
+    schema:
+      # 1. 일자 및 식별 정보 (String / Date 타임존 정규화)
+      candle_date_time_kst: { name: "trade_date", type: "date" } # 사내 표준 시계열 주축 (KST 기준 일봉 날짜객체 변환)
+
+      # 2. 캔들 가격 정보 (Float32 메모리 최적화)
+      opening_price: { name: "open", type: "float32" } # 시가
+      high_price: { name: "high", type: "float32" } # 고가
+      low_price: { name: "low", type: "float32" } # 저가
+      trade_price: { name: "close", type: "float32" } # 종가 (현재가)
+      prev_closing_price: { name: "prev_close", type: "float32" } # 전일 종가
+
+      # 3. 전일 대비 변동 정보 (Float32)
+      change_price: { name: "change_price", type: "float32" } # 전일 대비 변동 금액
+      change_rate: { name: "change_rate", type: "float32" } # 전일 대비 변동률
+
+      # 4. 대용량 거래량 및 시스템 식별자 (Float64 / Int64 정밀도 보호 및 오버플로우 원천 방어)
+      candle_acc_trade_price: { name: "trading_value", type: "float64" } # 누적 거래대금 (정밀도 보장)
+      candle_acc_trade_volume: { name: "volume", type: "float64" } # 누적 거래량
