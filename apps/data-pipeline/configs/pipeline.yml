@@ -15,7 +15,7 @@ tasks:
     target_loader: "aws" # loader.yml의 최상위 노드 참조 (S3 적재)
     extract_jobs:
       # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
-      - "kis_kospi_composite_daily"
+      - "kis_kospi_daily"
       - "kis_kospi_large_cap_daily"
       - "kis_kospi_mid_cap_daily"
       - "kis_kospi_small_cap_daily"
@@ -46,7 +46,7 @@ tasks:
       - "kis_vkospi_daily"
 
       # ========== [KOSDAQ 지수 일별 데이터 : 30개] ==========
-      - "kis_kosdaq_composite_daily"
+      - "kis_kosdaq_daily"
       - "kis_kosdaq_large_cap_daily"
       - "kis_kosdaq_mid_cap_daily"
       - "kis_kosdaq_small_cap_daily"

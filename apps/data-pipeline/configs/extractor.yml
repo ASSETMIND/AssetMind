@@ -98,8 +98,8 @@
     chunk_size: 200
     base_date: "20170901"
   upbit_daily_params: &upbit_daily_params
-    start_date: "$START_DATE"
-    end_date: "$END_DATE"
+    to: "$END_DATE_UPBIT"
+    count: 1
 
 policy:
   # ----------------------------------------------------------------------------
@@ -107,7 +107,7 @@ policy:
   # ----------------------------------------------------------------------------
 
   # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
-  kis_kospi_composite_daily:
+  kis_kospi_daily:
     <<: *kis_domestic_base
     description: "코스피 종합 지수 일봉"
     params:
@@ -311,7 +311,7 @@ policy:
       FID_INPUT_ISCD: "00503"
 
   # ========== [KOSDAQ 지수 일별 데이터 : 30개] ==========
-  kis_kosdaq_composite_daily:
+  kis_kosdaq_daily:
     <<: *kis_domestic_base
     description: "코스닥 종합 지수 일봉"
     params:

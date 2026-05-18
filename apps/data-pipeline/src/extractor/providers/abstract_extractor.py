@@ -146,7 +146,7 @@ class AbstractExtractor(IExtractor, ABC):
             # [설계 의도] KIS API 등 일부 금융 API의 '시작일==종료일' 시 데이터 누락 버그를 근본적으로 해결하기 위해 
             # 조회 범위를 [T, T+1]로 설정하여 명시적인 구간(Range)을 형성함. 
             # 00시 실행 시 T+1 데이터는 존재하지 않으므로, API 버그를 우회하면서 정확히 T일의 데이터만 수집 가능함.
-            start_dt = target_dt - timedelta(days=1)
+            start_dt = target_dt
             end_dt = target_dt
 
         # YAML에 정의된 원본 정책 파라미터를 복사하여 베이스 생성
