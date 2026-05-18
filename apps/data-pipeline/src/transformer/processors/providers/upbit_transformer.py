@@ -151,6 +151,7 @@ class UPBITTransformer(AbstractTransformer):
                 try:
                     if dtype in ["date", "datetime", "datetime64[ns]"]:
                         df[col] = self._cast_datetime_vectorized(df[col])
+                        df[col] = df[col].dt.normalize()
                     elif dtype in ["float32", "float64", "int32", "int64"]:
                         df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
                     else:
