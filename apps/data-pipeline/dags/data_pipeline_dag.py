@@ -34,61 +34,83 @@ from airflow.operators.bash import BashOperator
 # ==============================================================================
 # [Constants & Configuration]
 # ==============================================================================
-# 매직 스트링 배제 및 유지보수를 위한 상수 정의
-DAG_ID: str = "bronze_daily_sourcing_pipeline"
-SCHEDULE_CRON: str = "0 0 * * *"  # KST 기준 매일 자정 00:00 실행 (테스트용)
-TIMEZONE: str = "Asia/Seoul"
-
 # Task 실패 시 재시도 정책
-RETRIES: int = 2
+RETRIES: int = 3
 RETRY_DELAY_MINUTES: int = 5
 
 # Airflow 컨테이너 내 파이프라인 소스코드 경로
 PROJECT_ROOT_DIR: str = "/opt/airflow"
 
-
-# ==============================================================================
-# [Custom Exceptions]
-# ==============================================================================
-class BronzeDAGConfigurationError(Exception):
-    """Bronze DAG 설정 또는 런타임 환경 구성 중 발생하는 에러를 정의하는 사용자 정의 예외."""
-    pass
-
-
 # ==============================================================================
 # [Main Class/Functions]
 # ==============================================================================
-# KST 타임존이 적용된 기본 파라미터 구성
-default_args = {
-    "owner": "data_engineering_team",
-    "depends_on_past": False,  # 과거 배치 실패가 현재 배치 실행을 막지 않음
-    "start_date": pendulum.datetime(2026, 4, 20, tz=TIMEZONE),
-    "email_on_failure": False,
-    "email_on_retry": False,
-    "retries": RETRIES,
-    "retry_delay": timedelta(minutes=RETRY_DELAY_MINUTES),
-}
+def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
+    """동적 파라미터를 주입받아 Airflow DAG 객체를 생성하는 팩토리 함수입니다.
+    
+    Args:
+        dag_id (str): Airflow UI에 노출될 DAG의 고유 식별자.
+        schedule (str): CRON 표현식 스케줄.
+        timezone (str): DAG 실행의 기준이 되는 타임존 (예: Asia/Seoul).
+        task_key (str): main.py로 전달될 타겟 태스크 이름 (TARGET_TASK).
+        
+    Returns:
+        DAG: 구성이 완료된 Airflow DAG 객체.
+    """
+    # [설계 의도] 타임존이 명확히 적용된 start_date를 설정하여
+    # 글로벌 환경에서도 논리적 실행 날짜 오작동이 발생하지 않도록 강제함.
+    default_args = {
+        "owner": "data_engineering_team",
+        "start_date": pendulum.datetime(2026, 5, 14, tz=timezone),
+        "retries": RETRIES,
+        "retry_delay": timedelta(minutes=RETRY_DELAY_MINUTES),
+    }
 
-with DAG(
-    dag_id=DAG_ID,
-    default_args=default_args,
-    description="Macro Data & Stock VTS API Daily Sourcing Pipeline",
-    schedule=SCHEDULE_CRON,
-    catchup=False,  # 과거 누락된 배치를 한꺼번에 재실행하지 않음 (API 쿼터 보호)
-    tags=["bronze", "EL", "daily"],
-) as dag:
+    with DAG(
+        dag_id=dag_id,
+        default_args=default_args,
+        schedule=schedule,
+        catchup=False,
+        tags=["bronze", "daily", task_key.split('_')[-1]],
+    ) as dag:
+        
+        # 1. Bronze Task : 외부 API에서 원본 데이터 추출 및 S3 적재
+        run_bronze = BashOperator(
+            task_id=f"run_bronze_{task_key}",
+            bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
+            env={
+                # [설계 의도] 무조건 UTC로 파싱되는 {{ ds_nodash }} 대신, 
+                # DAG에 할당된 타임존(dag.timezone)을 기준으로 논리적 실행일(data_interval_start)을 포맷팅합니다.
+                # 이를 통해 KST, EST 등 타임존과 무관하게 데이터의 "목표 대상일(Target Date)"이 정확히 주입됩니다.
+                "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "TARGET_TASK": f"{task_key}"
+            },
+            append_env=True,
+        )
 
-    # [설계 의도] 
-    # src 디렉토리가 파이썬 패키지로 정상 인식되도록 PYTHONPATH를 현재 경로로 명시하고,
-    # python -m 옵션을 사용하여 src.main 모듈을 실행합니다.
-    run_bronze_pipeline = BashOperator(
-        task_id="run_bronze_main_app",
-        bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
-        # [설계 의도] Airflow의 {{ ds_nodash }} (예: 20260421)를 환경변수로 주입하여, 
-        # 향후 main.py에서 해당 날짜를 수집 기준일(execution_date)로 활용할 수 있도록 대비함.
-        env={**os.environ, "AIRFLOW_EXECUTION_DATE": "{{ ds_nodash }}"},
-        append_env=True,
-    )
+        # 2. Silver Task : 내부 원본 데이터 검증 및 정제 후 통합하여 S3 적재 
 
-    # 단일 Task이므로 의존성(>> 연산) 생략
-    run_bronze_pipeline
+        # 3. Gold Task : 피쳐 엔지니어링 및 파생변수 생성 후 PostgreSQL 적재
+
+        # 4. Task 의존성 (흐름) 제어
+        run_bronze
+
+    return dag
+
+# ==========================================================
+# DAG 인스턴스 생성
+# ==========================================================
+# 1. Asia 파이프라인 (KST 00:00)
+bronze_asia_dag = create_dag(
+    dag_id="bronze_daily_asia",
+    schedule="0 0 * * *",
+    timezone="Asia/Seoul",
+    task_key="bronze_daily_asia"
+)
+
+# 2. Global 파이프라인 (EST 00:00)
+bronze_global_dag = create_dag(
+    dag_id="bronze_daily_global",
+    schedule="0 0 * * *",
+    timezone="America/New_York",
+    task_key="bronze_daily_global"
+)

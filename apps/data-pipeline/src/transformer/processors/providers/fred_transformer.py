@@ -85,6 +85,10 @@ class FREDTransformer(AbstractTransformer):
             # 리스트(배열)를 각각의 행(Row)으로 분리
             df = df.explode(explode_target).reset_index(drop=True)
             
+            # 빈 배열([])이 explode되어 생성된 NaN(float) 결측치를 강제 제거
+            # 이 방어 로직이 없으면 다음 단계의 json_normalize가 float를 딕셔너리로 오해하여 붕괴됩니다.
+            df = df.dropna(subset=[explode_target]).reset_index(drop=True)
+
             # 행으로 분리된 딕셔너리들의 Key를 컬럼으로 전개
             if not df[explode_target].isna().all():
                 exploded_df = pd.json_normalize(df[explode_target].tolist())
@@ -127,7 +131,9 @@ class FREDTransformer(AbstractTransformer):
             if col in df.columns:
                 try:
                     # FRED의 "." 같은 결측치 처리를 위해 coerce 옵션 필수 적용
-                    if dtype in ["float32", "float64", "int32", "int64"]:
+                    if dtype in ["date", "datetime", "datetime64[ns]"]:
+                        df[col] = self._cast_datetime_vectorized(df[col])
+                    elif dtype in ["float32", "float64", "int32", "int64"]:
                         df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
                     else:
                         df[col] = df[col].astype(dtype)

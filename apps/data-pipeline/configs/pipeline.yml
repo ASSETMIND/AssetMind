@@ -10,8 +10,8 @@ tasks:
   # ----------------------------------------------------------------------------
   # Task 1. 거시경제 및 주요 지수 배치 (매일 장 마감 후 실행 목적)
   # ----------------------------------------------------------------------------
-  bronze_daily_batch:
-    description: "글로벌 거시경제 핵심 지표 일일 수집 배치"
+  bronze_daily_asia:
+    description: "아시아 거시경제 핵심 지표 일일 수집 배치"
     target_loader: "aws" # loader.yml의 최상위 노드 참조 (S3 적재)
     extract_jobs:
       # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
@@ -77,6 +77,83 @@ tasks:
       - "kis_kosdaq_mid_size_business_daily"
       - "kis_kosdaq_tech_growth_daily"
 
+      # ========== [글로벌 주요 국가 지수 일별 데이터 : 10개] ==========
+      # 아시아 핵심
+      - "kis_global_china_shanghai_daily"
+      - "kis_global_china_chinext_daily"
+      - "kis_global_hk_hangseng_daily"
+      - "kis_global_taiwan_taiex_daily"
+      - "kis_global_japan_nikkei_daily"
+
+      # ASEAN 신흥국
+      - "kis_global_indonesia_idx_daily"
+      - "kis_global_vietnam_vn_daily"
+      - "kis_global_malaysia_klci_daily"
+      - "kis_global_philippines_psei_daily"
+      - "kis_global_thailand_set_daily"
+
+      # ========== [환율 일별 데이터 : 14개] ==========
+      # 한국 및 기축/준기축 통화
+      - "kis_fx_krw_usd_daily"
+      - "kis_fx_eur_usd_daily"
+      - "kis_fx_gbp_usd_daily"
+      - "kis_fx_jpy_usd_daily"
+      - "kis_fx_cny_usd_daily"
+      - "kis_fx_twd_usd_daily"
+
+      # 아메리카
+      - "kis_fx_cad_usd_daily"
+      - "kis_fx_brl_usd_daily"
+
+      # 신흥국 및 ASEAN
+      - "kis_fx_inr_usd_daily"
+      - "kis_fx_idr_usd_daily"
+      - "kis_fx_vnd_usd_daily"
+      - "kis_fx_myr_usd_daily"
+      - "kis_fx_php_usd_daily"
+      - "kis_fx_thb_usd_daily"
+
+      # ========== [시장금리 일별 데이터 : 28개] ==========
+      - "ecos_bok_base_rate_daily"
+      - "ecos_call_1d_all_daily"
+      - "ecos_call_1d_broker_daily"
+      - "ecos_call_1d_bank_sec_daily"
+      - "ecos_kofr_daily"
+      - "ecos_koribor_3m_daily"
+      - "ecos_koribor_6m_daily"
+      - "ecos_koribor_12m_daily"
+      - "ecos_cd_91d_daily"
+      - "ecos_cp_91d_daily"
+      - "ecos_nhb_1_5y_daily"
+      - "ecos_ktb_1y_daily"
+      - "ecos_ktb_2y_daily"
+      - "ecos_ktb_3y_daily"
+      - "ecos_ktb_5y_daily"
+      - "ecos_ktb_10y_daily"
+      - "ecos_ktb_20y_daily"
+      - "ecos_ktb_30y_daily"
+      - "ecos_ktb_50y_daily"
+      - "ecos_msb_91d_daily"
+      - "ecos_msb_1y_daily"
+      - "ecos_msb_2y_daily"
+      - "ecos_kdb_1y_daily"
+      - "ecos_cb_3y_aa_minus_daily"
+      - "ecos_cb_3y_bbb_minus_daily"
+      - "ecos_cb_3y_aa_minus_minpyung_daily"
+      - "ecos_mmf_7d_daily"
+      - "ecos_cma_daily"
+
+      # ========== [업비트 가상자산 일별 데이터 : 5개] ==========
+      - "upbit_krw_usdt_daily"
+      - "upbit_krw_btc_daily"
+      - "upbit_krw_eth_daily"
+      - "upbit_krw_sol_daily"
+      - "upbit_krw_xrp_daily"
+
+  bronze_daily_global:
+    description: "글로벌 주요 지수 및 원자재 일일 수집 배치"
+    target_loader: "aws"
+    extract_jobs:
       # ========== [S&P500 지수 일별 데이터 : 1개] ==========
       - "kis_snp500_daily"
 
@@ -123,14 +200,7 @@ tasks:
       - "kis_dow_jones_tires_daily"
       - "kis_dow_jones_wireless_comm_daily"
 
-      # ========== [글로벌 주요 국가 지수 일별 데이터 : 17개] ==========
-      # 아시아 핵심
-      - "kis_global_china_shanghai_daily"
-      - "kis_global_china_chinext_daily"
-      - "kis_global_hk_hangseng_daily"
-      - "kis_global_taiwan_taiex_daily"
-      - "kis_global_japan_nikkei_daily"
-
+      # ========== [글로벌 주요 국가 지수 일별 데이터 : 7개] ==========
       # 유럽
       - "kis_global_europe_stoxx50_daily"
       - "kis_global_germany_dax_daily"
@@ -141,34 +211,6 @@ tasks:
       - "kis_global_canada_tsx_daily"
       - "kis_global_brazil_bovespa_daily"
       - "kis_global_india_sensex_daily"
-
-      # ASEAN 신흥국
-      - "kis_global_indonesia_idx_daily"
-      - "kis_global_vietnam_vn_daily"
-      - "kis_global_malaysia_klci_daily"
-      - "kis_global_philippines_psei_daily"
-      - "kis_global_thailand_set_daily"
-
-      # ========== [환율 일별 데이터 : 14개] ==========
-      # 한국 및 기축/준기축 통화
-      - "kis_fx_krw_usd_daily"
-      - "kis_fx_eur_usd_daily"
-      - "kis_fx_gbp_usd_daily"
-      - "kis_fx_jpy_usd_daily"
-      - "kis_fx_cny_usd_daily"
-      - "kis_fx_twd_usd_daily"
-
-      # 아메리카
-      - "kis_fx_cad_usd_daily"
-      - "kis_fx_brl_usd_daily"
-
-      # 신흥국 및 ASEAN
-      - "kis_fx_inr_usd_daily"
-      - "kis_fx_idr_usd_daily"
-      - "kis_fx_vnd_usd_daily"
-      - "kis_fx_myr_usd_daily"
-      - "kis_fx_php_usd_daily"
-      - "kis_fx_thb_usd_daily"
 
       # ========== [원자재/에너지/농산물 근월물 일별 데이터 : 23개] ==========
       # 귀금속
@@ -207,40 +249,3 @@ tasks:
       - fred_us_treasury_5y_daily
       - fred_us_treasury_10y_daily
       - fred_us_treasury_30y_daily
-
-      # ========== [시장금리 일별 데이터 : 28개] ==========
-      - "ecos_bok_base_rate_daily"
-      - "ecos_call_1d_all_daily"
-      - "ecos_call_1d_broker_daily"
-      - "ecos_call_1d_bank_sec_daily"
-      - "ecos_kofr_daily"
-      - "ecos_koribor_3m_daily"
-      - "ecos_koribor_6m_daily"
-      - "ecos_koribor_12m_daily"
-      - "ecos_cd_91d_daily"
-      - "ecos_cp_91d_daily"
-      - "ecos_nhb_1_5y_daily"
-      - "ecos_ktb_1y_daily"
-      - "ecos_ktb_2y_daily"
-      - "ecos_ktb_3y_daily"
-      - "ecos_ktb_5y_daily"
-      - "ecos_ktb_10y_daily"
-      - "ecos_ktb_20y_daily"
-      - "ecos_ktb_30y_daily"
-      - "ecos_ktb_50y_daily"
-      - "ecos_msb_91d_daily"
-      - "ecos_msb_1y_daily"
-      - "ecos_msb_2y_daily"
-      - "ecos_kdb_1y_daily"
-      - "ecos_cb_3y_aa_minus_daily"
-      - "ecos_cb_3y_bbb_minus_daily"
-      - "ecos_cb_3y_aa_minus_minpyung_daily"
-      - "ecos_mmf_7d_daily"
-      - "ecos_cma_daily"
-
-      # ========== [업비트 가상자산 일별 데이터 : 5개] ==========
-      - "upbit_krw_usdt_daily"
-      - "upbit_krw_btc_daily"
-      - "upbit_krw_eth_daily"
-      - "upbit_krw_sol_daily"
-      - "upbit_krw_xrp_daily"

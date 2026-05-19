@@ -53,11 +53,18 @@ class KISTransformer(AbstractTransformer):
         """변환 전 정책과 데이터 간의 필수 무결성을 검증합니다."""
         explode_target = self.policy.get("explode_target")
         
-        if explode_target and explode_target not in data.columns:
-            raise TransformerError(
-                message=f"[KISTransformer] 무결성 오류: 평탄화 대상 컬럼 '{explode_target}'이(가) 데이터에 존재하지 않습니다.",
-                should_retry=False
-            )
+        if not explode_target:
+            return
+
+        # 단일 문자열(str) 입력 시 리스트로 강제 정규화하여 처리 로직을 통일함
+        targets = [explode_target] if isinstance(explode_target, str) else explode_target
+        
+        for target in targets:
+            if target not in data.columns:
+                raise TransformerError(
+                    message=f"[KISTransformer] 무결성 오류: 평탄화 대상 컬럼 '{target}'이(가) 데이터에 존재하지 않습니다.",
+                    should_retry=False
+                )
 
     def _apply_transform(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
         """불필요한 컬럼을 제거하고 중첩 딕셔너리(output1 등)를 고속으로 평탄화합니다."""
@@ -71,15 +78,41 @@ class KISTransformer(AbstractTransformer):
             
         # 2. 타겟 컬럼 전개 (Flattening)
         explode_target = self.policy.get("explode_target")
-        if explode_target and explode_target in df.columns:
-            # [설계 의도] df[explode_target].tolist()는 List[Dict] 형태를 띱니다.
-            # 이를 json_normalize에 넘기면 Key들이 컬럼이 되는 새로운 DataFrame이 C엔진 속도로 생성됩니다.
-            exploded_df = pd.json_normalize(df[explode_target].tolist())
-            
-            # 원본 타겟 컬럼 삭제 및 전개된 컬럼 병합
-            df = df.drop(columns=[explode_target])
-            df = pd.concat([df, exploded_df], axis=1)
-            
+
+        if not explode_target:
+            return df
+        
+        # 단일 문자열(str) 입력 시 리스트로 정규화
+        targets = [explode_target] if isinstance(explode_target, str) else explode_target
+
+        # 2. 타겟 컬럼 순차 전개 (Flattening & Broadcasting)
+        for target in targets:
+            if target in df.columns:
+                # [설계 의도] List 타입 대응 (output2)
+                # 데이터가 존재하고 첫 번째 요소가 리스트인 경우, pandas 네이티브 explode로 세로(Row) 확장 수행
+                if not df[target].empty and isinstance(df[target].dropna().iloc[0], list):
+                    df = df.explode(target)
+
+                # 빈 배열([]) 수집 건 등이 결측치가 되었을 경우 안전하게 제거
+                df = df.dropna(subset=[target])
+                
+                # explode 연산 후 붕괴된 Index를 반드시 초기화. 
+                # (초기화하지 않으면 뒤의 json_normalize 결과와 index mismatch가 발생하여 NaN이 채워짐)
+                df = df.reset_index(drop=True)
+                
+                # [설계 의도] Dict 타입 가로 평탄화 (output1 및 explode된 output2)
+                exploded_df = pd.json_normalize(df[target].tolist())
+                
+                # 원본 타겟 컬럼 삭제 및 전개된 컬럼을 열(Column) 기준으로 병합
+                df = df.drop(columns=[target])
+
+                # 중복 컬럼 방어 - 만약 평탄화된 컬럼이 원본 데이터프레임의 기존 컬럼과 이름이 겹칠 경우, 기존 컬럼을 우선적으로 제거하여 충돌 방지
+                overlap_cols = [col for col in exploded_df.columns if col in df.columns]
+                if overlap_cols:
+                    df = df.drop(columns=overlap_cols)
+
+                df = pd.concat([df, exploded_df], axis=1)
+                
         return df
 
     def _enforce_schema(self, data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
@@ -111,8 +144,9 @@ class KISTransformer(AbstractTransformer):
         for col, dtype in type_map.items():
             if col in df.columns:
                 try:
-                    # 빈 문자열('')이나 None 등을 안전하게 처리하기 위해 pd.to_numeric 사용 후 캐스팅
-                    if dtype in ["float32", "float64", "int32", "int64"]:
+                    if dtype in ["date", "datetime", "datetime64[ns]"]:
+                        df[col] = self._cast_datetime_vectorized(df[col])
+                    elif dtype in ["float32", "float64", "int32", "int64"]:
                         df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
                     else:
                         df[col] = df[col].astype(dtype)

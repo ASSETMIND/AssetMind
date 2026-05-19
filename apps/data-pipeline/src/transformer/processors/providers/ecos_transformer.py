@@ -183,8 +183,9 @@ class ECOSTransformer(AbstractTransformer):
         for col, dtype in type_map.items():
             if col in df.columns:
                 try:
-                    # 결측치 방어를 위해 pd.to_numeric(errors='coerce') 사용 (수치형 한정)
-                    if dtype in ["float32", "float64", "int32", "int64"]:
+                    if dtype in ["date", "datetime", "datetime64[ns]"]:
+                        df[col] = self._cast_datetime_vectorized(df[col])
+                    elif dtype in ["float32", "float64", "int32", "int64"]:
                         df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
                     else:
                         df[col] = df[col].astype(dtype)
