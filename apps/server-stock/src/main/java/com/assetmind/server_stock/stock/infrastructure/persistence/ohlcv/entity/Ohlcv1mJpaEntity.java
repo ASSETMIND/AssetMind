@@ -1,6 +1,6 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.entity;
+package com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.entity;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.keys.OhlcvId;
+import com.assetmind.server_stock.stock.infrastructure.persistence.common.keys.OhlcvId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -14,10 +14,10 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "ohlcv_1d")
+@Table(name = "ohlcv_1m")
 @IdClass(OhlcvId.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Ohlcv1dJpaEntity {
+public class Ohlcv1mJpaEntity {
 
     @Id
     @Column(name = "stock_code", nullable = false, length = 20)
@@ -43,7 +43,7 @@ public class Ohlcv1dJpaEntity {
     private Long volume;
 
     @Builder
-    public Ohlcv1dJpaEntity(String stockCode, LocalDateTime candleTimestamp,
+    public Ohlcv1mJpaEntity(String stockCode, LocalDateTime candleTimestamp,
             Double openPrice, Double highPrice, Double lowPrice, Double closePrice, Long volume) {
         this.stockCode = stockCode;
         this.candleTimestamp = candleTimestamp;
@@ -53,4 +53,5 @@ public class Ohlcv1dJpaEntity {
         this.closePrice = closePrice;
         this.volume = volume;
     }
+
 }

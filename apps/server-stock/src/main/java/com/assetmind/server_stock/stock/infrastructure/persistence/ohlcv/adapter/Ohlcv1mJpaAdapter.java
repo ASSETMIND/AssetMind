@@ -1,11 +1,11 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
+package com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.adapter;
 
 import com.assetmind.server_stock.global.aspect.LogExecutionTime;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.repository.Ohlcv1mRepository;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.entity.Ohlcv1mJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.common.projection.ChartCandleProjection;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.repository.Ohlcv1mJpaRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
  * {@link Ohlcv1mRepository} 인터페이스를 JPA 기술로 구현한 어탭터 구현체
  *
  * 도메인 계층에서 전달받은 순수 DTO {@link OhlcvDto}를
- * 영속성 객체 {@link com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1mJpaEntity}로 변환하여 DB에 저장
+ * 영속성 객체 {@link Ohlcv1mJpaEntity}로 변환하여 DB에 저장
  *
  * 현재는 JPA의 saveAll()을 사용하고 있으나 향후 성능 최적화가 필요할 시에는 JdbcTemplate으로 변경할 예정
  */

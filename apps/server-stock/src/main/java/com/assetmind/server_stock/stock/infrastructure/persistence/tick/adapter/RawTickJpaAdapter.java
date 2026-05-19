@@ -1,7 +1,8 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
+package com.assetmind.server_stock.stock.infrastructure.persistence.tick.adapter;
 
 import com.assetmind.server_stock.stock.domain.repository.RawTickRepository;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.repository.RawTickJpaRepository;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity.RawTickJpaEntity;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;

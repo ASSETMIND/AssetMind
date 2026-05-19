@@ -1,7 +1,8 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.redis;
+package com.assetmind.server_stock.stock.infrastructure.persistence.stock.adapter;
 
 import com.assetmind.server_stock.stock.domain.repository.StockSnapshotRepository;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.repository.StockPriceRedisRepository;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

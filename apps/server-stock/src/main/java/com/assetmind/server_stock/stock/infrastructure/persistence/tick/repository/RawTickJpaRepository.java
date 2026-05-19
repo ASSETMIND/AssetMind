@@ -1,7 +1,7 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
+package com.assetmind.server_stock.stock.infrastructure.persistence.tick.repository;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.keys.TickId;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.common.keys.TickId;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

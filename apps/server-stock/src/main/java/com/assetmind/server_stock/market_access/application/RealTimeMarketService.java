@@ -1,11 +1,8 @@
 package com.assetmind.server_stock.market_access.application;
 
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
-import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
-import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import jakarta.annotation.PreDestroy;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

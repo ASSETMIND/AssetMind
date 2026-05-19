@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.entity;
+package com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity;
 
 import java.io.Serializable;
 import lombok.Builder;

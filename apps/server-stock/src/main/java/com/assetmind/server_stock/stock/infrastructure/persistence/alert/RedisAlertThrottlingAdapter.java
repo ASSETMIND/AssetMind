@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.redis;
+package com.assetmind.server_stock.stock.infrastructure.persistence.alert;
 
 import com.assetmind.server_stock.stock.application.port.AlertThrottlingPort;
 import java.time.Duration;

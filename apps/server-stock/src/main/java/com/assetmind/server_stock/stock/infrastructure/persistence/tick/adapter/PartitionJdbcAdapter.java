@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.jdbc;
+package com.assetmind.server_stock.stock.infrastructure.persistence.tick.adapter;
 
 import com.assetmind.server_stock.stock.domain.repository.PartitionRepository;
 import java.time.LocalDate;

@@ -1,8 +1,8 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
+package com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.repository;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.keys.OhlcvId;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection.ChartCandleProjection;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.entity.Ohlcv1dJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.common.keys.OhlcvId;
+import com.assetmind.server_stock.stock.infrastructure.persistence.common.projection.ChartCandleProjection;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;

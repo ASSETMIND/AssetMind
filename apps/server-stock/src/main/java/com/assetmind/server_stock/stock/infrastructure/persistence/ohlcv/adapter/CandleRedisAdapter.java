@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.redis;
+package com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.adapter;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;

@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.entity;
+package com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

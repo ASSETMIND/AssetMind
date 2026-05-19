@@ -1,4 +1,4 @@
-package com.assetmind.server_stock.stock.infrastructure.persistence.entity.projection;
+package com.assetmind.server_stock.stock.infrastructure.persistence.common.projection;
 
 import java.time.LocalDateTime;
 
