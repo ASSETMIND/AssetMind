@@ -32,7 +32,7 @@ public class OrderBookThrottlingScheduler {
 
             // 최신 데이터가 변경된 데이터라면 프론트엔드로 전송
             if (snapshot != null) {
-                String destination = "/topic/orderbook" + stockCode;
+                String destination = "/topic/orderbook/" + stockCode;
                 messagingTemplate.convertAndSend(destination, snapshot);
                 flushCount++;
             }
