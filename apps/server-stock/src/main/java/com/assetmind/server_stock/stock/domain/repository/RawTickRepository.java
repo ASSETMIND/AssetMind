@@ -1,6 +1,6 @@
 package com.assetmind.server_stock.stock.domain.repository;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity.RawTickJpaEntity;
 import java.util.List;
 
 /**

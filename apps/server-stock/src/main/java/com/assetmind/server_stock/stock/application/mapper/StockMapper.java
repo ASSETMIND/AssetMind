@@ -1,8 +1,8 @@
 package com.assetmind.server_stock.stock.application.mapper;
 
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity.StockPriceRedisEntity;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
