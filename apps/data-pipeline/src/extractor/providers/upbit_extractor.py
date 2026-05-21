@@ -22,7 +22,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
   - 근거: 다양한 종류의 자산을 수집해야 하는 파이프라인 특성상 확장성(Scalability) 확보가 코드 레벨의 강한 결합(Hardcoding)보다 우선시됨.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from src.common.config import ConfigManager
@@ -181,3 +181,23 @@ class UPBITExtractor(AbstractExtractor):
                 "chunks_merged": len(raw_data_list)
             }
         )
+    
+    def _replace_macros(self, params: Dict[str, Any], start_dt: datetime, end_dt: datetime) -> Dict[str, Any]:
+        """부모의 기본 매크로 치환을 확장하여 UPBIT 전용 날짜 포맷($END_DATE_UPBIT)을 지원합니다.
+        
+        [설계 의도]
+        업비트의 일봉 캔들은 매일 오전 9시(KST)에 마감됩니다. 
+        타겟일(end_dt)의 완성된 일봉을 조회하려면, API의 'to' 파라미터에 '타겟일 + 1일 09:00:00'을 
+        전달해야 하므로 이를 동적으로 계산하여 주입합니다.
+        """
+        # 1. 부모 클래스(AbstractExtractor)의 기본 매크로 치환 실행
+        replaced = super()._replace_macros(params, start_dt, end_dt)
+
+        # 2. UPBIT 전용 09시 기준 마감 시간 계산
+        upbit_target_utc = (end_dt + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00Z")
+        # 3. UPBIT 전용 매크로 지시어 치환
+        for key, value in replaced.items():
+            if isinstance(value, str) and value == "$END_DATE_UPBIT":
+                replaced[key] = upbit_target_utc
+
+        return replaced

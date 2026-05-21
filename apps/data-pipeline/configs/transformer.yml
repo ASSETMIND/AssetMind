@@ -7,20 +7,28 @@
 # ==============================================================================
 
 routing:
-  # 1. KIS 국내 지수
+  # 1. KIS 아시아
   - prefix: "kis_kospi_"
     schema: "kis_domestic_schema"
   - prefix: "kis_kosdaq_"
     schema: "kis_domestic_schema"
   - prefix: "kis_vkospi_"
     schema: "kis_domestic_schema"
+  - prefix: "kis_asia_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_fx_"
+    schema: "kis_domestic_schema"
 
-  # 2. KIS 해외 지수/원자재/환율
+  # 2. KIS 글로벌
   - prefix: "kis_nasdaq_"
     schema: "kis_overseas_schema"
   - prefix: "kis_snp500_"
     schema: "kis_overseas_schema"
   - prefix: "kis_dow_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_global_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_commodity_"
     schema: "kis_overseas_schema"
 
   # 3. FRED 미국 채권 금리

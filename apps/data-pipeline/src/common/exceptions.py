@@ -89,6 +89,14 @@ class LoaderError(ETLError):
     """[L] 데이터 적재 단계 예외 Base."""
     pass
 
+class ReaderError(ETLError):
+    """[R] 데이터 읽기(Reader) 단계 예외 Base."""
+    pass
+
+class BuilderError(ETLError):
+    """Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    pass
+
 
 # ==============================================================================
 # 4. Extractor Layer Detailed Exceptions
@@ -361,11 +369,6 @@ class S3UploadError(LoaderError):
 # 7. Reader Layer Detailed Exceptions
 # ==============================================================================
 
-class ReaderError(ETLError):
-    """[R] 데이터 읽기(Reader) 단계 예외 Base."""
-    pass
-
-
 class ReaderInitializationError(ReaderError):
     """AbstractReader 및 하위 구현체의 초기화 실패 시 발생하는 예외.
     
@@ -461,3 +464,38 @@ class ReaderServiceError(ReaderError):
             details=details,
             should_retry=False
         )
+
+# ==============================================================================
+# 8. Builder Layer Detailed Exceptions
+# ==============================================================================
+
+class BuilderDataMismatchError(BuilderError):
+    """Builder 연산 중 입력 데이터프레임과 식별자의 정합성이 맞지 않을 때 발생하는 예외."""
+
+    def __init__(
+        self,
+        message: str,
+        df_count: int,
+        job_count: int
+    ) -> None:
+        details = {
+            "df_count": df_count,
+            "job_count": job_count
+        }
+        # 물리적 데이터 불일치는 재시도해도 무조건 실패하므로 should_retry=False 강제
+        super().__init__(
+            message,
+            details=details,
+            should_retry=False
+        )
+
+
+class BuilderServiceError(BuilderError):
+    """BuilderService 계층의 사전 검증 및 파이프라인 제어 중 발생하는 예외."""
+    
+    def __init__(self, message: str, original_exception: Optional[Exception] = None) -> None:
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+            
+        super().__init__(message, details=details, should_retry=False)
