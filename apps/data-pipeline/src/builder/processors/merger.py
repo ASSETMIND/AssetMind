@@ -30,6 +30,7 @@ from typing import List
 import pandas as pd
 
 from src.common.decorators.log_decorator import log_decorator
+from src.common.exceptions import BuilderDataMismatchError
 
 @log_decorator(logger_name="build_wide_table")
 def build_wide_table(
@@ -55,7 +56,11 @@ def build_wide_table(
 
     # [설계 의도] DataFrame과 네임스페이스 식별자의 1:1 매칭 무결성 조기 검증 (Fail-Fast)
     if len(dfs) != len(job_ids):
-        raise ValueError(f"데이터프레임 개수({len(dfs)})와 Job ID 개수({len(job_ids)})가 일치하지 않습니다.")
+        raise BuilderDataMismatchError(
+            message=f"데이터프레임 개수({len(dfs)})와 Job ID 개수({len(job_ids)})가 일치하지 않습니다.",
+            df_count=len(dfs),
+            job_count=len(job_ids)
+        )
 
     indexed_dfs = []
     
