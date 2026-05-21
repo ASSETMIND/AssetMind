@@ -12,7 +12,7 @@ tasks:
   # ----------------------------------------------------------------------------
   bronze_daily_asia:
     description: "아시아 거시경제 핵심 지표 일일 수집 배치"
-    target_loader: "aws" # loader.yml의 최상위 노드 참조 (S3 적재)
+    target_loader: "s3_zstd"
     extract_jobs:
       # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
       - "kis_kospi_daily"
@@ -153,7 +153,7 @@ tasks:
 
   bronze_daily_global:
     description: "글로벌 주요 지수 및 원자재 일일 수집 배치"
-    target_loader: "aws"
+    target_loader: "s3_zstd"
     extract_jobs:
       # ========== [S&P500 지수 일별 데이터 : 1개] ==========
       - "kis_snp500_daily"

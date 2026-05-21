@@ -210,12 +210,12 @@ class PipelineService:
             "error_info": error_info
         }
 
-    async def _safe_load(self, job_id: str, dto: ExtractedDTO) -> Dict[str, Any]:
-        """단일 수집 완료 DTO에 대한 데이터 적재를 안전하게 격리하여 수행합니다.
+    async def _safe_load(self, job_id: str, dto: Union[ExtractedDTO, TransformedDTO]) -> Dict[str, Any]:
+        """단일 수집 또는 변환 완료 DTO에 대한 데이터 적재를 안전하게 격리하여 수행합니다.
         
         Args:
             job_id (str): 현재 처리 중인 Job의 고유 식별자.
-            dto (ExtractedDTO): 수집이 성공적으로 완료된 원본 데이터 객체.
+            dto (Union[ExtractedDTO, TransformedDTO]): 처리가 성공적으로 완료된 데이터 객체.
             
         Returns:
             Dict[str, Any]: 단일 Job의 적재 처리 최종 상태가 담긴 딕셔너리.
@@ -224,6 +224,7 @@ class PipelineService:
             # [설계 의도] Impedance Matching 방어 로직.
             # LoaderService.execute_load는 동기(Sync) 블로킹 함수입니다. 이를 비동기 루프에서 직접 호출하면
             # 전체 파이프라인이 멈추게 되므로, asyncio.to_thread를 사용하여 워커 스레드 풀로 I/O 연산을 위임합니다.
+            # LoaderService가 Union 타입을 지원하므로 DTO 종류에 상관없이 안전하게 다형성 처리가 가능합니다.
             is_loaded = await asyncio.to_thread(self._loader_service.execute_load, dto)
             
             if is_loaded:
@@ -232,7 +233,7 @@ class PipelineService:
                 return {"job_id": job_id, "status": STATUS_FAIL_LOAD, "error_info": {"message": "Loader returned False"}}
 
         except LoaderError as le:
-            # [설계 의도] 기 정의된 적재 도메인 에러(S3UploadError, ZstdCompressionError 등)를 포착하여 규격 유지.
+            # 기 정의된 적재 도메인 에러(S3UploadError, ZstdCompressionError 등)를 포착하여 규격 유지.
             return {
                 "job_id": job_id, 
                 "status": STATUS_FAIL_LOAD, 
@@ -240,7 +241,7 @@ class PipelineService:
             }
             
         except Exception as e:
-            # [설계 의도] 방어적 프로그래밍. 예측하지 못한 시스템 치명적 오류(MemoryError 등) 캐치 및 표준화(to_dict).
+            # 방어적 프로그래밍. 예측하지 못한 시스템 치명적 오류 캐치 및 표준화(to_dict).
             unexpected_error = ETLError(
                 message=f"적재 중 알 수 없는 치명적 오류 발생: {str(e)}", 
                 original_exception=e
