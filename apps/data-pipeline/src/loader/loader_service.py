@@ -96,8 +96,8 @@ class LoaderService:
             # [설계 의도] 메인 프로세스 기동 시 불필요한 서드파티 모듈을 로드하지 않도록,
             # 분기 블록 내부에서 동적 임포트(Dynamic Import)를 수행함.
             if target_system == "aws":
-                from src.loader.providers.s3_loader import S3Loader
-                loader_instance = S3Loader(
+                from src.loader.providers.s3_zstd_loader import S3ZstdLoader
+                loader_instance = S3ZstdLoader(
                     bucket_name=loader_policy.s3.get("bucket_name"),
                     region=loader_policy.region
                 )
