@@ -70,7 +70,7 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
         default_args=default_args,
         schedule=schedule,
         catchup=False,
-        tags=["bronze", "daily", task_key.split('_')[-1]],
+        tags=["daily", task_key.split('_')[-1]],
     ) as dag:
         
         # 1. Bronze Task : 외부 API에서 원본 데이터 추출 및 S3 적재
@@ -82,17 +82,26 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
                 # DAG에 할당된 타임존(dag.timezone)을 기준으로 논리적 실행일(data_interval_start)을 포맷팅합니다.
                 # 이를 통해 KST, EST 등 타임존과 무관하게 데이터의 "목표 대상일(Target Date)"이 정확히 주입됩니다.
                 "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
-                "TARGET_TASK": f"{task_key}"
+                "TARGET_TASK": f"bronze_{task_key}"
             },
             append_env=True,
         )
 
         # 2. Silver Task : 내부 원본 데이터 검증 및 정제 후 통합하여 S3 적재 
+        run_silver = BashOperator(
+            task_id=f"run_silver_{task_key}",
+            bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
+            env={
+                "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "TARGET_TASK": f"silver_{task_key}"
+            },
+            append_env=True,
+        )
 
         # 3. Gold Task : 피쳐 엔지니어링 및 파생변수 생성 후 PostgreSQL 적재
 
         # 4. Task 의존성 (흐름) 제어
-        run_bronze
+        run_bronze >> run_silver
 
     return dag
 
@@ -100,17 +109,17 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
 # DAG 인스턴스 생성
 # ==========================================================
 # 1. Asia 파이프라인 (KST 00:00)
-bronze_asia_dag = create_dag(
-    dag_id="bronze_daily_asia",
+daily_asia_dag = create_dag(
+    dag_id="daily_asia",
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
-    task_key="bronze_daily_asia"
+    task_key="daily_asia"
 )
 
 # 2. Global 파이프라인 (EST 00:00)
-bronze_global_dag = create_dag(
-    dag_id="bronze_daily_global",
+daily_global_dag = create_dag(
+    dag_id="daily_global",
     schedule="0 0 * * *",
     timezone="America/New_York",
-    task_key="bronze_daily_global"
+    task_key="daily_global"
 )
