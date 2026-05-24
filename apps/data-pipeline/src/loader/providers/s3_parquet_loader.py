@@ -25,8 +25,10 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
    - 근거: 수백/수천 개의 일자별 폴더로 데이터를 찢어서 올리는 분산 적재(Partitioning)를 직접 코딩하는 것은 바퀴를 다시 발명하는 것(Reinventing the wheel)이며, PyArrow 엔진에 위임하는 것이 유지보수성과 성능 면에서 압도적으로 유리하므로 이 방식을 채택함.
 """
 
+import os
+
 import pandas as pd
-from typing import List
+from typing import Any, Dict, List
 
 from src.common.exceptions import LoaderError
 from src.common.log import LogManager
@@ -81,28 +83,37 @@ class S3ParquetLoader(AbstractLoader):
         """DataFrame을 PyArrow 엔진을 통해 S3에 분산 파티셔닝하여 적재합니다."""
         
         df: pd.DataFrame = dto.data
-        # s3fs 엔진 통신을 위한 프로토콜 명시적 경로 생성
         s3_path = f"s3://{self._bucket_name}/{self._prefix}"
         
+        # [핵심 수정] LocalStack 엔드포인트 분기 및 storage_options 조립
+        storage_options: Dict[str, Any] = {}
+        local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT")
+        
+        if local_endpoint:
+            storage_options = {
+                "client_kwargs": {
+                    "endpoint_url": local_endpoint,
+                    "aws_access_key_id": "test",
+                    "aws_secret_access_key": "test"
+                }
+            }
+            
         try:
-            # [핵심 로직] Boto3 보일러플레이트 없이 엔진에 I/O 및 파티셔닝 전면 위임
+            # PyArrow 내부 s3fs로 스토리지 옵션 강제 주입
             df.to_parquet(
                 path=s3_path,
                 engine="pyarrow",
-                compression="zstd",  # Parquet 파일 내부에 최신 zstd 압축 적용
+                compression="zstd",
                 partition_cols=self._partition_cols,
-                index=False
+                index=False,
+                storage_options=storage_options
             )
+            self._logger.info(f"S3ParquetLoader: S3에 Parquet 파일로 성공적으로 적재되었습니다. (Path: {s3_path})")
             return True
             
-        except ImportError as e:
-            raise LoaderError(
-                message="Parquet S3 적재에 필수적인 라이브러리('pyarrow', 's3fs')가 설치되어 있지 않습니다.",
-                original_exception=e
-            ) from e
         except Exception as e:
-            # S3 권한 부족, 네트워크 순단 등의 예기치 않은 I/O 에러를 도메인 에러로 래핑
+            self._logger.error(f"[S3ParquetLoader] 물리 S3 Parquet 파일 쓰기 중 네이티브 I/O 에러 발생: {e}", exc_info=True)
             raise LoaderError(
-                message=f"S3 Parquet 적재 중 시스템 I/O 오류 발생: {e}",
-                original_exception=e
+                message=f"S3 Parquet 적재 중 시스템 I/O 오류 발생: {str(e)}",
+                should_retry=False
             ) from e

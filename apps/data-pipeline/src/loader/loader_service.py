@@ -91,22 +91,21 @@ class LoaderService:
         try:
             loader_policy = self._config.get_loader(target_system)
 
-            # [설계 의도] 브론즈(Zstd) 및 실버/골드(Parquet) 파이프라인 확장을 위해 
-            # 타겟 시스템 분기를 세분화하고 각 환경에 맞는 구체 로더를 동적 임포트(Dynamic Import)함.
+            # 파이프라인 확장을 위해 타겟 시스템 분기를 세분화하고 각 환경에 맞는 구체 로더를 동적 임포트.
             if target_system == "s3_zstd":
                 from src.loader.providers.s3_zstd_loader import S3ZstdLoader
                 loader_instance = S3ZstdLoader(
-                    bucket_name=loader_policy.s3.get("bucket_name"),
+                    bucket_name=loader_policy.bucket_name,
                     region=loader_policy.region,
-                    prefix=loader_policy.get("prefix")
+                    prefix=loader_policy.prefix
                 )
                 
             elif target_system == "s3_parquet":
                 from src.loader.providers.s3_parquet_loader import S3ParquetLoader
                 loader_instance = S3ParquetLoader(
-                    bucket_name=loader_policy.get("bucket_name"),
-                    prefix=loader_policy.get("prefix"),
-                    partition_cols=loader_policy.get("partition_cols")
+                    bucket_name=loader_policy.bucket_name,
+                    prefix=loader_policy.prefix,
+                    partition_cols=loader_policy.partition_cols
                 )
                 
             else:
