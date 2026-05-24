@@ -96,11 +96,11 @@ class ReaderService:
             # [설계 의도] 분기 블록 내부 동적 임포트(Dynamic Import).
             # S3 리더만 필요한 환경에서 불필요하게 psycopg2(Postgres) 엔진이 로드되어 
             # 메모리가 낭비되거나 ImportError가 발생하는 것을 방어함.
-            if self._target_reader in ["s3", "aws"]:
+            if self._target_reader in ["s3_zstd"]:
                 from src.reader.providers.s3_zstd_reader import S3ZstdStreamingReader
                 
                 reader_instance = S3ZstdStreamingReader(
-                    bucket_name=reader_policy.s3.get("bucket_name", "data-pipeline-bronze"),
+                    bucket_name=reader_policy.bucket_name,
                     region=reader_policy.region
                 )
             
@@ -129,67 +129,85 @@ class ReaderService:
             ) from e
 
     @log_decorator()
-    def read_stream(
-        self, 
-        source_path: str, 
-        batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Iterator[Any]:
-        """지정된 스토리지 경로로부터 OOM 없이 데이터를 추출하는 스트리밍 제너레이터를 시작합니다.
-
-        [설계 의도]
-        하위 구현체(예: S3ZstdStreamingReader)가 데이터를 모두 다운로드하지 않고,
-        네트워크 Socket 레벨에서 Byte Stream을 유지하며 청크(Chunk) 단위로 
-        데이터 프레임 파싱용 리스트(List[Dict])를 Yield 하도록 위임합니다.
+    def read_stream(self, job_id: str, execution_date: str, source_layer: str, batch_size: int = DEFAULT_BATCH_SIZE) -> Iterator[Any]:
+        """지정된 작업 식별자(job_id)와 배치 기준일(execution_date) 및 대상 레이어(source_layer)를 기반으로
+        하부 스토리지의 데이터 스트림을 청크 단위로 읽어오는 단일 진입점 인터페이스입니다.
 
         Args:
-            source_path (str): 추출할 대상 데이터의 고유 경로 (예: S3 Object Key).
-            batch_size (int, optional): 하위 구현체에서 한 번에 Yield할 데이터 행(Row) 수. 
-                                        기본값은 DEFAULT_BATCH_SIZE (10,000).
+            job_id (str): 설정을 판독하기 위한 고유 작업 ID (예: 'kis_kospi_daily').
+            execution_date (str): 하이브 파티션 경로 조립을 위한 배치 기준일 (YYYYMMDD).
+            source_layer (str): 데이터를 읽어올 원천 메달리온 레이어 명칭.
+            batch_size (int, optional): 다운스트림으로 한 번에 yield할 레코드 크기. 기본값은 DEFAULT_BATCH_SIZE.
 
         Returns:
-            Iterator[Any]: 메모리 최적화를 위해 배치 단위로 묶인 데이터 제너레이터.
+            Iterator[Any]: 압축 해제 및 청크 정형화가 완료된 레코드 데이터를 순차 반환하는 제너레이터.
 
         Raises:
-            ReaderServiceError: 진입점(Entry Point)의 파라미터 무결성 사전 검증(Fail-Fast) 실패 시.
-            DataReadStreamError: 하위 리더에서 네트워크 단절 및 데이터 압축 해제 중 에러 발생 시.
+            ReaderServiceError: 입력 파라미터가 유효하지 않거나 하부 리더 구동 중 예외 발생 시.
         """
-        # 1. 사전 조건 검증 (Pre-condition Validation)
-        # [설계 의도] 방어적 프로그래밍. 파이썬의 동적 타이핑 오류가 I/O 레이어 깊숙이 침투하여 
-        # 원인 불명의 Boto3 에러로 터지기 전에, Facade 계층에서 논리 연산으로 원천 차단함.
-        if not isinstance(source_path, str) or not source_path.strip():
+        # 1. Pre-condition 규칙 검증 및 Fail-Fast 처리
+        if not job_id or not job_id.strip():
             raise ReaderServiceError(
-                message=f"유효하지 않은 데이터 읽기 경로(source_path)입니다. (입력값: {source_path})",
-                target_reader=self._target_reader,
-                invalid_path=str(source_path)
+                message=f"유효하지 않은 작업 식별자(job_id)입니다. (입력값: {job_id})",
+                target_reader=self._target_reader
             )
             
+        if not execution_date or not execution_date.strip():
+            raise ReaderServiceError(
+                message=f"유효하지 않은 실행 날짜(execution_date)입니다. (입력값: {execution_date})",
+                target_reader=self._target_reader
+            )
+
+        if not source_layer or not source_layer.strip():
+            raise ReaderServiceError(
+                message=f"유효하지 않은 소스 레이어(source_layer)입니다. (입력값: {source_layer})",
+                target_reader=self._target_reader
+            )
+
         if not isinstance(batch_size, int) or batch_size <= 0:
             raise ReaderServiceError(
                 message=f"batch_size는 1 이상의 정수여야 합니다. (입력값: {batch_size})",
                 target_reader=self._target_reader
             )
 
+        # 2. [비즈니스 규칙 반영] job_id 접두사에서 provider 추출 및 YYYYMMDD 날짜 분해
+        clean_job_id = job_id.strip()
+        clean_date = execution_date.strip()
+        
+        provider = clean_job_id.split('_')[0]
+        year = clean_date[0:4]
+        month = clean_date[4:6]
+        day = clean_date[6:8]
+        
+        layer_prefix = source_layer.strip().lower()
+        
+        # 3. [구조적 매핑] 브론즈 레이어의 Hive-Style 파티셔닝 디렉토리 Prefix 구조 생성
+        # 예: bronze/market_data/provider=ecos/job=ecos_kdb_1y_daily/year=2026/month=05/day=23/
+        source_path = (
+            f"{layer_prefix}/market_data/"
+            f"provider={provider}/"
+            f"job={clean_job_id}/"
+            f"year={year}/"
+            f"month={month}/"
+            f"day={day}/"
+        )
+        
         self._logger.info(
             f"데이터 스트림 추출 요청 위임 - Target: {self._target_reader.upper()}, "
             f"Path: {source_path}, Batch: {batch_size}"
         )
 
-        # 2. 인스턴스 획득 및 템플릿 메서드 호출 위임
-        # 다형성 보장: ReaderService는 대상이 S3인지 DB인지 관여하지 않고, 
-        # 오직 AbstractReader 규격의 read_stream()에만 의존함.
+        # 2. 인스턴스 획득 및 구체 리더(S3ZstdStreamingReader)로 정합성 규격에 맞게 호출 위임
         try:
             reader = self._get_or_create_reader()
             return reader.read_stream(
-                source_path=source_path.strip(),
+                source_path=source_path,
                 batch_size=batch_size
             )
         except Exception as e:
-            # 하위 모듈에서 이미 규격화된 도메인 에러는 그대로 Bypass
             if isinstance(e, (ConfigurationError, ReaderInitializationError, ReaderServiceError)):
                 raise e
-            # 예상치 못한 상위 파이프라인 런타임 오류는 서비스 에러로 감싸서 추적성 보존
             raise ReaderServiceError(
-                message="데이터 리더 스트리밍 위임 중 알 수 없는 예외 발생",
-                target_reader=self._target_reader,
-                invalid_path=source_path
-            ) from e
+                message=f"하부 리더 스트림 구동 중 예기치 못한 치명적 오류 발생: {e}",
+                target_reader=self._target_reader
+            )
