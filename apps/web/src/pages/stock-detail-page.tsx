@@ -108,7 +108,7 @@ export default function StockDetailPage() {
 									<div style={{ flexShrink: 0 }}>
 										<ErrorBoundary><OrderbookSection /></ErrorBoundary>
 									</div>
-									<div style={{ flexShrink: 0 }}>
+									<div style={{ flexShrink: 0, width: '340px' }}>
 										<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
 									</div>
 								</div>
