@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useOrderbook } from '../../hooks/stock-detail/use-orderbook';
 import { OrderbookTable } from './orderbook-table';
@@ -7,11 +8,14 @@ export default function OrderbookSection() {
 	const { id: stockCode = '' } = useParams<{ id: string }>();
 	const { viewModel, status } = useOrderbook(stockCode);
 	const viewport = useViewport();
+	const [expanded, setExpanded] = useState(false);
+
+	const effectiveViewport = viewport === 'mobile' && expanded ? 'desktop' : viewport;
 
 	return (
 		<OrderbookTable
 			status={status}
-			viewport={viewport}
+			viewport={effectiveViewport}
 			asks={viewModel?.asks}
 			bids={viewModel?.bids}
 			marketInfo={{
@@ -26,6 +30,7 @@ export default function OrderbookSection() {
 				volumeUnit: '',
 				changeFromYesterday: 0,
 			}}
+			onQuickOrder={() => setExpanded((prev) => !prev)}
 			onRetry={() => window.location.reload()}
 		/>
 	);

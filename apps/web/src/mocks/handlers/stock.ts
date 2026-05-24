@@ -1,4 +1,4 @@
-import { http, HttpResponse, passthrough, ws, type HttpResponseResolver } from 'msw';
+import { http, HttpResponse, ws, type HttpResponseResolver } from 'msw';
 
 const ALERT_THRESHOLD = 10.0;
 const COOLDOWN_MS = 30 * 60 * 1000;
@@ -74,8 +74,6 @@ const stockHistoryResolver: HttpResponseResolver = ({ request, params }) => {
 const stockSocket = ws.link('ws://localhost:5173/ws-stock');
 
 export const stockHandlers = [
-	http.get('http://localhost:9090/*', () => passthrough()),
-	http.post('http://localhost:9090/*', () => passthrough()),
 	http.get('*/api/stocks/ranking/:type', stockRankingResolver),
 	http.get('*/api/stocks/:stockCode/charts/candles', stockCandlesResolver),
 	http.get('*/api/stocks/:stockCode/history', stockHistoryResolver),
