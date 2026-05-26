@@ -107,7 +107,7 @@ export default function AIPredictionSection() {
 
 	const isMobile = viewport === 'mobile';
 	const isTablet = viewport === 'tablet';
-	const panelWidth = isMobile ? '100%' : isTablet ? '347px' : '340px';
+	const panelWidth = '100%';
 	const panelHeight = isMobile ? 'auto' : '820px';
 
 	return (
