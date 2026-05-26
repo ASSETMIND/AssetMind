@@ -191,22 +191,24 @@ class S3ZstdLoader(AbstractLoader):
 
     def _generate_s3_key(self, dto: ExtractedDTO) -> str:
         """S3 객체가 적재될 논리적 디렉토리 경로 및 파일 이름(Object Key)을 동적으로 생성합니다.
-        
-        [설계 의도] 
+
         수집 메타데이터의 `source`(예: KIS)와 `job_id`(예: kis_kospi_daily)를 기반으로 
         Hive-Style 파티셔닝(`key=value/`) 경로를 구성합니다. 이는 AWS Athena, AWS Glue 등 
         분석 서비스에서 파티션 프로젝션(Partition Projection)을 통해 쿼리 스캔 비용을 
         획기적으로 줄이는 데이터 카탈로깅 최적화 기법입니다.
+        
+        [멱등성 보장 구현] 
+        동일한 배치가 재실행될 때 파일이 누적되는 현상을 막기 위해 실행 시점의 난수(UUID)와 
+        타임스탬프를 파일명에서 소거했습니다. 대신 대상 데이터 일자(file_date)를 명시하여 
+        동일 경로 유입 시 자동으로 덮어쓰기(Overwrite)가 수행되도록 정렬합니다.
 
         Args:
             dto (ExtractedDTO): 키 생성의 기반 메타데이터가 포함된 데이터 객체.
 
         Returns:
-            str: 계층적 파티션과 고유 파일명이 결합된 S3 Object Key.
+            str: 계층적 파티션과 결정론적 고유 파일명이 결합된 S3 Object Key.
         """
         # [설계 의도] 시스템 시간이 아닌 환경변수에 주입된 '데이터 대상 날짜(YYYYMMDD)'를 우선 파싱
-        # 글로벌 파이프라인(미국 시간 기준)이 한국 시간 다음날 낮에 실행되더라도, 
-        # 대상 데이터 일자는 전일(예: 15일)로 완벽하게 라우팅되도록 보장함.
         execution_date_str = os.environ.get("AIRFLOW_EXECUTION_DATE")
         
         if execution_date_str and len(execution_date_str) == 8:
@@ -215,21 +217,20 @@ class S3ZstdLoader(AbstractLoader):
             month = execution_date_str[4:6]
             day = execution_date_str[6:8]
             date_path = f"year={year}/month={month}/day={day}"
+            file_date = execution_date_str
         else:
             # 로컬 수동 테스트 등 환경변수가 없을 때만 동작하는 Fallback (물리적 시간)
             self._logger.warning("AIRFLOW_EXECUTION_DATE가 누락되어 시스템 현재 시간으로 파티션을 생성합니다.")
             now = datetime.datetime.now(datetime.timezone.utc)
             date_path = now.strftime("year=%Y/month=%m/day=%d")
+            file_date = now.strftime("%Y%m%d")
         
         # `_validate_dto`를 통과했으므로 meta 내부의 source, job_id 속성 존재가 완벽히 보장됨.
         provider = str(dto.meta.get("source")).lower()
         job_id = str(dto.meta.get("job_id")).lower()
         
-        # 밀리초 수준의 동시 수집 충돌을 피하기 위해 난수 기반 UUID 추가
-        unique_id = uuid.uuid4().hex[:8]
-        timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
-        
-        return f"{self._prefix}/provider={provider}/job={job_id}/{date_path}/{timestamp}_{unique_id}.json.zst"
+        # 고정 컨벤션 적용을 통한 멱등성 보장: 동일한 source/job_id/date 조합은 항상 동일한 S3 Key로 매핑되어 덮어쓰기(Overwrite) 처리됨.
+        return f"{self._prefix}/provider={provider}/job={job_id}/{date_path}/{job_id}_{file_date}.json.zst"
     
     def _upload_stream(self, dto: ExtractedDTO, s3_key: str) -> bool:
         """데이터 객체의 원본을 압축 스트림으로 변환하고 S3 네트워크 I/O를 수행하도록 조율합니다.
