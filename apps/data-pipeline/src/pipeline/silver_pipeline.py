@@ -124,10 +124,21 @@ class SilverPipeline(AbstractPipeline):
                 transformed_dfs, self._task_policy.extract_jobs, "trade_date"
             )
 
-            if not final_df.empty:
-                final_df["year"] = execution_date[0:4]
-                final_df["month"] = execution_date[4:6]
-                final_df["day"] = execution_date[6:8]
+            if final_df.empty:
+                self._logger.warning(
+                    f"[{self._task_name}] 해당 실행일자({execution_date})에 병합된 금융 지표 데이터가 없습니다. "
+                    f"(글로벌 휴장일 또는 데이터 수집 공백) 적재를 생략하고 파이프라인을 정상 완료합니다."
+                )
+                return {
+                    "status": STATUS_SUCCESS,
+                    "task_name": self._task_name,
+                    "execution_date": execution_date,
+                    "error_info": None
+                }
+
+            final_df["year"] = execution_date[0:4]
+            final_df["month"] = execution_date[4:6]
+            final_df["day"] = execution_date[6:8]
 
             # 4. Loader: 최종 결합된 데이터셋을 TransformedDTO에 캡슐화하여 S3ParquetLoader로 분산 파티셔닝 적재 위임.
             transformed_dto = TransformedDTO(
