@@ -11,6 +11,7 @@ import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.exception.InvalidOrderBookParameterException;
 import com.assetmind.server_stock.stock.infrastructure.throttling.OrderBookCacheRepository;
+import com.assetmind.server_stock.stock.presentation.dto.OrderBookResponseDto;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -49,7 +50,7 @@ class OrderBookServiceTest {
         given(cacheRepository.getSnapshot(validStockCode)).willReturn(dummyOrderBook);
 
         // when
-        OrderBook result = orderBookService.getOrderBookSnapshot(validStockCode);
+        OrderBookResponseDto result = orderBookService.getOrderBookSnapshot(validStockCode);
 
         // then
         assertThat(result).isNotNull();
@@ -70,7 +71,7 @@ class OrderBookServiceTest {
         given(cacheRepository.getSnapshot(validStockCode)).willReturn(null);
 
         // when
-        OrderBook result = orderBookService.getOrderBookSnapshot(validStockCode);
+        OrderBookResponseDto result = orderBookService.getOrderBookSnapshot(validStockCode);
 
         // then
         assertThat(result).isNull();
