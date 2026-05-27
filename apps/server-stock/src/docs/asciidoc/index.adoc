@@ -60,3 +60,37 @@ include::{snippets}/chart-get-candles/query-parameters.adoc[]
 ==== 응답 (Response)
 include::{snippets}/chart-get-candles/http-response.adoc[]
 include::{snippets}/chart-get-candles/response-fields.adoc[]
+
+== 4. 주식 호가 (OrderBook)
+
+=== 4-1. 실시간 호가 스냅샷 단건 조회
+종목 상세 페이지 최초 진입 시, 화면의 빈 공간(스켈레톤 UI 등)을 즉시 채우기 위해 인메모리 캐시에 저장된 최신 1~10호가 스냅샷을 조회합니다.
+(조회 이후 실시간 데이터 업데이트는 STOMP 웹소켓 채널 구독을 이용해주세요.)
+
+==== [정상] 캐시 데이터 존재 시
+===== 요청 (Request)
+include::{snippets}/orderbook/get-snapshot-success/http-request.adoc[]
+include::{snippets}/orderbook/get-snapshot-success/path-parameters.adoc[]
+
+===== 응답 (Response)
+include::{snippets}/orderbook/get-snapshot-success/http-response.adoc[]
+include::{snippets}/orderbook/get-snapshot-success/response-fields.adoc[]
+
+==== [정상] 데이터 미수집 상태 (장 시작 전 등)
+KIS 서버로부터 아직 호가 데이터를 수신하지 못한 초기 상태에는 `data` 필드가 `null`로 반환됩니다.
+===== 요청 (Request)
+include::{snippets}/orderbook/get-snapshot-success-empty/http-request.adoc[]
+include::{snippets}/orderbook/get-snapshot-success-empty/path-parameters.adoc[]
+
+===== 응답 (Response)
+include::{snippets}/orderbook/get-snapshot-success-empty/http-response.adoc[]
+include::{snippets}/orderbook/get-snapshot-success-empty/response-fields.adoc[]
+
+==== [실패] 지원하지 않는 종목 조회 시
+===== 요청 (Request)
+include::{snippets}/orderbook/get-snapshot-fail-invalid-code/http-request.adoc[]
+include::{snippets}/orderbook/get-snapshot-fail-invalid-code/path-parameters.adoc[]
+
+===== 응답 (Response)
+include::{snippets}/orderbook/get-snapshot-fail-invalid-code/http-response.adoc[]
+include::{snippets}/orderbook/get-snapshot-fail-invalid-code/response-fields.adoc[]
