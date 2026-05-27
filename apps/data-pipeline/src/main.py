@@ -32,7 +32,7 @@ import logging
 import os
 from dotenv import load_dotenv
 
-from src.pipeline_service import PipelineService
+from src.pipeline.pipeline_factory import PipelineFactory
 from src.common.exceptions import ConfigurationError
 from src.common.decorators.log_decorator import log_decorator
 
@@ -70,13 +70,22 @@ async def main() -> None:
     if airflow_exec_date:
         logging.getLogger("main").info(f"Airflow 스케줄러 기준 실행일({airflow_exec_date})로 수집을 진행합니다.")
 
-    # [설계 의도] 주입된 TARGET_TASK에 따라 pipeline.yml의 해당 정책을 로드함
-    async with PipelineService(TARGET_TASK) as pipeline:
+    # [설계 의도] 구체 클래스(PipelineService)의 하드코딩 직접 선언을 폐기하고,
+    # 팩토리의 가상 생성 대리자 인터페이스(`PipelineFactory.create`)를 통해 다형성을 확보함.
+    # 이 구조는 향후 Silver/Gold 파이프라인이 추가되어 유입되어도 본 코드를 단 한 글자도 수정하지 않는 견고함을 제공함.
+    async with PipelineFactory.create(TARGET_TASK) as pipeline:
         result = await pipeline.run_batch(
             execution_date=airflow_exec_date,
             extract_mode="TODAY" 
         )
         logging.getLogger("main").info(f"[{TARGET_TASK}] 실행 완료. 상태: {result.get('status')}")
+
+        # 파이프라인 결과 검증 및 Fail-Fast 강제
+        if result and result.get("status") in ["FAIL_PROCESSING", "CRITICAL_SYSTEM_ERROR"]:
+            raise RuntimeError(
+                f"[{TARGET_TASK}] 파이프라인 내부 가동 중 치명적 배치 오류가 발생했습니다. "
+                f"상태코드: {result.get('status')}, 에러상세: {result.get('error_info')}"
+            )
 
 if __name__ == "__main__":
     # [설계 의도] 파이썬 비동기 생태계의 최상위 이벤트 루프 생성 및 메인 코루틴 진입점.

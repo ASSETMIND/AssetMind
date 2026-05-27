@@ -43,7 +43,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 # Local Imports
 from src.common.dtos import ExtractedDTO
-from src.common.config import ConfigManager
 from src.common.exceptions import (
     ConfigurationError, 
     ZstdCompressionError, 
@@ -68,7 +67,7 @@ S3_MAX_CONCURRENCY: int = 10
 ZSTD_COMPRESSION_LEVEL: int = 3
 
 
-class S3Loader(AbstractLoader):
+class S3ZstdLoader(AbstractLoader):
     """금융 원천 데이터의 Zstd 스트리밍 압축 및 AWS S3 적재를 전담하는 구체화 클래스.
     
     `AbstractLoader`의 템플릿 생명주기를 준수하며, Boto3 클라이언트를 
@@ -80,22 +79,22 @@ class S3Loader(AbstractLoader):
         _boto3_client (Any): 연결이 수립된 Boto3 S3 Session/Client 인스턴스.
     """
 
-    def __init__(self, bucket_name: str, region: str) -> None:
-        """S3Loader 인스턴스를 초기화하고 AWS 자격 증명 기반의 S3 클라이언트를 구성합니다.
+    def __init__(self, bucket_name: str, region: str, prefix: str) -> None:
+        """S3ZstdLoader 인스턴스를 초기화하고 AWS 자격 증명 기반의 S3 클라이언트를 구성합니다.
 
         Args:
             bucket_name (str): 대상 S3 버킷 이름.
             region (str): AWS 리전 (예: 'ap-northeast-2').
+            prefix (str): S3 객체의 경로 접두사.
             
         Raises:
             ConfigurationError: 필수 AWS 설정(bucket_name, region)이 누락되었거나 Boto3 세션 생성 실패 시.
         """
-        # [설계 의도] 부모 클래스(AbstractLoader)의 초기화 메서드를 호출하여 
-        # ConfigManager 로드 및 Logger 초기화를 일관성 있게 상속받음.
         super().__init__()
         
         self._bucket_name = bucket_name
         self._region = region
+        self._prefix = prefix.strip("/")
         
         # [설계 의도] 클라우드 인프라 연동 시 필수 파라미터 누락은 파이프라인 런타임에 
         # 치명적 에러를 유발하므로 객체 초기화 시점에 조기 검증(Fail-Fast)함.
@@ -103,6 +102,8 @@ class S3Loader(AbstractLoader):
             raise ConfigurationError("S3 버킷 이름이 누락되었습니다.", key_name="aws.s3.bucket_name")
         if not self._region:
             raise ConfigurationError("AWS 리전이 누락되었습니다.", key_name="aws.region")
+        if not self._prefix:
+            raise ConfigurationError("S3 Prefix 경로가 누락되었습니다.", key_name="aws.s3.prefix")
             
         self._boto3_client = self._init_s3_client()
 
@@ -228,7 +229,7 @@ class S3Loader(AbstractLoader):
         unique_id = uuid.uuid4().hex[:8]
         timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
         
-        return f"raw/provider={provider}/job={job_id}/{date_path}/{timestamp}_{unique_id}.json.zst"
+        return f"{self._prefix}/provider={provider}/job={job_id}/{date_path}/{timestamp}_{unique_id}.json.zst"
     
     def _upload_stream(self, dto: ExtractedDTO, s3_key: str) -> bool:
         """데이터 객체의 원본을 압축 스트림으로 변환하고 S3 네트워크 I/O를 수행하도록 조율합니다.

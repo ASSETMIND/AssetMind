@@ -7,21 +7,29 @@
 #   ConfigManager를 통해 S3Loader 및 PostgreSQLLoader 객체 초기화 시 주입됩니다.
 # ==============================================================================
 
+# ==========================================
+# [공통 템플릿] 중복 방지를 위한 YAML Anchor
+# ==========================================
+s3-defaults: &s3_defaults
+  region: "ap-northeast-2" # AWS 기본 리전 (서울)
+  tuning:
+    multipart_threshold_mb: 10
+    max_concurrency: 10
+
 # ------------------------------------------------------------------------------
 # [1] S3 적재기 설정 (S3Loader)
 # 용도: 금융 원천 데이터(Raw Data)의 zstd 스트리밍 적재 및 보관
 # ------------------------------------------------------------------------------
-aws:
-  region: "ap-northeast-2" # AWS 기본 리전 (서울)
-  s3:
-    # 환경(dev/stg/prd)에 따라 분리된 원천 데이터 전용 데이터 레이크 버킷
-    bucket_name: "data-pipeline-bronze"
+s3_zstd:
+  <<: *s3_defaults
+  bucket_name: "data-pipeline-bronze"
+  prefix: "bronze/market_data" # [추가] S3 내 최상위 디렉토리
 
-    # [참고] 멀티파트 업로드 임계값 및 스레드 튜닝 (현재는 코드에 상수로 있으나,
-    # 향후 동적 설정이 필요할 경우를 대비한 예약 필드)
-  tuning:
-    multipart_threshold_mb: 10
-    max_concurrency: 10
+s3_parquet:
+  <<: *s3_defaults
+  bucket_name: "data-pipeline-silver"
+  prefix: "silver/market_data" # [추가] S3 내 최상위 디렉토리
+  partition_cols: ["year", "month", "day"] # [추가] 하이브 스타일 파티셔닝 키
 
 # ------------------------------------------------------------------------------
 # [2] 관계형 DB 적재기 설정 (PostgreSQLLoader)

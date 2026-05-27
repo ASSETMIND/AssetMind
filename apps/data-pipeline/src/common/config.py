@@ -129,6 +129,7 @@ class PipelineTask(BaseModel):
     """pipeline.yml에 정의된 개별 파이프라인 조립(Task) 스키마."""
     
     description: str
+    layer: Literal["bronze", "silver", "gold"]
     target_loader: str
     extract_jobs: List[str] = Field(default_factory=list)
 
@@ -136,8 +137,10 @@ class AWSLoaderPolicy(BaseModel):
     """AWS S3 데이터 레이크 적재를 위한 환경 설정 스키마."""
     
     region: str
-    s3: Dict[str, str]
-    tuning: Dict[str, int] = Field(default_factory=dict)
+    bucket_name: str
+    prefix: Optional[str] = None
+    partition_cols: Optional[List[str]] = None
+    tuning: Optional[Dict] = None
 
 class PostgresLoaderPolicy(BaseModel):
     """PostgreSQL 데이터 웨어하우스 적재를 위한 환경 설정 스키마."""
@@ -326,7 +329,7 @@ class ConfigManager(BaseSettings):
             
         # [설계 의도] OCP(개방-폐쇄 원칙)에 따라 적재 타겟에 맞는 구체적인 Pydantic 모델을 
         # 다형성(Polymorphism) 형태로 분기하여 반환. 향후 GCP, Azure 로더 추가 시 확장 용이.
-        if loader_name == "aws":
+        if loader_name in ["s3_zstd", "s3_parquet"]:
             return AWSLoaderPolicy(**loader_data)
         elif loader_name == "postgres":
             return PostgresLoaderPolicy(**loader_data)
@@ -378,7 +381,7 @@ class ConfigManager(BaseSettings):
         if not reader_data:
             raise ConfigurationError(f"Reader 타겟 '{reader_name}' 설정을 reader.yml에서 찾을 수 없습니다.")
             
-        if reader_name in ["s3", "aws"]:
+        if reader_name in ["s3_zstd", "s3_parquet"]:
             # [설계 의도] DRY 원칙에 입각하여 기존에 정의된 AWSLoaderPolicy를 그대로 재사용
             return AWSLoaderPolicy(**reader_data)
         else:

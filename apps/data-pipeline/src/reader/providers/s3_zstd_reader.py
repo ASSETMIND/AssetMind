@@ -34,9 +34,6 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
    - 근거: Worker Node 스펙(통상 4GB 이상) 대비 100~200MB의 배치 버퍼는 충분히 감내할 수 있는 수준이며, Pandas 변환 속도의 극적인 상승(수십 배)을 위해 필수적인 트레이드오프임.
 """
 
-# ==============================================================================
-# 2. Imports
-# ==============================================================================
 import io
 import json
 from typing import Any, Dict, Iterator, List
@@ -50,7 +47,7 @@ from src.common.exceptions import ReaderInitializationError, DataReadStreamError
 from src.common.config import ConfigManager
 
 # ==============================================================================
-# 3. Constants & Configuration
+# Constants & Configuration
 # ==============================================================================
 # [설계 의도] zstandard 해제기 내부의 C 레벨 버퍼 크기.
 # 너무 작으면 I/O 컨텍스트 스위칭이 빈번해지고, 너무 크면 OOM이 발생할 수 있으므로
@@ -58,13 +55,7 @@ from src.common.config import ConfigManager
 ZSTD_READ_BUFFER_BYTES: int = 16 * 1024 * 1024
 
 # ==============================================================================
-# 4. Custom Exceptions
-# ==============================================================================
-# [설계 의도] 본 모듈은 상위 추상 계층(AbstractReader)에서 강제하는 
-# ReaderInitializationError, DataReadStreamError를 재사용하여 중앙 집중화된 예외 정책을 따릅니다.
-
-# ==============================================================================
-# 5. Main Class/Functions
+# Main Class/Functions
 # ==============================================================================
 class S3ZstdStreamingReader(AbstractReader):
     """S3에 적재된 Zstandard 압축 JSONL 데이터를 실시간 스트리밍으로 읽어들이는 구체화 리더.
