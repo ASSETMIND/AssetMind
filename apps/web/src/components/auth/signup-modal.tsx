@@ -36,7 +36,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 
 	const emailBtnConfig = getEmailButtonConfig();
 
-	// 인풋 내부 버튼 — button.small.primary #6D4AE6, 너비 충분히 확보
 	const InnerButton = ({ text, onClick, disabled }: { text: string; onClick: () => void; disabled?: boolean }) => (
 		<button
 			type='button'
@@ -67,16 +66,14 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 				isOpen
 				onClose={onClose}
 				title='회원가입'
-				className='w-[480px] bg-[#1C1D21] rounded-[40px] px-[40px] py-[50px] max-h-[90vh] overflow-y-auto'
+				className='w-[calc(100vw-32px)] max-w-[480px] bg-[#1C1D21] rounded-[40px] px-[24px] py-[40px] sm:px-[40px] sm:py-[50px] max-h-[90dvh] overflow-y-auto'
 			>
 				{/* 헤더 */}
-				<h2 style={{ fontSize: '48px', fontWeight: 500, color: '#FFFFFF', textAlign: 'center', margin: '0 0 40px', lineHeight: '120%', letterSpacing: '-0.05em' }}>
+				<h2 style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 500, color: '#FFFFFF', textAlign: 'center', margin: '0 0 40px', lineHeight: '120%', letterSpacing: '-0.05em' }}>
 					SIGN UP
 				</h2>
 
 				<form onSubmit={actions.onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-					{/* 이름 — 레이블 추가 */}
 					<Input
 						label='이름'
 						type='text'
@@ -85,7 +82,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						{...register('name')}
 					/>
 
-					{/* 아이디 — 중복 확인 버튼 인풋 내부 */}
 					<Input
 						label='아이디'
 						type='text'
@@ -105,7 +101,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						{...register('email', { onChange: actions.handleEmailChange })}
 					/>
 
-					{/* 인증번호 — 인증 확인 버튼 인풋 내부 */}
 					<Input
 						label='인증번호'
 						type='text'
@@ -126,7 +121,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						{...register('authCode')}
 					/>
 
-					{/* 비밀번호 */}
 					<Input
 						label='비밀번호'
 						type={showPw ? 'text' : 'password'}
@@ -137,7 +131,6 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						{...register('password')}
 					/>
 
-					{/* 비밀번호 확인 */}
 					<Input
 						label='비밀번호 확인'
 						type={showPwCheck ? 'text' : 'password'}
@@ -150,14 +143,16 @@ export default function SignupModal({ onClose, onClickLogin }: Props) {
 						{...register('passwordConfirm')}
 					/>
 
-					{/* 가입하기 버튼 */}
-					<Button type='submit' size='lg' disabled={state.isSignupPending} className='mt-4'>
-						{state.isSignupPending ? '가입 처리 중...' : '가입하기'}
-					</Button>
+					{/* 가입하기 버튼 — 키보드 가림 방지용 여백 */}
+					<div style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+						<Button type='submit' size='lg' disabled={state.isSignupPending} className='mt-4'>
+							{state.isSignupPending ? '가입 처리 중...' : '가입하기'}
+						</Button>
+					</div>
 				</form>
 
 				{/* 로그인 전환 */}
-				<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
+				<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px', paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
 					<span style={{ fontSize: '14px', color: '#9194A1' }}>이미 계정이 있으신가요?</span>
 					<button onClick={onClickLogin} type='button' style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500, color: '#FFFFFF' }}>
 						로그인
