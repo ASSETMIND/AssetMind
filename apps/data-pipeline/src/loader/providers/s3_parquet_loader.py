@@ -106,7 +106,8 @@ class S3ParquetLoader(AbstractLoader):
                 compression="zstd",
                 partition_cols=self._partition_cols,
                 index=False,
-                storage_options=storage_options
+                storage_options=storage_options,
+                existing_data_behavior="delete_matching"
             )
             self._logger.info(f"S3ParquetLoader: S3에 Parquet 파일로 성공적으로 적재되었습니다. (Path: {s3_path})")
             return True
