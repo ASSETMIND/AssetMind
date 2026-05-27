@@ -3,6 +3,7 @@ package com.assetmind.server_stock.stock.presentation;
 import com.assetmind.server_stock.global.common.ApiResponse;
 import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.stock.application.OrderBookService;
+import com.assetmind.server_stock.stock.presentation.dto.OrderBookResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,8 +20,8 @@ public class OrderBookController {
      * 종목 상세 페이지 최초 진입 시 사용할 호가 스냅샷 조회 API
      */
     @GetMapping("/{stockCode}/orderbook")
-    public ApiResponse<OrderBook> getOrderBookSnapshot(@PathVariable String stockCode) {
-        OrderBook snapshot = orderBookService.getOrderBookSnapshot(stockCode);
+    public ApiResponse<OrderBookResponseDto> getOrderBookSnapshot(@PathVariable String stockCode) {
+        OrderBookResponseDto snapshot = orderBookService.getOrderBookSnapshot(stockCode);
 
         if (snapshot == null) {
             return ApiResponse.success("해당 종목의 호가 스냅샷이 존재하지 않습니다.");

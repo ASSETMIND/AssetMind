@@ -5,6 +5,8 @@ import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import com.assetmind.server_stock.stock.exception.InvalidOrderBookParameterException;
 import com.assetmind.server_stock.stock.infrastructure.throttling.OrderBookCacheRepository;
+import com.assetmind.server_stock.stock.presentation.dto.OrderBookResponseDto;
+import com.assetmind.server_stock.stock.presentation.dto.OrderBookResponseDto.OrderBookLevelResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,12 +20,14 @@ public class OrderBookService {
     /**
      * 특정 종목의 최신 호가 스냅샷을 조회
      */
-    public OrderBook getOrderBookSnapshot(String stockCode) {
+    public OrderBookResponseDto getOrderBookSnapshot(String stockCode) {
 
         if(!stockMetadataProvider.isExist(stockCode)) {
             throw new InvalidOrderBookParameterException(ErrorCode.UNSUPPORTED_ORDER_BOOK);
         }
 
-        return cacheRepository.getSnapshot(stockCode);
+        OrderBook snapshot = cacheRepository.getSnapshot(stockCode);
+
+        return OrderBookResponseDto.from(snapshot);
     }
 }

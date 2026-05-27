@@ -1,5 +1,7 @@
 package com.assetmind.server_stock.stock.presentation.dto;
 
+import com.assetmind.server_stock.market_access.domain.OrderBook;
+import com.assetmind.server_stock.market_access.domain.OrderBook.Level;
 import java.util.List;
 import lombok.Builder;
 
@@ -15,6 +17,22 @@ public record OrderBookResponseDto(
         List<OrderBookLevelResponse> levels // 10개의 호가
 ) {
 
+    public static OrderBookResponseDto from(OrderBook orderBook) {
+        if (orderBook == null) {
+            return null; // 방어 로직: 캐시가 비어있을 경우 null 반환
+        }
+
+        return OrderBookResponseDto.builder()
+                .stockCode(orderBook.stockCode())
+                .marketTime(String.valueOf(orderBook.marketTime()))
+                .totalBidSize(String.valueOf(orderBook.totalBidSize()))
+                .totalAskSize(String.valueOf(orderBook.totalAskSize()))
+                .levels(orderBook.levels().stream()
+                        .map(OrderBookLevelResponse::from)
+                        .toList())
+                .build();
+    }
+
     /**
      * 단일 호가 레벨 데이터
      */
@@ -25,5 +43,14 @@ public record OrderBookResponseDto(
             String askSize, // 매도 잔량
             String bidPrice,// 매수 호가
             String bidSize // 매수 잔량
-    ) {}
+    ) {
+        public static OrderBookLevelResponse from(Level domainLevel) {
+            return OrderBookLevelResponse.builder()
+                    .askPrice(String.valueOf(domainLevel.askPrice()))
+                    .askSize(String.valueOf(domainLevel.askSize()))
+                    .bidPrice(String.valueOf(domainLevel.bidPrice()))
+                    .bidSize(String.valueOf(domainLevel.bidSize()))
+                    .build();
+        }
+    }
 }
