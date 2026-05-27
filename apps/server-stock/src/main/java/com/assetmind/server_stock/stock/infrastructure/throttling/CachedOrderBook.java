@@ -2,12 +2,14 @@ package com.assetmind.server_stock.stock.infrastructure.throttling;
 
 import com.assetmind.server_stock.market_access.domain.OrderBook;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.Getter;
 
 /**
  * L1(Lever1, 인메모리 캐시) 캐시 내부에 저장될 객체
  * 멀티스레드 환경에서 안전한 상태 관리를 보장
  */
 public class CachedOrderBook {
+    @Getter
     private OrderBook orderBook;
 
     // 멀티스레드 환경에서 OrderBook 상태의 원자성을 지키기 위해 CAS 사용하는 AtomicBoolean 이용
@@ -46,4 +48,5 @@ public class CachedOrderBook {
 
         return null;
     }
+
 }

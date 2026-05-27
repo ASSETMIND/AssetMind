@@ -47,4 +47,13 @@ public class OrderBookCacheRepository {
         }
         return null;
     }
+
+    /**
+     * 최신 스냅샷 단건 조회
+     * 종목 상세 페이지에 최초 진입시 초기 데이터 렌더링을 위한 메서드
+     */
+    public OrderBook getSnapshot(String stockCode) {
+        CachedOrderBook cached = cacheMap.get(stockCode);
+        return (cached != null) ? cached.getOrderBook() : null;
+    }
 }
