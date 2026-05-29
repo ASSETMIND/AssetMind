@@ -150,7 +150,6 @@ export default function StockDetailPage() {
 								</div>
 							) : (
 								<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-									<ErrorBoundary><CompanyNavSection /></ErrorBoundary>
 									<ErrorBoundary><CompanyInfoSection /></ErrorBoundary>
 								</div>
 							)}

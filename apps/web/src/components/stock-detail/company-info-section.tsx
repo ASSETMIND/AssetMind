@@ -90,12 +90,34 @@ const HomepageButton = ({ url }: { url?: string }) => (
 	</button>
 );
 
-const InfoTable = ({ company }: { company: CompanyInfo }) => {
+const InfoTable = ({ company, isMobile }: { company: CompanyInfo; isMobile: boolean }) => {
 	const rows = [
 		[{ label: '시가총액', value: company.marketCap, sub: undefined }, { label: '실제 기업 가치', value: company.enterpriseValue, sub: undefined }],
 		[{ label: '기업명', value: company.companyName, sub: undefined }, { label: '대표이사', value: company.ceo, sub: undefined }],
 		[{ label: '상장일', value: company.listingDate, sub: company.listingDateSub }, { label: '발행주식수', value: company.shares, sub: company.sharesSub }],
 	];
+
+	if (isMobile) {
+		const cells = rows.flat();
+		return (
+			<div style={{ width: '100%' }}>
+				{cells.map((cell, i) => (
+					<div key={i}>
+						<div style={{ height: '1px', backgroundColor: DIVIDER }} />
+						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0', gap: '8px' }}>
+							<span style={{ fontSize: '14px', fontWeight: 400, color: '#9194A1', flexShrink: 0 }}>{cell.label}</span>
+							<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+								<span style={{ fontSize: '14px', fontWeight: 700, color: '#FFFFFF', textAlign: 'right' }}>{cell.value}</span>
+								{cell.sub && <span style={{ fontSize: '12px', fontWeight: 400, color: '#9194A1', textAlign: 'right' }}>{cell.sub}</span>}
+							</div>
+						</div>
+					</div>
+				))}
+				<div style={{ height: '1px', backgroundColor: DIVIDER }} />
+			</div>
+		);
+	}
+
 	return (
 		<div style={{ width: '100%' }}>
 			{rows.map((row, ri) => (
@@ -222,7 +244,7 @@ export default function CompanyInfoSection() {
 							{company.description}
 						</div>
 					)}
-					<InfoTable company={company} />
+					<InfoTable company={company} isMobile={isMobile} />
 				</div>
 
 				{/* 매출·산업 구성 */}
