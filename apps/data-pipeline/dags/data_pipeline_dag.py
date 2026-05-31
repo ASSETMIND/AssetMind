@@ -44,7 +44,7 @@ PROJECT_ROOT_DIR: str = "/opt/airflow"
 # ==============================================================================
 # [Main Class/Functions]
 # ==============================================================================
-def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
+def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_year: int, start_month: int, start_day: int) -> DAG:
     """동적 파라미터를 주입받아 Airflow DAG 객체를 생성하는 팩토리 함수입니다.
     
     Args:
@@ -52,7 +52,9 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
         schedule (str): CRON 표현식 스케줄.
         timezone (str): DAG 실행의 기준이 되는 타임존 (예: Asia/Seoul).
         task_key (str): main.py로 전달될 타겟 태스크 이름 (TARGET_TASK).
-        
+        start_year (int): DAG의 시작 연도.
+        start_month (int): DAG의 시작 월.
+        start_day (int): DAG의 시작 일.
     Returns:
         DAG: 구성이 완료된 Airflow DAG 객체.
     """
@@ -60,7 +62,6 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
     # 글로벌 환경에서도 논리적 실행 날짜 오작동이 발생하지 않도록 강제함.
     default_args = {
         "owner": "data_engineering_team",
-        "start_date": pendulum.datetime(2026, 5, 14, tz=timezone),
         "retries": RETRIES,
         "retry_delay": timedelta(minutes=RETRY_DELAY_MINUTES),
     }
@@ -68,8 +69,10 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
     with DAG(
         dag_id=dag_id,
         default_args=default_args,
+        start_date=pendulum.datetime(start_year, start_month, start_day, tz=timezone),
         schedule=schedule,
-        catchup=False,
+        catchup=True,
+        max_active_runs=1,
         tags=["daily", task_key.split('_')[-1]],
     ) as dag:
         
@@ -81,10 +84,11 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
                 # [설계 의도] 무조건 UTC로 파싱되는 {{ ds_nodash }} 대신, 
                 # DAG에 할당된 타임존(dag.timezone)을 기준으로 논리적 실행일(data_interval_start)을 포맷팅합니다.
                 # 이를 통해 KST, EST 등 타임존과 무관하게 데이터의 "목표 대상일(Target Date)"이 정확히 주입됩니다.
-                "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
                 "TARGET_TASK": f"bronze_{task_key}"
             },
             append_env=True,
+            pool="external_api_pool"
         )
 
         # 2. Silver Task : 내부 원본 데이터 검증 및 정제 후 통합하여 S3 적재 
@@ -92,7 +96,7 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str) -> DAG:
             task_id=f"run_silver_{task_key}",
             bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
             env={
-                "AIRFLOW_EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
                 "TARGET_TASK": f"silver_{task_key}"
             },
             append_env=True,
@@ -113,7 +117,10 @@ daily_asia_dag = create_dag(
     dag_id="daily_asia",
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
-    task_key="daily_asia"
+    task_key="daily_asia",
+    start_year=2026,
+    start_month=5,
+    start_day=26
 )
 
 # 2. Global 파이프라인 (EST 00:00)
@@ -121,5 +128,8 @@ daily_global_dag = create_dag(
     dag_id="daily_global",
     schedule="0 0 * * *",
     timezone="America/New_York",
-    task_key="daily_global"
+    task_key="daily_global",
+    start_year=2026,
+    start_month=1,
+    start_day=1
 )
