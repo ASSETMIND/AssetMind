@@ -106,10 +106,10 @@ class RetryDecorator:
             float: 대기 시간(초).
         """
         # 1. 지수적 증가 (Exponential Backoff)
-        # 생성자(__init__)에서 주입받은 기본 대기 시간(self.delay)을 기준으로,
+        # 생성자(__init__)에서 주입받은 기본 대기 시간(self.base_delay)을 기준으로,
         # 재시도 횟수마다 2의 제곱으로 대기 시간을 기하급수적으로 늘립니다.
         # (예: delay가 1.0초일 때 -> 1회차: 1초, 2회차: 2초, 3회차: 4초)
-        backoff_base = self.delay * (2 ** (attempt - 1))
+        backoff_base = self.base_delay * (self.backoff_factor ** (attempt - 1))
         
         # 2. 시간 분산 (Equal Jitter 알고리즘)
         # 계산된 대기 시간의 50%는 고정 대기(최소한의 쿨타임 보장)로 가져가고,
