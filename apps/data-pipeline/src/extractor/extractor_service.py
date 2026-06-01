@@ -271,8 +271,28 @@ class ExtractorService:
         # 2. Parallel Execution
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 3. Log Summary (기존 기능 완벽 복구)
+        # 3. Failure Detection & Logging
+        failed_jobs = [
+            (job_id, res) for job_id, res in zip(job_requests, results) 
+            if isinstance(res, Exception)
+        ]
+
+        if failed_jobs:
+            for job_id, exception in failed_jobs:
+                # 추출 요청 형식이 str 혹은 tuple일 수 있음을 고려하여 job_id 추출
+                target_id = job_id[0] if isinstance(job_id, tuple) else job_id
+                
+                self._logger.error(
+                    f"수집 실패 - Job ID: {target_id} | 원인: {str(exception)}",
+                    extra={
+                        "error_type": exception.__class__.__name__,
+                        "failed_job_id": target_id,
+                        "batch_size": len(job_requests)
+                    }
+                )
+
+        # 4. Log Summary
         success_count = sum(1 for r in results if not isinstance(r, Exception) and r is not None)
-        self._logger.info(f"배치 수집 요약 지표 - 총 {len(job_requests)}건 중 {success_count}건 성공")
+        self._logger.info(f"[Extractor 요약 리포트] 총 {len(job_requests)}건 중 {success_count}건 성공")
 
         return results

@@ -259,7 +259,7 @@ class ColorFormatter(logging.Formatter):
             msg = f"{color}{msg}{self.RESET}"
         elif record.levelno == logging.INFO:
             # 전체 작업의 성공/실패 여부를 요약하는 핵심 지표(Summary) 메시지 강조
-            if "요약" in msg:
+            if "요약" in msg or "리포트" in msg:
                 msg = f"{self.SUMMARY_COLOR}{msg}{self.RESET}"
             else:
                 # 일반 INFO 로그 내 생명주기 마일스톤 강조
