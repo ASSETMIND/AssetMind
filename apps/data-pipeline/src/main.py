@@ -65,7 +65,7 @@ async def main() -> None:
 
     # [설계 의도] Airflow BashOperator가 환경변수로 주입한 논리적 실행 날짜(YYYYMMDD)를 획득.
     # Airflow 환경이 아닌 로컬 직접 실행 시에는 None이 되어 파이프라인 서비스 내부의 Fallback(오늘 날짜)이 작동함.
-    airflow_exec_date = os.environ.get("AIRFLOW_EXECUTION_DATE")
+    airflow_exec_date = os.environ.get("EXECUTION_DATE")
     
     if airflow_exec_date:
         logging.getLogger("main").info(f"Airflow 스케줄러 기준 실행일({airflow_exec_date})로 수집을 진행합니다.")

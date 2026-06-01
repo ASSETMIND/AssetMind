@@ -61,10 +61,14 @@ services:
   # 1. Metadata DB
   airflow-postgres:
     image: postgres:16
+    ports:
+      - "5434:5432"
     environment:
       POSTGRES_USER: ${AIRFLOW_POSTGRES_USER}
       POSTGRES_PASSWORD: ${AIRFLOW_POSTGRES_PASSWORD}
       POSTGRES_DB: ${AIRFLOW_POSTGRES_DB}
+    volumes:
+      - airflow-db-volume:/var/lib/postgresql/data
     healthcheck:
       test:
         [
@@ -129,6 +133,8 @@ services:
           --role Admin \
           --email "${_AIRFLOW_WWW_USER_EMAIL:-admin@example.com}" \
           --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" || true
+        echo "Creating Airflow Pools..."
+        airflow pools set external_api_pool 1 "Pool for External API Throttling" || true
         echo "Airflow Initialization Completed Successfully."
     depends_on:
       airflow-postgres:

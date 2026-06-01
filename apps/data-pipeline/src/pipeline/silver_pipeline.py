@@ -136,9 +136,9 @@ class SilverPipeline(AbstractPipeline):
                     "error_info": None
                 }
 
-            final_df["year"] = execution_date[0:4]
-            final_df["month"] = execution_date[4:6]
-            final_df["day"] = execution_date[6:8]
+            final_df["year"] = final_df["trade_date"].astype(str).str[0:4]
+            final_df["month"] = final_df["trade_date"].astype(str).str[4:6]
+            final_df["day"] = final_df["trade_date"].astype(str).str[6:8]
 
             # 4. Loader: 최종 결합된 데이터셋을 TransformedDTO에 캡슐화하여 S3ParquetLoader로 분산 파티셔닝 적재 위임.
             transformed_dto = TransformedDTO(

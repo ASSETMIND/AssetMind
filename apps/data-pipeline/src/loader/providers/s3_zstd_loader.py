@@ -209,7 +209,7 @@ class S3ZstdLoader(AbstractLoader):
             str: 계층적 파티션과 결정론적 고유 파일명이 결합된 S3 Object Key.
         """
         # [설계 의도] 시스템 시간이 아닌 환경변수에 주입된 '데이터 대상 날짜(YYYYMMDD)'를 우선 파싱
-        execution_date_str = os.environ.get("AIRFLOW_EXECUTION_DATE")
+        execution_date_str = os.environ.get("EXECUTION_DATE")
         
         if execution_date_str and len(execution_date_str) == 8:
             # "20260515" 형식을 "year=2026/month=05/day=15"로 파싱
@@ -220,7 +220,7 @@ class S3ZstdLoader(AbstractLoader):
             file_date = execution_date_str
         else:
             # 로컬 수동 테스트 등 환경변수가 없을 때만 동작하는 Fallback (물리적 시간)
-            self._logger.warning("AIRFLOW_EXECUTION_DATE가 누락되어 시스템 현재 시간으로 파티션을 생성합니다.")
+            self._logger.warning("EXECUTION_DATE가 누락되어 시스템 현재 시간으로 파티션을 생성합니다.")
             now = datetime.datetime.now(datetime.timezone.utc)
             date_path = now.strftime("year=%Y/month=%m/day=%d")
             file_date = now.strftime("%Y%m%d")
