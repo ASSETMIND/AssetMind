@@ -20,6 +20,7 @@ from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.common.exceptions import ConfigurationError, TransformerInitializationError, TransformerError
 from src.transformer.processors.abstract_transformer import AbstractTransformer
+from src.common.decorators.log_decorator import log_decorator
 
 
 class TransformerService:
@@ -31,6 +32,11 @@ class TransformerService:
         # [핵심 수정] Extractor config 로드 제거. 오직 Transformer 설정만 의존.
         self._transformer_config = ConfigManager.load("transformer")
         self._transformer_cache: Dict[str, AbstractTransformer] = {}
+
+        self._success_count = 0
+        self._empty_count = 0
+        self._fail_count = 0
+        self._warning_logs: List[str] = []
 
     def _resolve_schema_policy(self, job_id: str) -> str:
         """transformer.yml의 routing 룰을 기반으로 job_id에 맞는 스키마 정책명을 추론합니다."""
@@ -51,8 +57,6 @@ class TransformerService:
         # 2. 캐시 히트
         if schema_policy_name in self._transformer_cache:
             return self._transformer_cache[schema_policy_name]
-
-        self._logger.info(f"[{job_id}] 변환기 지연 초기화 진입 (Policy: {schema_policy_name})")
 
         # 3. 스키마 정책 조회 및 객체 생성
         try:
@@ -89,6 +93,7 @@ class TransformerService:
                 raise e
             raise TransformerInitializationError(f"변환기 초기화 중 예기치 않은 오류 발생: {e}") from e
 
+    @log_decorator()
     def transform_stream(
         self, 
         job_id: str, 
@@ -99,9 +104,9 @@ class TransformerService:
         """Reader 계층의 스트림을 받아 변환을 수행하는 제너레이터를 반환합니다."""
         transformer = self._get_or_create_transformer(job_id)
         
-        self._logger.info(f"[{job_id}] 스트리밍 데이터 변환 파이프라인 가동 (enforce_schema={enforce_schema})")
+        # [설계 의도] 청크 단위가 아닌, 파이프라인의 최종 '건수(Job ID)' 규격 정산을 판정하기 위한 상태 지시계
+        has_valid_data = False
         
-        chunk_count = 0
         try:
             for batch_data in data_stream:
                 if batch_data is None or len(batch_data) == 0:
@@ -113,14 +118,46 @@ class TransformerService:
                     job_id=job_id, 
                     **kwargs
                 )
-                chunk_count += 1
+                
+                if transformed_df is not None and not transformed_df.empty:
+                    has_valid_data = True
+                    
                 yield transformed_df
                 
-            self._logger.info(f"[{job_id}] 스트리밍 변환 완료 (총 {chunk_count}개 청크 처리됨)")
+            # [정산 축적] 해당 지표의 모든 스트림 전개가 정상 완료된 후 최종 행(Row) 자산 생존 여부 판정
+            if has_valid_data:
+                self._success_count += 1
+            else:
+                self._empty_count += 1
+                self._warning_logs.append(
+                    f"[{transformer.__class__.__name__.upper()}] 변환 후 데이터 공백 감지 (빈값) - Job ID: {job_id}"
+                )
             
         except Exception as e:
+            self._fail_count += 1
+            self._warning_logs.append(
+                f"[{transformer.__class__.__name__.upper()}] 변환 파이프라인 연산 크래시 - Job ID: {job_id} | 원인: {str(e)}"
+            )
             raise TransformerError(
                 message=f"스트리밍 변환 제너레이터 실행 중 오류 발생: {e}",
-                should_retry=False,
-                original_exception=e
-            ) from e
+                should_retry=False
+            )
+
+    def log_batch_summary(self) -> None:
+        """[reader > transformer] 전체 연산 파이프라인이 완결된 후, 적재해 둔 변환 경고 로그들을 
+        한 줄에 하나씩 순차 콘솔 출력하고 최종 정산 통합 리포트를 단 1회 마감 배포합니다.
+        """
+        # 1. 최종 정산 리포트 로그 출력
+        self._logger.info(
+            f"[Transformer 요약 리포트] 총 {self._success_count + self._empty_count + self._fail_count} 건 중 성공 {self._success_count}건(빈값 {self._empty_count}건), 실패 {self._fail_count}건"
+        )
+
+        # 2. 개별 경고 로그 순차 출력
+        for log_msg in self._warning_logs:
+            self._logger.warning(log_msg)
+        
+        # 3. 휘발성 자산 자가 청소(Reset)
+        self._success_count = 0
+        self._empty_count = 0
+        self._fail_count = 0
+        self._warning_logs.clear()
