@@ -71,6 +71,11 @@ class ReaderService:
         self._logger = LogManager.get_logger(self.__class__.__name__)
         self._reader_cache: Dict[str, AbstractReader] = {}
 
+        self._success_count = 0
+        self._empty_count = 0
+        self._fail_count = 0
+        self._warning_logs: list[str] = []
+
     def _get_or_create_reader(self) -> AbstractReader:
         """설정값에 기반하여 대상 스토리지 I/O 리더 인스턴스를 지연 초기화 및 반환합니다.
 
@@ -86,9 +91,6 @@ class ReaderService:
         # O(1) 시간 복잡도로 인스턴스를 반환하여 MLOps 파이프라인의 처리 속도를 보장함.
         if self._target_reader in self._reader_cache:
             return self._reader_cache[self._target_reader]
-
-        # 2. [Cold-Start] 캐시 미스(Cache Miss) 시 동적 모듈 로드 및 초기화 수행
-        self._logger.info(f"[{self._target_reader.upper()}] 리더 인스턴스 지연 초기화 진입")
 
         try:
             reader_policy = self._config.get_reader(self._target_reader)
@@ -191,19 +193,15 @@ class ReaderService:
             f"month={month}/"
             f"day={day}/"
         )
-        
-        self._logger.info(
-            f"데이터 스트림 추출 요청 위임 - Target: {self._target_reader.upper()}, "
-            f"Path: {source_path}, Batch: {batch_size}"
-        )
 
         # 2. 인스턴스 획득 및 구체 리더(S3ZstdStreamingReader)로 정합성 규격에 맞게 호출 위임
         try:
             reader = self._get_or_create_reader()
-            return reader.read_stream(
+            raw_stream = reader.read_stream(
                 source_path=source_path,
                 batch_size=batch_size
             )
+            return self._wrap_stream_with_report(job_id=clean_job_id, stream=raw_stream)
         except Exception as e:
             if isinstance(e, (ConfigurationError, ReaderInitializationError, ReaderServiceError)):
                 raise e
@@ -211,3 +209,65 @@ class ReaderService:
                 message=f"하부 리더 스트림 구동 중 예기치 못한 치명적 오류 발생: {e}",
                 target_reader=self._target_reader
             )
+
+    def _wrap_stream_with_report(self, job_id: str, stream: Iterator[Any]) -> Iterator[Any]:
+        """실시간으로 성공/빈값/실패 메트릭과 경고 문구를 인스턴스 버퍼에 안전하게 누적하는 래퍼 제너레이터입니다."""
+        try:
+            while True:
+                try:
+                    batch = next(stream)
+                    
+                    is_empty = False
+                    if batch is None:
+                        is_empty = True
+                    elif hasattr(batch, "empty") and batch.empty:
+                        is_empty = True
+                    elif isinstance(batch, list):
+                        if not batch:
+                            is_empty = True
+                        elif isinstance(batch[0], dict) and "output2" in batch[0] and not batch[0]["output2"]:
+                            is_empty = True
+
+                    if is_empty:
+                        self._empty_count += 1
+                        # [설계 의도] 지시 명세에 따른 중간 로그 노이즈 방어 레이어. 
+                        # logger.warning을 즉시 호출하지 않고 인메모리에 적재하여 연산 종료 후 일괄 출력을 보장합니다.
+                        self._warning_logs.append(
+                            f"[{self._target_reader.upper()}] 원본 데이터 공백 감지 (빈값) - Job ID: {job_id}"
+                        )
+                    else:
+                        self._success_count += 1
+
+                    yield batch
+
+                except StopIteration:
+                    break
+                    
+                except Exception as e:
+                    self._fail_count += 1
+                    self._warning_logs.append(
+                        f"[{self._target_reader.upper()}] 원본 데이터 스트림 로드 실패 - Job ID: {job_id} | 원인: {str(e)}"
+                    )
+                    raise e
+        except Exception as e:
+            raise e
+
+    @log_decorator()
+    def log_batch_summary(self) -> None:
+        """[reader > transformer] 전체 연산 루프가 완결된 후, 적재해 둔 개별 지표 경고 로그들을 
+        한 줄에 하나씩 순차적으로 콘솔에 출력하고 최종 정산 통합 리포트를 단 1회 마감 배포합니다.
+        """
+        # 2. ExtractorService 정산 규격과 100% 동기화된 형태의 실버 레이어 마감 성적표 출력
+        self._logger.info(
+            f"[Reader 요약 리포트] 총 {self._success_count + self._empty_count + self._fail_count}건 중 성공 {self._success_count}건(빈값 {self._empty_count}건), 실패 {self._fail_count}건"
+        )
+
+        # 1. 버퍼에 누적 보관되어 있던 개별 스킵 경고 대상들을 순회하며 디버깅용 WARNING 라인 일괄 출력
+        for log_msg in self._warning_logs:
+            self._logger.warning(log_msg)
+        
+        # [설계 의도] 차기 배치가 깨끗한 상태에서 카운팅 자산을 재집계할 수 있도록 정산 상태값 완전 휘발성 초기화
+        self._success_count = 0
+        self._empty_count = 0
+        self._fail_count = 0
+        self._warning_logs.clear()
