@@ -72,6 +72,7 @@ class BronzePipeline(AbstractPipeline):
 
         # [Extract] 외부망 비동기 병렬 수집
         extracted = await self._extractor_service.extract_batch(job_requests)
+        self._extractor_service.log_batch_summary()
 
         # [Load] 수집 결과 적재 위임 태스크 빌드
         load_tasks = []
@@ -83,6 +84,7 @@ class BronzePipeline(AbstractPipeline):
 
         # 적재 작업 병렬 실행 (asyncio.to_thread 풀 소모)
         loaded = await asyncio.gather(*load_tasks, return_exceptions=True)
+        self._loader_service.log_batch_summary()
 
         success_count = sum(1 for r in loaded if isinstance(r, dict) and r.get("status") == STATUS_SUCCESS)
         fail_count = len(job_ids) - success_count
@@ -96,7 +98,7 @@ class BronzePipeline(AbstractPipeline):
             "fail": fail_count,
             "details": loaded
         }
-        self._logger.info(f"브론즈 파이프라인 가동 완료 - 총 {len(job_ids)}건 중 {success_count}건 성공")
+        self._logger.info(f"[Bronze Pipeline 요약 리포트] 총 {len(job_ids)}건 중 {success_count}건 성공")
 
         total_count = len(job_ids)
         if total_count > 0:

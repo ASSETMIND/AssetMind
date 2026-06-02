@@ -122,11 +122,13 @@ class SilverPipeline(AbstractPipeline):
                     else:
                         job_df = pd.DataFrame()
 
-                    # 원자재 데이터처럼 원천 JSON 페이로드 자체에 날짜 필드가 존재하지 않아 
-                    # trade_date 컬럼이 누락된 경우, 파이프라인이 보장하는 현재 배치 실행 기준일(execution_date)을 
-                    # 컬럼에 동적 주입하여 다운스트림 Builder 계층의 광역 조인(Wide Join) 무결성을 보장합니다.
+                    # trade_date 컬럼이 누락된 경우, 동적 주입하여 다운스트림 Builder 계층의 광역 조인(Wide Join) 무결성을 보장합니다.
                     if not job_df.empty and "trade_date" not in job_df.columns:
                         job_df["trade_date"] = pd.to_datetime(execution_date)
+
+                    # 2일치 데이터(당일, 전일) 중 대상일(execution_date) 레코드 1개만 정확하게 필터링하여 남깁니다.
+                    if not job_df.empty:
+                        job_df = job_df[job_df["trade_date"] == pd.to_datetime(execution_date)].reset_index(drop=True)
 
                     if job_df.empty:
                         status = "SKIPPED_EMPTY"
@@ -161,7 +163,7 @@ class SilverPipeline(AbstractPipeline):
             self._reader_service.log_batch_summary()
             self._transformer_service.log_batch_summary()
 
-            # 3. Builder: 비즈니스 키 기반으로 다중 테이블 컬럼을 와이드 데이터프레임(Wide DataFrame) 형태로 결합(Merge).
+            # 4. Builder: 비즈니스 키 기반으로 다중 테이블 컬럼을 와이드 데이터프레임(Wide DataFrame) 형태로 결합(Merge).
             final_df = self._builder_service.execute_build(
                 transformed_dfs, self._task_policy.extract_jobs, "trade_date"
             )
@@ -209,8 +211,7 @@ class SilverPipeline(AbstractPipeline):
                     "details": job_details
                 }
                 self._logger.info(
-                    f"실버 파이프라인 가동 완료 - 총 {len(job_ids)}건 중 "
-                    f"[성공: {success_count}건 / 스킵: {skip_count}건 / 실패: {fail_count}건]"
+                    f"[Silver Pipeline 요약 리포트] 총 {len(job_ids)}건 중 [성공: {success_count}건 / 스킵: {skip_count}건 / 실패: {fail_count}건]"
                 )
                 for detail in job_details:
                     if detail["status"] in ["SKIPPED_EMPTY", "SKIPPED_MISSING_KEY"]:

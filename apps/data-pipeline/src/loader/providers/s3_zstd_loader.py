@@ -139,9 +139,9 @@ class S3ZstdLoader(AbstractLoader):
                     "aws_access_key_id": "test",      # LocalStack Dummy Key
                     "aws_secret_access_key": "test"   # LocalStack Dummy Key
                 })
-                self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
-            else:
-                self._logger.info("[운영 환경 감지] 실제 AWS S3 클라이언트로 초기화합니다.")
+                # self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
+            # else:
+                # self._logger.info("[운영 환경 감지] 실제 AWS S3 클라이언트로 초기화합니다.")
 
             # 3. 클라이언트 생성
             return boto3.client(**client_kwargs)
@@ -323,7 +323,7 @@ class S3ZstdLoader(AbstractLoader):
         )
 
         try:
-            self._logger.info(f"S3 업로드 시작 - Bucket: {self._bucket_name}, Key: {s3_key}")
+            # self._logger.info(f"S3 업로드 시작 - Bucket: {self._bucket_name}, Key: {s3_key}")
             self._boto3_client.upload_fileobj(
                 Fileobj=file_obj,
                 Bucket=self._bucket_name,

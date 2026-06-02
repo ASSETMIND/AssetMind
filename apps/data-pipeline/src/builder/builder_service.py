@@ -61,7 +61,7 @@ class BuilderService:
         Raises:
             BuilderError: 입력 데이터 검증 실패 또는 병합 중 시스템 에러 발생 시.
         """
-        self._logger.info(f"[{len(job_ids)}개 지표] Wide Table 병합 작업을 시작합니다. (Key: {merge_key})")
+        # self._logger.info(f"[{len(job_ids)}개 지표] Wide Table 병합 작업을 시작합니다. (Key: {merge_key})")
 
         # 1. 사전 검증 (Pre-condition Validation)
         if not dfs or not job_ids:
@@ -80,7 +80,7 @@ class BuilderService:
             if wide_df.empty:
                 self._logger.warning("병합 연산은 성공했으나, 결과 데이터프레임이 비어있습니다.")
             else:
-                self._logger.info(f"병합 완료: {wide_df.shape[0]} Rows x {wide_df.shape[1]} Cols")
+                self._logger.info(f"[Builder 요약 리포트] 총 {len(job_ids)}개 지표 병합 완료: {wide_df.shape[0]} Rows x {wide_df.shape[1]} Cols (Key: {merge_key})")
                 
             return wide_df
             
