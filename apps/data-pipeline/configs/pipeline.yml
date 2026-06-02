@@ -200,7 +200,6 @@ tasks:
       - "kis_dow_jones_publishing_daily"
       - "kis_dow_jones_steel_daily"
       - "kis_dow_jones_trucking_daily"
-      - "kis_dow_jones_tires_daily"
       - "kis_dow_jones_wireless_comm_daily"
 
       # ========== [글로벌 주요 국가 지수 일별 데이터 : 6개] ==========
