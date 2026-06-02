@@ -122,6 +122,12 @@ class SilverPipeline(AbstractPipeline):
                     else:
                         job_df = pd.DataFrame()
 
+                    # 원자재 데이터처럼 원천 JSON 페이로드 자체에 날짜 필드가 존재하지 않아 
+                    # trade_date 컬럼이 누락된 경우, 파이프라인이 보장하는 현재 배치 실행 기준일(execution_date)을 
+                    # 컬럼에 동적 주입하여 다운스트림 Builder 계층의 광역 조인(Wide Join) 무결성을 보장합니다.
+                    if not job_df.empty and "trade_date" not in job_df.columns:
+                        job_df["trade_date"] = pd.to_datetime(execution_date)
+
                     if job_df.empty:
                         status = "SKIPPED_EMPTY"
                         reason = "입력 데이터프레임이 완전히 비어 있습니다. (과거 백필 공백 또는 휴장일)"
