@@ -86,38 +86,72 @@ class SilverPipeline(AbstractPipeline):
 
             self._logger.info(f"[{self._task_name}] Silver ETL 파이프라인을 시작합니다. (기준일: {execution_date})")
 
-            # 개별 Job ID 순회 및 Chunk 단위 DataFrame 병합 프로세스 구축
+            # 개별 Job ID 순회 및 Chunk 단위 DataFrame 병합 프로세스 구축 
             transformed_dfs = []
+            success_count = 0
+            skip_count = 0
+            fail_count = 0
+            job_details = []
 
             # 설정에 지정된 Job ID 목록(List[str])을 순회하며 개별 스토리지 I/O 및 변환 가동
             for job_id in self._task_policy.extract_jobs:
-                self._logger.info(f"[{self._task_name}] Job {job_id} 데이터 읽기 및 변환을 시작합니다.")
-                
                 job_chunks = []
-                # 1. Reader: 파라미터 구조 계약조건에 일치하도록 단일 job_id와 execution_date를 정확히 인계
-                raw_data_stream = self._reader_service.read_stream(
-                    job_id=job_id,
-                    execution_date=execution_date,
-                    source_layer="bronze"
-                )
-                
-                # 2. Transformer: Reader가 반환한 제너레이터 스트림을 통째로 위임하여 가공 파이프라인 스트림을 형성
-                transformed_stream = self._transformer_service.transform_stream(
-                    job_id=job_id,
-                    data_stream=raw_data_stream
-                )
-                
-                # 3. Execution: 변환이 완료되어 순차적으로 Yield되는 정제 DataFrame 청크들을 수집
-                for df in transformed_stream:
-                    job_chunks.append(df)
-                
-                # 하나의 Job에서 파생된 복수의 청크 DataFrame을 단일 도메인 테이블로 수렴 결합
-                if job_chunks:
-                    job_df = pd.concat(job_chunks, ignore_index=True)
-                else:
+                try:
+                    # 1. Reader: 파라미터 구조 계약조건에 일치하도록 단일 job_id와 execution_date를 정확히 인계
+                    raw_data_stream = self._reader_service.read_stream(
+                        job_id=job_id,
+                        execution_date=execution_date,
+                        source_layer="bronze"
+                    )
+
+                    # 2. Transformer: Reader가 반환한 제너레이터 스트림을 통째로 위임하여 가공 파이프라인 스트림을 형성
+                    transformed_stream = self._transformer_service.transform_stream(
+                        job_id=job_id,
+                        data_stream=raw_data_stream
+                    )
+                    
+                    # 3. Execution: 변환이 완료되어 순차적으로 Yield되는 정제 DataFrame 청크들을 수집
+                    for df in transformed_stream:
+                        job_chunks.append(df)
+                    
+                    # 하나의 Job에서 파생된 복수의 청크 DataFrame을 단일 도메인 테이블로 수렴 결합
+                    if job_chunks:
+                        job_df = pd.concat(job_chunks, ignore_index=True)
+                    else:
+                        job_df = pd.DataFrame()
+
+                    if job_df.empty:
+                        status = "SKIPPED_EMPTY"
+                        reason = "입력 데이터프레임이 완전히 비어 있습니다. (과거 백필 공백 또는 휴장일)"
+                        skip_count += 1
+                        job_details.append({"job_id": job_id, "status": status, "reason": reason})
+                    elif "trade_date" not in job_df.columns:
+                        status = "SKIPPED_MISSING_KEY"
+                        reason = f"필수 조인 키('trade_date')가 스키마 변환 후 유실되었습니다. (보유 컬럼: {list(job_df.columns)})"
+                        skip_count += 1
+                        job_details.append({"job_id": job_id, "status": status, "reason": reason})
+                        # 다운스트림 빌더 계층의 조인 연산 크래시를 방지하기 위해 안전한 빈 구조체로 대체
+                        job_df = pd.DataFrame()
+                    else:
+                        status = "SUCCESS"
+                        success_count += 1
+                        job_details.append({"job_id": job_id, "status": status, "reason": None})
+                        
+                except TransformerError as te:
+                    status = "FAIL_TRANSFORM"
+                    fail_count += 1
+                    job_details.append({"job_id": job_id, "status": status, "reason": str(te.message)})
+                    job_df = pd.DataFrame()
+                except Exception as e:
+                    status = "FAIL_UNKNOWN"
+                    fail_count += 1
+                    job_details.append({"job_id": job_id, "status": status, "reason": str(e)})
                     job_df = pd.DataFrame()
                     
                 transformed_dfs.append(job_df)
+
+            self._reader_service.log_batch_summary()
+            self._transformer_service.log_batch_summary()
 
             # 3. Builder: 비즈니스 키 기반으로 다중 테이블 컬럼을 와이드 데이터프레임(Wide DataFrame) 형태로 결합(Merge).
             final_df = self._builder_service.execute_build(
@@ -136,6 +170,8 @@ class SilverPipeline(AbstractPipeline):
                     "error_info": None
                 }
 
+            final_df = final_df.copy()
+
             final_df["year"] = final_df["trade_date"].astype(str).str[0:4]
             final_df["month"] = final_df["trade_date"].astype(str).str[4:6]
             final_df["day"] = final_df["trade_date"].astype(str).str[6:8]
@@ -153,13 +189,27 @@ class SilverPipeline(AbstractPipeline):
             is_loaded = await asyncio.to_thread(self._loader_service.execute_load, transformed_dto)
             
             if is_loaded:
-                self._logger.info(f"[{self._task_name}] Silver 파이프라인 배치 가동 최종 성공.")
-                return {
+                # [설계 의도] 브론즈 규격과 완벽히 통일된 형태의 정산 요약본 생성 및 요약 로깅 수행
+                summary = {
                     "status": STATUS_SUCCESS,
                     "task_name": self._task_name,
                     "execution_date": execution_date,
-                    "error_info": None
+                    "total_jobs": len(job_ids),
+                    "success_jobs": success_count,
+                    "skip_jobs": skip_count,
+                    "fail_jobs": fail_count,
+                    "details": job_details
                 }
+                self._logger.info(
+                    f"실버 파이프라인 가동 완료 - 총 {len(job_ids)}건 중 "
+                    f"[성공: {success_count}건 / 스킵: {skip_count}건 / 실패: {fail_count}건]"
+                )
+                for detail in job_details:
+                    if detail["status"] in ["SKIPPED_EMPTY", "SKIPPED_MISSING_KEY"]:
+                        self._logger.warning(
+                            f"데이터 스킵 대상 Job ID: {detail['job_id']} | 사유: {detail['reason']}"
+                        )
+                return summary
             else:
                 raise LoaderError("S3 Parquet 적재 엔진이 최종 실패(False)를 반환했습니다.")
 

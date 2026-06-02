@@ -14,8 +14,6 @@ routing:
     schema: "kis_domestic_schema"
   - prefix: "kis_vkospi_"
     schema: "kis_domestic_schema"
-  - prefix: "kis_asia_"
-    schema: "kis_domestic_schema"
   - prefix: "kis_fx_"
     schema: "kis_domestic_schema"
 
@@ -25,6 +23,8 @@ routing:
   - prefix: "kis_snp500_"
     schema: "kis_overseas_schema"
   - prefix: "kis_dow_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_asia_"
     schema: "kis_overseas_schema"
   - prefix: "kis_global_"
     schema: "kis_overseas_schema"

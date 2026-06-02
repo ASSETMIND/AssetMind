@@ -96,6 +96,11 @@ def build_wide_table(
     # [설계 의도] O(N) 순차 조인(Merge)이 아닌, C-엔진 기반의 pd.concat을 사용하여 
     # 메모리 상에서 1-Shot으로 가로(axis=1) 병합을 수행하여 성능을 극대화합니다.
     wide_df = pd.concat(indexed_dfs, axis=1)
+
+    # [설계 의도] 대량의 데이터프레임 가로 결합으로 발생한 내부 메모리 단편화(Fragmentation)를 해소합니다.
+    # 연속적인 단일 메모리 블록으로 재배정함으로써, 후속 인덱스 정렬(.sort_index) 및 
+    # 다운스트림 파이프라인 연산 시 PerformanceWarning 경고 노이즈가 발생하는 것을 원천 차단합니다.
+    wide_df = wide_df.copy()
         
     # 3. 정렬 및 인덱스 복원 (다운스트림 레이어를 위한 평탄화)
     wide_df = wide_df.sort_index().reset_index()

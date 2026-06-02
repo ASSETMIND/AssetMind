@@ -32,6 +32,8 @@ STATUS_FAIL_LOAD = "FAIL_LOAD"
 STATUS_SYSTEM_ERROR = "CRITICAL_SYSTEM_ERROR"
 STATUS_EMPTY = "EMPTY_JOBS"
 
+MIN_SUCCESS_RATE_THRESHOLD: float = 0.95  # 최소 95% 이상 성공해야 정상 종료로 인정
+
 
 class BronzePipeline(AbstractPipeline):
     """외부 소스 연동 및 원천 바이너리 적재를 전담하는 브론즈 데이터 레이어 서비스 계층."""
@@ -95,6 +97,24 @@ class BronzePipeline(AbstractPipeline):
             "details": loaded
         }
         self._logger.info(f"브론즈 파이프라인 가동 완료 - 총 {len(job_ids)}건 중 {success_count}건 성공")
+
+        total_count = len(job_ids)
+        if total_count > 0:
+            current_success_rate = success_count / total_count
+            
+            if current_success_rate < MIN_SUCCESS_RATE_THRESHOLD:
+                # 시스템 표준 예외 규격에 맞춰 구조화된 컨텍스트 주입 후 발생
+                raise ETLError(
+                    message=f"수집 성공률이 기준치에 미달하여 태스크를 실패 처리합니다. (성공률: {current_success_rate:.2%} < 기준: {MIN_SUCCESS_RATE_THRESHOLD:.2%})",
+                    details={
+                        "total_jobs": total_count,
+                        "success_jobs": success_count,
+                        "fail_jobs": fail_count,
+                        "current_rate": current_success_rate,
+                        "threshold_rate": MIN_SUCCESS_RATE_THRESHOLD
+                    }
+                )
+
         return summary
 
     async def _failed_extract(self, job_id: str, exception: Exception) -> Dict[str, Any]:
