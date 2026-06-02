@@ -146,26 +146,24 @@ class KISExtractor(AbstractExtractor):
         # [설계 의도] 정적 설정(policy.params)을 기본값으로 깔고, 스케줄러 등이 주입한
         # 동적 설정(request.params)으로 덮어쓰기하여 런타임 유연성을 극대화함.
         merged_params = {**policy.params, **request.params}
+        merged_params = {k.upper(): v for k, v in merged_params.items()}
 
         if "FID_INPUT_ISCD" in merged_params:
             iscd = str(merged_params["FID_INPUT_ISCD"])
             
-            # 5-1. 국내 지수: KIS 규격은 4자리(예: 0021)입니다. YAML에 5자리(예: 00021)로 인입될 경우 보정합니다.
-            if policy.domain == "domestic-stock" and len(iscd) == 5 and iscd.startswith("0"):
+            # 국내 지수: KIS 규격은 4자리(예: 0021)입니다. YAML에 5자리(예: 00021)로 인입될 경우 보정합니다.
+            if policy.domain == "domestic-stock" and len(iscd) == 5: #and iscd.startswith("0"):
                 merged_params["FID_INPUT_ISCD"] = iscd[1:]
                 
-            # 5-2. 해외 지수: QNDAQ 등 타사 범용 규격을 KIS 전용 티커 규격으로 강제 맵핑합니다.
-            elif policy.domain == "overseas-price":
-                ticker_map = {
-                    "QNDAQ": "COMP",  # 나스닥 종합
-                    "PSPX": "SPX",    # S&P 500
-                    "P.DJI": "DJI"    # 다우존스
-                }
-                if iscd in ticker_map:
-                    merged_params["FID_INPUT_ISCD"] = ticker_map[iscd]
+        # print(f"DEBUG_KIS_REQUEST - JOB_ID: {request.job_id} | URL: {url} | TR_ID: {headers['tr_id']} | PARAMS: {merged_params}")
 
-        # 6. 비동기 호출 수행
-        return await self.http_client.get(url, headers=headers, params=merged_params)
+        # 6. 비동기 호출 수행 및 응답 저장
+        response_data = await self.http_client.get(url, headers=headers, params=merged_params)
+        
+        # [임시 디버깅용] 서버가 반환한 실제 JSON 데이터 출력
+        # print(f"DEBUG_KIS_RESPONSE - JOB_ID: {request.job_id} | BODY: {response_data}")
+        
+        return response_data
 
     def _create_response(self, raw_data_list: List[Any], job_id: str) -> ExtractedDTO:
         """KIS API 응답 구조를 파싱하여 비즈니스 성공 여부를 판단하고 시스템 표준 DTO로 포장합니다.
@@ -196,6 +194,16 @@ class KISExtractor(AbstractExtractor):
             if rt_cd != "0":
                 msg = raw_data.get("msg1", raw_data.get("msg", "알 수 없는 오류"))
                 raise ExtractorError(f"KIS API 부분 실패 (Chunk {idx+1}/{len(raw_data_list)}): {msg} (Code: {rt_cd})")
+
+            # 비즈니스 응답 코드가 0(정상)이더라도, 핵심 배열(output2)이 비어있거나 
+            # 요약 정보(output1)의 수치 데이터가 모두 '0'인 경우 정합성 에러를 유발하여 브론즈 단계에서 Fail-Fast 차단.
+            output2 = raw_data.get("output2", [])
+            output1 = raw_data.get("output1", {})
+            
+            if not output2 and output1.get("ovrs_nmix_prpr") == "0.00":
+                raise ExtractorError(
+                    f"[{job_id}] API 응답은 정상이나 실제 시세 데이터가 누락되었습니다. "
+                )
 
             # 2. 첫 응답을 베이스 뼈대로 캡처
             # [설계 의도] 첫 번째 청크의 메타데이터(output1: 종목 요약 정보 등)를 보존하고 배열 뼈대를 준비함.
