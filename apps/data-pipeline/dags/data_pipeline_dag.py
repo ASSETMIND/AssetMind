@@ -118,9 +118,9 @@ daily_asia_dag = create_dag(
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
-    start_year=2026,
-    start_month=5,
-    start_day=26
+    start_year=2000,
+    start_month=1,
+    start_day=1
 )
 
 # 2. Global 파이프라인 (EST 00:00)
@@ -129,7 +129,7 @@ daily_global_dag = create_dag(
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
-    start_year=2026,
+    start_year=2000,
     start_month=1,
     start_day=1
 )
