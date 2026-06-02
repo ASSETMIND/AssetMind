@@ -89,16 +89,20 @@ policy:
     schema:
       # 1. 일자 및 식별 정보 (String)
       stck_bsop_date: { name: "trade_date", type: "date" } # 영업 일자
-      # hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
-      # stck_shrn_iscd: { name: "ticker_code", type: "string" } # 단축 종목코드
       prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
-      # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
-      ovrs_nmix_prpr: { name: "close", type: "float32" } # 현재가 (종가)
-      ovrs_nmix_oprc: { name: "open", type: "float32" } # 시가 (배열 데이터 기준)
-      ovrs_nmix_hgpr: { name: "high", type: "float32" } # 최고가 (배열 데이터 기준)
-      ovrs_nmix_lwpr: { name: "low", type: "float32" } # 최저가 (배열 데이터 기준)
-      ovrs_nmix_prdy_clpr: { name: "prev_price", type: "float32" } # 전일 종가
-      ovrs_nmix_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭
+      # 2. 가격 및 지수 정보 (Float32 - 해외지수 및 원자재/상품 하이브리드 바인딩 규격)
+      ovrs_nmix_prpr: { name: "close", type: "float32" }      # 종가 (해외지수용)
+      ovrs_prod_prpr: { name: "close", type: "float32" }      # 종가 (원자재 상품용)
+      ovrs_nmix_oprc: { name: "open", type: "float32" }       # 시가 (해외지수용)
+      ovrs_prod_oprc: { name: "open", type: "float32" }       # 시가 (원자재 상품용)
+      ovrs_nmix_hgpr: { name: "high", type: "float32" }       # 고가 (해외지수용)
+      ovrs_prod_hgpr: { name: "high", type: "float32" }       # 고가 (원자재 상품용)
+      ovrs_nmix_lwpr: { name: "low", type: "float32" }        # 저가 (해외지수용)
+      ovrs_prod_lwpr: { name: "low", type: "float32" }        # 저가 (원자재 상품용)
+      ovrs_nmix_prdy_clpr: { name: "prev_price", type: "float32" }  # 전일 종가 (해외지수용)
+      ovrs_prod_prdy_clpr: { name: "prev_price", type: "float32" }  # 전일 종가 (원자재 상품용)
+      ovrs_nmix_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭 (해외지수용)
+      ovrs_prod_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭 (원자재 상품용)
       prdy_ctrt: { name: "price_change_rate", type: "float32" } # 전일 대비율
       # 3. 거래량 (Float32)
       acml_vol: { name: "volume", type: "float32" } # 누적 거래량

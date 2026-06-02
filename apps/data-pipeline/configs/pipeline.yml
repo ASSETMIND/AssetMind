@@ -421,7 +421,6 @@ tasks:
       - "kis_dow_jones_internet_daily"
       - "kis_dow_jones_transportation_daily"
       - "kis_dow_jones_utilities_daily"
-      - "kis_dow_jones_commodity_daily"
       - "kis_dow_jones_reit_daily"
       - "kis_dow_jones_automobiles_daily"
       - "kis_dow_jones_auto_parts_daily"
