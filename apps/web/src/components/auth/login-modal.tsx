@@ -39,12 +39,12 @@ export default function LoginModal({ onClose, onClickSignup, onClickFindIdPw }: 
 				isOpen
 				onClose={onClose}
 				title='로그인'
-				className='w-[480px] bg-[#1C1D21] rounded-[40px] px-[40px] py-[50px]'
+				className='w-[calc(100vw-32px)] max-w-[480px] bg-[#1C1D21] rounded-[40px] px-[24px] py-[40px] sm:px-[40px] sm:py-[50px] max-h-[90dvh] overflow-y-auto'
 			>
 				{/* 헤더 */}
 				<div style={{ textAlign: 'center', marginBottom: '40px' }}>
-					<h2 style={{ fontSize: '48px', fontWeight: 500, color: '#FFFFFF', margin: '0 0 8px', lineHeight: '120%', letterSpacing: '-0.05em' }}>LOGIN</h2>
-					<p style={{ fontSize: '20px', fontWeight: 400, color: '#FFFFFF', margin: 0, lineHeight: '140%' }}>AssetMind에 오신 것을 환영합니다.</p>
+					<h2 style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 500, color: '#FFFFFF', margin: '0 0 8px', lineHeight: '120%', letterSpacing: '-0.05em' }}>LOGIN</h2>
+					<p style={{ fontSize: 'clamp(14px, 4vw, 20px)', fontWeight: 400, color: '#FFFFFF', margin: 0, lineHeight: '140%' }}>AssetMind에 오신 것을 환영합니다.</p>
 				</div>
 
 				{/* 폼 */}

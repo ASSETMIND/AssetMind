@@ -4,7 +4,6 @@ import ChartSection from '../components/stock-detail/chart-section';
 import OrderbookSection from '../components/stock-detail/orderbook-section';
 import AIPredictionSection from '../components/stock-detail/ai-prediction-section';
 import CombinedTradeInfoSection from '../components/stock-detail/combine-trade-info-section';
-import CompanyNavSection from '../components/stock-detail/company-nav-section';
 import CompanyInfoSection from '../components/stock-detail/company-info-section';
 import StockHeaderCard from '../components/stock-detail/stock-header-card';
 import ErrorBoundary from '../components/common/error-boundary';
@@ -140,10 +139,7 @@ export default function StockDetailPage() {
 						<>
 							{!isMobile ? (
 								<div className='grid grid-cols-12 gap-4'>
-									<div className={isTablet ? 'col-span-12' : 'col-span-2'}>
-										<ErrorBoundary><CompanyNavSection /></ErrorBoundary>
-									</div>
-									<div className={isTablet ? 'col-span-12' : 'col-span-7'}>
+									<div className={isTablet ? 'col-span-12' : 'col-span-9'}>
 										<ErrorBoundary><CompanyInfoSection /></ErrorBoundary>
 									</div>
 									{!isTablet && (
@@ -154,7 +150,6 @@ export default function StockDetailPage() {
 								</div>
 							) : (
 								<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-									<ErrorBoundary><CompanyNavSection /></ErrorBoundary>
 									<ErrorBoundary><CompanyInfoSection /></ErrorBoundary>
 								</div>
 							)}
