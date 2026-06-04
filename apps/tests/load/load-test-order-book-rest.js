@@ -3,9 +3,10 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '30s', target: 500 },  // 30초 동안 500명까지
-    { duration: '1m', target: 1000 },  // 1분 동안 1000명 유지
-    { duration: '30s', target: 0 },    // 30초 동안 0명으로 쿨다운
+    { duration: '1m', target: 1000 },  // 1분 동안 1000명까지
+    { duration: '2m', target: 3000 },  // 2분 동안 3000명 유지
+    { duration: '2m', target: 5000 },  // 2분 동안 5000명 유지
+    { duration: '1m', target: 0 },     // 1분 동안 0명으로 쿨다운
   ],
   thresholds: {
     http_req_duration: ['p(95)<200'], // 95%의 요청이 200ms 이내여야 통과
