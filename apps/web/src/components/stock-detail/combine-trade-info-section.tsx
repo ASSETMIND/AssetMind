@@ -33,7 +33,7 @@ const fmtSigned = (v: number) => `${v >= 0 ? '+' : ''}${fmt(v)}`;
 const signColor = (v: number) => v > 0 ? RISE : v < 0 ? FALL : '#9194A1';
 
 const thStyle: React.CSSProperties = { padding: '8px 12px', textAlign: 'right', color: '#9194A1', fontWeight: 400, fontSize: '12px', borderBottom: '1px solid #2F3037', whiteSpace: 'nowrap' };
-const tdBase: React.CSSProperties = { padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 400 };
+const tdBase: React.CSSProperties = { padding: '8px 12px', textAlign: 'right', fontSize: '12px', fontWeight: 400, whiteSpace: 'nowrap' };
 
 // ─── Mock 데이터 ──────────────────────────────────────────────
 
