@@ -23,7 +23,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
   - 단점: 상속 구조로 인한 프레임워크적 제약과 클래스 계층 구조의 복잡성이 다소 증가함.
   - 근거: 파이프라인 엔진은 신뢰성이 최우선이며, 새로운 레이어(Silver, Gold) 추가 시 개발자가 명세(`run_batch`)를 누락하는 치명적 실수를 방지하기 위해 강인한 정적 제약(ABC)을 채택함.
 """
-
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
@@ -48,12 +48,15 @@ class AbstractPipeline(ABC):
     async def __aenter__(self) -> "AbstractPipeline":
         """비동기 컨텍스트 진입 시 호출되는 자원 할당 훅 메서드입니다."""
         self._logger.info(f"[{self._task_name}] {self.__class__.__name__} 리소스 할당 프로세스를 시작합니다.")
+        self._start_time = time.perf_counter()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """비동기 컨텍스트 탈출 시 자원을 해제하여 누수를 방지하는 훅 메서드입니다."""
-        self._logger.info(f"[{self._task_name}] {self.__class__.__name__} 리소스 해제가 완료되었습니다.")
+        if hasattr(self, "_start_time"):
+            elapsed_time = time.perf_counter() - self._start_time
 
+        self._logger.info(f"[{self._task_name}] {self.__class__.__name__} 리소스 해제가 완료되었습니다. (총 실행 소요 시간: {elapsed_time:.4f}초)")
     @abstractmethod
     async def run_batch(self, execution_date: Optional[str] = None, extract_mode: str = "TODAY") -> Dict[str, Any]:
         """설정된 배치 명세에 따라 실제 대량 데이터 ETL/EL 작업을 가동하는 핵심 오버라이딩 진입점입니다.

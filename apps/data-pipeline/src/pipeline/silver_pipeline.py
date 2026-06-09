@@ -85,9 +85,13 @@ class SilverPipeline(AbstractPipeline):
         # 2. 브론즈 레이어에 적재 완료된 '하루 전날(어제)'의 원천 데이터를 조회 및 처리할 수 있도록 1일을 차감하여 확정합니다.
         execution_date = (target_dt - datetime.timedelta(days=1)).strftime("%Y%m%d")
 
-        try:
-            self._logger.info(f"[{self._task_name}] Silver ETL 파이프라인을 시작합니다. (기준일: {execution_date})")
+        weeks = ["월", "화", "수", "목", "금", "토", "일"]
+        exec_dt = datetime.datetime.strptime(execution_date, "%Y%m%d")
+        weekday_str = weeks[exec_dt.weekday()]
 
+        try:
+            self._logger.info(f"[{self._task_name}] Silver ETL 파이프라인을 시작합니다. (기준일: {execution_date} ({weekday_str}))")
+            
             # 개별 Job ID 순회 및 Chunk 단위 DataFrame 병합 프로세스 구축 
             transformed_dfs = []
             success_count = 0
