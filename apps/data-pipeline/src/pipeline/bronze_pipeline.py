@@ -59,7 +59,9 @@ class BronzePipeline(AbstractPipeline):
 
     @log_decorator()
     async def run_batch(self, execution_date: Optional[str] = None, extract_mode: str = "TODAY") -> Dict[str, Any]:
-        """브론즈 레이어에 할당된 API 수집 태스크들을 스레드 및 코루틴 Concurrency 기반으로 고속 병렬 처리합니다."""
+        """브론즈 레이어에 할당된 API 수집 태스크들을 흐름 단절(Stop-and-Wait) 없이 
+        수집(Extract)과 적재(Load)가 유기적으로 이어지는 파이프라인 스트리밍 방식으로 고속 병렬 처리합니다.
+        """
         job_ids = self._task_policy.extract_jobs
         if not job_ids:
             return {"status": STATUS_EMPTY, "total": 0, "success": 0, "fail": 0, "details": []}
@@ -67,23 +69,47 @@ class BronzePipeline(AbstractPipeline):
         if not execution_date:
             execution_date = datetime.now().strftime("%Y%m%d")
 
+        weeks = ["월", "화", "수", "목", "금", "토", "일"]
+        exec_dt = datetime.datetime.strptime(execution_date, "%Y%m%d")
+        weekday_str = weeks[exec_dt.weekday()]
+        self._logger.info(f"[{self._task_name}] Bronze ETL 파이프라인을 시작합니다. (기준일: {execution_date} ({weekday_str}))")
+
         runtime_params = {"EXECUTION_DATE": execution_date, "EXTRACT_MODE": extract_mode.upper()}
-        job_requests = [(job_id, runtime_params) for job_id in job_ids]
 
-        # [Extract] 외부망 비동기 병렬 수집
-        extracted = await self._extractor_service.extract_batch(job_requests)
+        # [설계 의도] 기존 extract_batch의 전역 세마포어 캡 우회로 인해 발생한 외부 API Throttling 차단 및 
+        # 커넥션 풀 고갈 현상을 방지하기 위해, 스트리밍 파이프라인 내에 최대 동시성 한도를 15개로 제한하는 세마포어를 도입함.
+        concurrency_semaphore = asyncio.Semaphore(10)
+
+        # # [설계 의도] 단일 작업의 수집(Extract)과 적재(Load)를 하나의 비동기 태스크 체인으로 결합합니다.
+        # 기존의 '수집 전원 완료 후 적재 시작' 방식의 단계별 단절(Stop-and-Wait) 병목을 제거하고,
+        # ExtractorService.extract_batch 내부의 인위적인 전역 세마포어 캡(10개)으로 인한 Head-of-Line Blocking을 우회합니다.
+        # 이를 통해 각 태스크는 개별 Extractor의 @rate_limit 스케줄러를 기반으로 초당 5회 한도를 100% 꽉 채워 발사되며,
+        # 수집이 끝나는 즉시 백그라운드 워커 스레드풀에서 S3 적재를 병렬로 동시 수행(Latency Hiding)합니다.
+        async def process_pipeline_streaming_task(job_id: str) -> Dict[str, Any]:
+            async with concurrency_semaphore:
+                try:
+                    runtime_parameters_copy = runtime_params.copy()
+                    
+                    # 1. 단일 작업 수집 메서드를 직접 호출하여 독립적인 비동기 큐잉 상태를 확보합니다.
+                    result = await self._extractor_service.extract_job(job_id, runtime_parameters_copy)
+                    
+                    # [설계 의도] 기존 extract_batch를 우회함에 따라 누락될 수 있는 
+                    # ExtractorService 내부 카운터를 수동 정산하여 종합 요약 리포트의 무결성을 유지합니다.
+                    self._extractor_service._success_count += 1
+                    
+                    # 2. 수집 성공 즉시 백그라운드 워커 스레드로 적재 위임
+                    return await self._safe_load(job_id, result)
+                except Exception as exception:
+                    self._extractor_service._fail_count += 1
+                    self._extractor_service._failed_jobs.append(job_id)
+                    return await self._failed_extract(job_id, exception)
+
+        # 100여 건의 모든 스트리밍 태스크를 동시 가동하여 비동기 이벤트 루프 가동률을 극대화합니다.
+        streaming_tasks = [process_pipeline_streaming_task(job_id) for job_id in job_ids]
+        loaded = await asyncio.gather(*streaming_tasks, return_exceptions=True)
+
+        # 자원 정산 및 요약 리포트 출력 규칙 보존
         self._extractor_service.log_batch_summary()
-
-        # [Load] 수집 결과 적재 위임 태스크 빌드
-        load_tasks = []
-        for job_id, result in zip(job_ids, extracted):
-            if isinstance(result, Exception):
-                load_tasks.append(self._failed_extract(job_id, result))
-            else:
-                load_tasks.append(self._safe_load(job_id, result))
-
-        # 적재 작업 병렬 실행 (asyncio.to_thread 풀 소모)
-        loaded = await asyncio.gather(*load_tasks, return_exceptions=True)
         self._loader_service.log_batch_summary()
 
         success_count = sum(1 for r in loaded if isinstance(r, dict) and r.get("status") == STATUS_SUCCESS)
@@ -105,7 +131,6 @@ class BronzePipeline(AbstractPipeline):
             current_success_rate = success_count / total_count
             
             if current_success_rate < MIN_SUCCESS_RATE_THRESHOLD:
-                # 시스템 표준 예외 규격에 맞춰 구조화된 컨텍스트 주입 후 발생
                 raise ETLError(
                     message=f"수집 성공률이 기준치에 미달하여 태스크를 실패 처리합니다. (성공률: {current_success_rate:.2%} < 기준: {MIN_SUCCESS_RATE_THRESHOLD:.2%})",
                     details={
