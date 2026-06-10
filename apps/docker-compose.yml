@@ -2,6 +2,18 @@
 version: '3.8'
 
 services:
+  # Nginx 컨테이너
+  nginx:
+    image: nginx:latest
+    container_name: assetmind-nginx
+    ports:
+      - "80:80" # 외부 k6 테스트 진입점
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - prometheus
+    restart: always
+    
   # PostgreSQL 컨테이너
   postgres:
     image: postgres:16-alpine
