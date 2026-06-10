@@ -106,6 +106,14 @@ class ReaderService:
                     region=reader_policy.region
                 )
             
+            elif self._target_reader in ["s3_parquet"]:
+                from src.reader.providers.s3_parquet_reader import S3ParquetStreamingReader
+                
+                reader_instance = S3ParquetStreamingReader(
+                    bucket_name=reader_policy.bucket_name,
+                    region=reader_policy.region
+                )
+            
             # 확장을 고려한 예약 구조 (PostgreSQL 등 추가 시 주석 해제 후 구현)
             # elif self._target_reader == "postgres":
             #     from src.reader.providers.postgres_reader import PostgresReader
