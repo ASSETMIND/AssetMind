@@ -63,26 +63,35 @@ class RateLimitBucket:
             self.timestamps.popleft()
 
     def get_wait_time(self) -> float:
-        """현재 호출 시 대기해야 할 시간을 계산합니다.
+        """현재 호출 시점에서 대기해야 할 물리적 초 단위 지연 시간을 산출하고 타임라인을 예약합니다.
         
         Returns:
-            float: 대기 시간(초). 즉시 실행 가능 시 0.0 반환.
+            float: 즉시 실행 가능 시 0.0 반환, 한도 초과 시 대기해야 할 초 단위 지연 시간.
         """
+        # [설계 의도] 본 메서드는 내부 메모리 큐(deque)의 산술 연산만 수행하는 CPU-bound 로직이므로,
+        # async def 비동기 오버헤드를 제거하고 동기 함수(def)로 선언하여 동기/비동기 래퍼 모두와 완벽한 호환성을 보장함.
         now = time.time()
         self._cleanup(now)
 
+        # 대기 지연 시간 계산의 엄격한 가드 배치
         if len(self.timestamps) < self.limit:
-            self.timestamps.append(now)
-            return 0.0
-        
-        earliest = self.timestamps[0]
-        wait_time = (earliest + self.period) - now
-        
-        if wait_time < 0:
-            wait_time = 0.0
+            if not self.timestamps or self.timestamps[-1] <= now:
+                self.timestamps.append(now)
+                return 0.0
+            else:
+                earliest_available_time = self.timestamps[-1] + (self.period / self.limit)
+                wait_time = earliest_available_time - now
+                self.timestamps.append(now + wait_time)
+                return wait_time
+        else:
+            earliest_active_timestamp = self.timestamps[0]
+            wait_time = (earliest_active_timestamp + self.period) - now
             
-        self.timestamps.append(now + wait_time)
-        return wait_time
+            if wait_time < 0.0:
+                wait_time = 0.0
+                
+            self.timestamps.append(now + wait_time)
+            return wait_time
 
 
 # ==============================================================================

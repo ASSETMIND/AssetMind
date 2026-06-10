@@ -20,14 +20,14 @@
     path: "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
     tr_id: "FHKUP03500100"
     chunk_size: 100
-    base_date: "19900101"
+    base_date: "20000101"
   kis_domestic_params: &kis_domestic_params
     FID_COND_MRKT_DIV_CODE: "U"
     FID_INPUT_DATE_1: "$START_DATE"
     FID_INPUT_DATE_2: "$END_DATE"
     FID_PERIOD_DIV_CODE: "D"
 
-  # 2. KIS 해외 원자재 ETF 공통 템플릿
+  # 2. KIS 해외 지수 ETF 공통 템플릿
   kis_overseas_base: &kis_overseas_base
     provider: "KIS"
     domain: "overseas-price"
@@ -48,9 +48,14 @@
     path: "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
     tr_id: "FHKST03030100"
     chunk_size: 100
-    base_date: "20030101"
+    base_date: "20000101"
   kis_fx_params: &kis_fx_params
     FID_COND_MRKT_DIV_CODE: "X"
+    FID_INPUT_DATE_1: "$START_DATE"
+    FID_INPUT_DATE_2: "$END_DATE"
+    FID_PERIOD_DIV_CODE: "D"
+  kis_fx_params: &kis_commodity_params
+    FID_COND_MRKT_DIV_CODE: "S"
     FID_INPUT_DATE_1: "$START_DATE"
     FID_INPUT_DATE_2: "$END_DATE"
     FID_PERIOD_DIV_CODE: "D"
@@ -60,7 +65,7 @@
     provider: "FRED"
     path: "/series/observations"
     chunk_size: 3650
-    base_date: "19600101"
+    base_date: "20000101"
   fred_params: &fred_params
     frequency: "d"
     observation_start: "$START_DATE_DASH"
@@ -71,7 +76,7 @@
     provider: "ECOS"
     path: "/StatisticSearch"
     chunk_size: 10000
-    base_date: "19990101"
+    base_date: "20000101"
 
   # 6. ECOS 일별(D) 파라미터 공통 템플릿
   ecos_daily_params: &ecos_daily_params
@@ -527,7 +532,7 @@ policy:
     description: "S&P500 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PSPX"
+      FID_INPUT_ISCD: "SPX"
 
   # ========== [NASDAQ 지수 일별 데이터 : 13개] ==========
   kis_nasdaq_daily:
@@ -535,91 +540,91 @@ policy:
     description: "나스닥 (Nasdaq) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "QNDAQ"
+      FID_INPUT_ISCD: "NDAQ"
 
   kis_nasdaq_bank_daily:
     <<: *kis_overseas_base
     description: "나스닥 은행 (NASDAQ Bank) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PBANK"
+      FID_INPUT_ISCD: "BANK"
 
   kis_nasdaq_composite_daily:
     <<: *kis_overseas_base
     description: "나스닥 종합 (NASDAQ Composite) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PCOMP"
+      FID_INPUT_ISCD: "COMP"
 
   kis_nasdaq_industrial_daily:
     <<: *kis_overseas_base
     description: "나스닥 공업지수 (NASDAQ INDUSTRIAL INDEX) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PINDS"
+      FID_INPUT_ISCD: "INDS"
 
   kis_nasdaq_insurance_daily:
     <<: *kis_overseas_base
     description: "나스닥 보험 (NASDAQ OTC Index - Insurance) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PINSR"
+      FID_INPUT_ISCD: "INSR"
 
   kis_nasdaq_computer_daily:
     <<: *kis_overseas_base
     description: "나스닥 컴퓨터 (NASDAQ Computer Index) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PIXCO"
+      FID_INPUT_ISCD: "IXCO"
 
   kis_nasdaq_financial_100_daily:
     <<: *kis_overseas_base
     description: "나스닥 금융100지수 (NASDAQ Financial 100 Index) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PIXF"
+      FID_INPUT_ISCD: "IXF"
 
   kis_nasdaq_healthcare_daily:
     <<: *kis_overseas_base
     description: "나스닥 헬스케어 (NASDAQ HealthCare) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PIXHC"
+      FID_INPUT_ISCD: "IXHC"
 
   kis_nasdaq_telecom_daily:
     <<: *kis_overseas_base
     description: "나스닥 정보통신 (NASDAQ Information Telecom) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PIXTC"
+      FID_INPUT_ISCD: "IXTC"
 
   kis_nasdaq_bio_daily:
     <<: *kis_overseas_base
     description: "나스닥 생명공학 (NASDAQ Bio) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PNBI"
+      FID_INPUT_ISCD: "NBI"
 
   kis_nasdaq_100_daily:
     <<: *kis_overseas_base
     description: "나스닥 100 (NASDAQ-100) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PNDX"
+      FID_INPUT_ISCD: "NDX"
 
   kis_nasdaq_other_financial_daily:
     <<: *kis_overseas_base
     description: "나스닥 기타금융 (NASDAQ OTC Index - Other Financial) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "POFIN"
+      FID_INPUT_ISCD: "OFIN"
 
   kis_nasdaq_transportation_daily:
     <<: *kis_overseas_base
     description: "나스닥 운송 (NASDAQ Transportation) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PTRAN"
+      FID_INPUT_ISCD: "TRAN"
 
   # ========== [Dow Jones 일별 데이터 : 26개] ==========
 
@@ -628,182 +633,182 @@ policy:
     description: "다우존스 산업지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "P.DJI"
+      FID_INPUT_ISCD: ".DJI"
 
   kis_dow_jones_internet_daily:
     <<: *kis_overseas_base
     description: "다우존스 인터넷 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "P.DJINET"
+      FID_INPUT_ISCD: ".DJINET"
 
   kis_dow_jones_transportation_daily:
     <<: *kis_overseas_base
     description: "다우존스 운송지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "P.DJT"
+      FID_INPUT_ISCD: ".DJT"
 
   kis_dow_jones_utilities_daily:
     <<: *kis_overseas_base
     description: "다우존스 유틸리티 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "P.DJU"
+      FID_INPUT_ISCD: ".DJU"
 
   kis_dow_jones_commodity_daily:
     <<: *kis_overseas_base
     description: "다우존스 UBS 상품지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJC"
+      FID_INPUT_ISCD: "DJC"
 
   kis_dow_jones_reit_daily:
     <<: *kis_overseas_base
     description: "다우존스 부동산신탁 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJR"
+      FID_INPUT_ISCD: "DJR"
 
   kis_dow_jones_automobiles_daily:
     <<: *kis_overseas_base
     description: "다우존스 자동차제조 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSAP"
+      FID_INPUT_ISCD: "DJUSAP"
 
   kis_dow_jones_auto_parts_daily:
     <<: *kis_overseas_base
     description: "다우존스 자동차부품 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSAT"
+      FID_INPUT_ISCD: "DJUSAT"
 
   kis_dow_jones_advertising_daily:
     <<: *kis_overseas_base
     description: "다우존스 광고미디어 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSAV"
+      FID_INPUT_ISCD: "DJUSAV"
 
   kis_dow_jones_broadcasting_daily:
     <<: *kis_overseas_base
     description: "다우존스 방송 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSBC"
+      FID_INPUT_ISCD: "DJUSBC"
 
   kis_dow_jones_casinos_daily:
     <<: *kis_overseas_base
     description: "다우존스 카지노 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSCA"
+      FID_INPUT_ISCD: "DJUSCA"
 
   kis_dow_jones_chemicals_daily:
     <<: *kis_overseas_base
     description: "다우존스 화학 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSCH"
+      FID_INPUT_ISCD: "DJUSCH"
 
   kis_dow_jones_construction_daily:
     <<: *kis_overseas_base
     description: "다우존스 건설 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSCN"
+      FID_INPUT_ISCD: "DJUSCN"
 
   kis_dow_jones_distiller_brewer_daily:
     <<: *kis_overseas_base
     description: "다우존스 주류 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSDB"
+      FID_INPUT_ISCD: "DJUSDB"
 
   kis_dow_jones_elect_cmpts_equip_daily:
     <<: *kis_overseas_base
     description: "다우존스 전자부품 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSEC"
+      FID_INPUT_ISCD: "DJUSEC"
 
   kis_dow_jones_food_beverage_daily:
     <<: *kis_overseas_base
     description: "다우존스 음식료 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSFB"
+      FID_INPUT_ISCD: "DJUSFB"
 
   kis_dow_jones_fixed_line_comm_daily:
     <<: *kis_overseas_base
     description: "다우존스 유선통신 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSFC"
+      FID_INPUT_ISCD: "DJUSFC"
 
   kis_dow_jones_hvy_machinery_daily:
     <<: *kis_overseas_base
     description: "다우존스 중장비 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSHR"
+      FID_INPUT_ISCD: "DJUSHR"
 
   kis_dow_jones_lodging_daily:
     <<: *kis_overseas_base
     description: "다우존스 호텔숙박 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSLG"
+      FID_INPUT_ISCD: "DJUSLG"
 
   kis_dow_jones_marine_transport_daily:
     <<: *kis_overseas_base
     description: "다우존스 해상운송 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSMT"
+      FID_INPUT_ISCD: "DJUSMT"
 
   kis_dow_jones_non_ferrous_metals_daily:
     <<: *kis_overseas_base
     description: "다우존스 비철금속 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSNF"
+      FID_INPUT_ISCD: "DJUSNF"
 
   kis_dow_jones_publishing_daily:
     <<: *kis_overseas_base
     description: "다우존스 출판 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSPB"
+      FID_INPUT_ISCD: "DJUSPB"
 
   kis_dow_jones_steel_daily:
     <<: *kis_overseas_base
     description: "다우존스 철강 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSST"
+      FID_INPUT_ISCD: "DJUSST"
 
   kis_dow_jones_trucking_daily:
     <<: *kis_overseas_base
     description: "다우존스 육상운송 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSTK"
+      FID_INPUT_ISCD: "DJUSTK"
 
   kis_dow_jones_tires_daily:
     <<: *kis_overseas_base
     description: "다우존스 타이어 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSTR"
+      FID_INPUT_ISCD: "DJUSTR"
 
   kis_dow_jones_wireless_comm_daily:
     <<: *kis_overseas_base
     description: "다우존스 무선통신 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "PDJUSWC"
+      FID_INPUT_ISCD: "DJUSWC"
 
   # ========== [글로벌 주요 국가 지수 일별 데이터 : 17개] ==========
 
@@ -813,35 +818,35 @@ policy:
     description: "중국 상해종합지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WSHANG"
+      FID_INPUT_ISCD: "SHANG"
 
   kis_asia_china_chinext_daily:
     <<: *kis_overseas_base
     description: "중국 심천 ChiNext 지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WCZ#399102"
+      FID_INPUT_ISCD: "CZ#399102"
 
   kis_asia_hk_hangseng_daily:
     <<: *kis_overseas_base
     description: "홍콩 항셍지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WHK#HS"
+      FID_INPUT_ISCD: "HK#HS"
 
   kis_asia_taiwan_taiex_daily:
     <<: *kis_overseas_base
     description: "대만 가권 지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WTW#WT"
+      FID_INPUT_ISCD: "TW#WT"
 
   kis_asia_japan_nikkei_daily:
     <<: *kis_overseas_base
     description: "일본 니케이 225 지수 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WJP#NI225"
+      FID_INPUT_ISCD: "JP#NI225"
 
   # --- [2. 유럽] ---
   kis_global_europe_stoxx50_daily:
@@ -849,28 +854,28 @@ policy:
     description: "유럽 유로 STOXX 50 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WSX5E"
+      FID_INPUT_ISCD: "SX5E"
 
   kis_global_germany_dax_daily:
     <<: *kis_overseas_base
     description: "독일 DAX 30 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WGR#DAX"
+      FID_INPUT_ISCD: "GR#DAX"
 
   kis_global_france_cac40_daily:
     <<: *kis_overseas_base
     description: "프랑스 CAC 40 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WFR#CAC"
+      FID_INPUT_ISCD: "FR#CAC"
 
   kis_global_uk_ftse_daily:
     <<: *kis_overseas_base
     description: "영국 FTSE 100 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WGB#FTSE"
+      FID_INPUT_ISCD: "GB#FTSE"
 
   # --- [GDP Top 10] ---
   kis_global_canada_tsx_daily:
@@ -878,21 +883,21 @@ policy:
     description: "캐나다 S&P/TSX 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WCAN#COM"
+      FID_INPUT_ISCD: "CAN#COM"
 
   kis_global_brazil_bovespa_daily:
     <<: *kis_overseas_base
     description: "브라질 Bovespa 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WBR#BOVE"
+      FID_INPUT_ISCD: "BR#BOVE"
 
   kis_asia_india_sensex_daily:
     <<: *kis_overseas_base
     description: "인도 센섹스(BSE 30) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WIN#BOMBAY"
+      FID_INPUT_ISCD: "IN#BOMBAY"
 
   # --- [신흥국] ---
   kis_asia_indonesia_idx_daily:
@@ -900,35 +905,35 @@ policy:
     description: "인도네시아 종합(IDX) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WID#JK"
+      FID_INPUT_ISCD: "ID#JK"
 
   kis_asia_vietnam_vn_daily:
     <<: *kis_overseas_base
     description: "베트남 호치민(VNI) 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WVN#VNI"
+      FID_INPUT_ISCD: "VN#VNI"
 
   kis_asia_malaysia_klci_daily:
     <<: *kis_overseas_base
     description: "말레이시아 KLCI 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WMY#KLSE"
+      FID_INPUT_ISCD: "MY#KLSE"
 
   kis_asia_philippines_psei_daily:
     <<: *kis_overseas_base
     description: "필리핀 PSEi 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WPH#MANILA"
+      FID_INPUT_ISCD: "PH#MANILA"
 
   kis_asia_thailand_set_daily:
     <<: *kis_overseas_base
     description: "태국 SET 일봉"
     params:
       <<: *kis_overseas_params
-      FID_INPUT_ISCD: "WTH#BANG"
+      FID_INPUT_ISCD: "TH#BANG"
 
   # ========== [환율 일별 데이터 : 14개] ==========
 
@@ -938,28 +943,28 @@ policy:
     description: "원/달러 환율 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@KRW"
+      FID_INPUT_ISCD: "FX@KRW"
 
   kis_fx_eur_usd_daily:
     <<: *kis_fx_base
     description: "유로/달러 환율 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@EUR"
+      FID_INPUT_ISCD: "FX@EUR"
 
   kis_fx_gbp_usd_daily:
     <<: *kis_fx_base
     description: "파운드/달러 환율 (영국) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@GBP"
+      FID_INPUT_ISCD: "FX@GBP"
 
   kis_fx_jpy_usd_daily:
     <<: *kis_fx_base
     description: "엔/달러 환율 (일본) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@JPY"
+      FID_INPUT_ISCD: "FX@JPY"
 
   # --- [아시아 주요국 통화] ---
   kis_fx_cny_usd_daily:
@@ -967,14 +972,14 @@ policy:
     description: "위안/달러 환율 (중국) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@CNY"
+      FID_INPUT_ISCD: "FX@CNY"
 
   kis_fx_twd_usd_daily:
     <<: *kis_fx_base
     description: "대만달러/달러 환율 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@TWD"
+      FID_INPUT_ISCD: "FX@TWD"
 
   # --- [아메리카 통화] ---
   kis_fx_cad_usd_daily:
@@ -982,14 +987,14 @@ policy:
     description: "캐나다달러/달러 환율 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@CAD"
+      FID_INPUT_ISCD: "FX@CAD"
 
   kis_fx_brl_usd_daily:
     <<: *kis_fx_base
     description: "헤알/달러 환율 (브라질) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@BRL"
+      FID_INPUT_ISCD: "FX@BRL"
 
   # --- [신흥국 (ASEAN 및 인도) 통화] ---
   kis_fx_inr_usd_daily:
@@ -997,42 +1002,42 @@ policy:
     description: "루피/달러 환율 (인도) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@IDR"
+      FID_INPUT_ISCD: "FX@IDR"
 
   kis_fx_idr_usd_daily:
     <<: *kis_fx_base
     description: "루피아/달러 환율 (인도네시아) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@INR"
+      FID_INPUT_ISCD: "FX@INR"
 
   kis_fx_vnd_usd_daily:
     <<: *kis_fx_base
     description: "동/달러 환율 (베트남) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@VND"
+      FID_INPUT_ISCD: "FX@VND"
 
   kis_fx_myr_usd_daily:
     <<: *kis_fx_base
     description: "링깃/달러 환율 (말레이시아) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@MYR"
+      FID_INPUT_ISCD: "FX@MYR"
 
   kis_fx_php_usd_daily:
     <<: *kis_fx_base
     description: "페소/달러 환율 (필리핀) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@PHP"
+      FID_INPUT_ISCD: "FX@PHP"
 
   kis_fx_thb_usd_daily:
     <<: *kis_fx_base
     description: "바트/달러 환율 (태국) 일봉"
     params:
       <<: *kis_fx_params
-      FID_INPUT_ISCD: "XFX@THB"
+      FID_INPUT_ISCD: "FX@THB"
 
   # ========== [원자재/에너지/농산물 근월물 일별 데이터 : 23개] ==========
 
@@ -1041,165 +1046,165 @@ policy:
     <<: *kis_overseas_base
     description: "금 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0101"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0101"
 
   kis_commodity_silver_daily:
     <<: *kis_overseas_base
     description: "은 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0102"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0102"
 
   kis_commodity_platinum_daily:
     <<: *kis_overseas_base
     description: "백금 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0103"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0103"
 
   kis_commodity_palladium_daily:
     <<: *kis_overseas_base
     description: "팔라듐 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0104"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0104"
 
   # --- [비철금속] ---
   kis_commodity_copper_daily:
     <<: *kis_overseas_base
     description: "동(구리) LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0202"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0202"
 
   kis_commodity_aluminum_daily:
     <<: *kis_overseas_base
     description: "알루미늄 LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0205"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0205"
 
   kis_commodity_zinc_daily:
     <<: *kis_overseas_base
     description: "아연 LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0207"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0207"
 
   kis_commodity_nickel_daily:
     <<: *kis_overseas_base
     description: "니켈 LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0209"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0209"
 
   kis_commodity_tin_daily:
     <<: *kis_overseas_base
     description: "주석 LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0211"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0211"
 
   kis_commodity_lead_daily:
     <<: *kis_overseas_base
     description: "연(납) LME 3개월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0213"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0213"
 
   # --- [농산물 (Agriculture)] ---
   kis_commodity_corn_daily:
     <<: *kis_overseas_base
     description: "옥수수 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0301"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0301"
 
   kis_commodity_wheat_daily:
     <<: *kis_overseas_base
     description: "소맥(밀) 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0302"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0302"
 
   kis_commodity_soybean_daily:
     <<: *kis_overseas_base
     description: "대두 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0303"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0303"
 
   kis_commodity_soybean_meal_daily:
     <<: *kis_overseas_base
     description: "대두박 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0304"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0304"
 
   kis_commodity_soybean_oil_daily:
     <<: *kis_overseas_base
     description: "대두유 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0305"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0305"
 
   kis_commodity_oats_daily:
     <<: *kis_overseas_base
     description: "귀리 시카고 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0306"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0306"
 
   kis_commodity_coffee_daily:
     <<: *kis_overseas_base
     description: "커피 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0307"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0307"
 
   kis_commodity_cocoa_daily:
     <<: *kis_overseas_base
     description: "코코아 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0308"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0308"
 
   kis_commodity_sugar_daily:
     <<: *kis_overseas_base
     description: "설탕 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0309"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0309"
 
   kis_commodity_cotton_daily:
     <<: *kis_overseas_base
     description: "원면(면화) 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0310"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0310"
 
   # --- [에너지 (Energy)] ---
   kis_commodity_wti_daily:
     <<: *kis_overseas_base
     description: "WTI 원유 뉴욕 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0402"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0402"
 
   kis_commodity_dubai_daily:
     <<: *kis_overseas_base
     description: "두바이유 선물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0403"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0403"
 
   kis_commodity_brent_daily:
     <<: *kis_overseas_base
     description: "Brent 원유 근월물 일봉"
     params:
-      <<: *kis_overseas_params
-      FID_INPUT_ISCD: "EM0405"
+      <<: *kis_commodity_params
+      FID_INPUT_ISCD: "M0405"
 
   # ----------------------------------------------------------------------------
   # FRED : https://fred.stlouisfed.org/categories

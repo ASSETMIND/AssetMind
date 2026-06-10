@@ -47,9 +47,10 @@ from src.common.interfaces import IAuthStrategy, IHttpClient
 # ==============================================================================
 # [Configuration] Constants
 # ==============================================================================
-# [설계 의도] 토큰 만료 10분 전부터 갱신 대상으로 간주하여, 통신 지연으로 인한 
-# 만료 토큰 사용(Unauthorized Error)을 사전 차단(Margin)함.
-TOKEN_EXPIRATION_BUFFER_MINUTES: int = 10
+# [설계 의도] 토큰 만료 1시간(60분) 전부터 갱신 대상으로 간주합니다. 이를 통해 대량의 
+# 자산 데이터 백필/수집 프로세스 구동 중 토큰이 만료되는 현상(Mid-flight Expiration)을 원천 차단하며, 
+# 만료 전 23시간 동안은 캐시를 유지하여 외부 인증 API 호출 빈도를 극한으로 최적화합니다.
+TOKEN_EXPIRATION_BUFFER_MINUTES: int = 60
 
 # [설계 의도] KIS API 응답에서 만료 일시 파싱 실패 시 적용할 Fail-Safe용 기본 수명(12시간).
 DEFAULT_TOKEN_DURATION_HOURS: int = 12
@@ -136,7 +137,7 @@ class KISAuthStrategy(IAuthStrategy):
         """현재 캐싱된 토큰의 갱신 필요 여부를 확인합니다.
 
         Returns:
-            bool: 토큰이 없거나, 만료 버퍼 시간(10분) 이내에 진입한 경우 True.
+            bool: 토큰이 없거나, 만료 버퍼 시간(60분) 이내에 진입한 경우 True.
         """
         # [수정] 인메모리 캐시가 비어있다면, 새로운 토큰을 발급받기 전에 파일 시스템 캐시를 먼저 확인합니다.
         if not self._access_token or not self._expires_at:

@@ -78,14 +78,20 @@ class SilverPipeline(AbstractPipeline):
             return {"status": STATUS_EMPTY, "total": 0, "success": 0, "fail": 0, "details": []}
 
         if not execution_date:
-            execution_date = datetime.now().strftime("%Y%m%d")
+            target_dt = datetime.date.today()
+        else:
+            target_dt = datetime.datetime.strptime(execution_date, "%Y%m%d").date()
+
+        # 2. 브론즈 레이어에 적재 완료된 '하루 전날(어제)'의 원천 데이터를 조회 및 처리할 수 있도록 1일을 차감하여 확정합니다.
+        execution_date = (target_dt - datetime.timedelta(days=1)).strftime("%Y%m%d")
+
+        weeks = ["월", "화", "수", "목", "금", "토", "일"]
+        exec_dt = datetime.datetime.strptime(execution_date, "%Y%m%d")
+        weekday_str = weeks[exec_dt.weekday()]
 
         try:
-            if not execution_date:
-                execution_date = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y%m%d")
-
-            self._logger.info(f"[{self._task_name}] Silver ETL 파이프라인을 시작합니다. (기준일: {execution_date})")
-
+            self._logger.info(f"[{self._task_name}] Silver ETL 파이프라인을 시작합니다. (기준일: {execution_date} ({weekday_str}))")
+            
             # 개별 Job ID 순회 및 Chunk 단위 DataFrame 병합 프로세스 구축 
             transformed_dfs = []
             success_count = 0
@@ -120,6 +126,14 @@ class SilverPipeline(AbstractPipeline):
                     else:
                         job_df = pd.DataFrame()
 
+                    # trade_date 컬럼이 누락된 경우, 동적 주입하여 다운스트림 Builder 계층의 광역 조인(Wide Join) 무결성을 보장합니다.
+                    if not job_df.empty and "trade_date" not in job_df.columns:
+                        job_df["trade_date"] = pd.to_datetime(execution_date)
+
+                    # 2일치 데이터(당일, 전일) 중 대상일(execution_date) 레코드 1개만 정확하게 필터링하여 남깁니다.
+                    if not job_df.empty:
+                        job_df = job_df[job_df["trade_date"] == pd.to_datetime(execution_date)].reset_index(drop=True)
+
                     if job_df.empty:
                         status = "SKIPPED_EMPTY"
                         reason = "입력 데이터프레임이 완전히 비어 있습니다. (과거 백필 공백 또는 휴장일)"
@@ -153,7 +167,7 @@ class SilverPipeline(AbstractPipeline):
             self._reader_service.log_batch_summary()
             self._transformer_service.log_batch_summary()
 
-            # 3. Builder: 비즈니스 키 기반으로 다중 테이블 컬럼을 와이드 데이터프레임(Wide DataFrame) 형태로 결합(Merge).
+            # 4. Builder: 비즈니스 키 기반으로 다중 테이블 컬럼을 와이드 데이터프레임(Wide DataFrame) 형태로 결합(Merge).
             final_df = self._builder_service.execute_build(
                 transformed_dfs, self._task_policy.extract_jobs, "trade_date"
             )
@@ -201,8 +215,7 @@ class SilverPipeline(AbstractPipeline):
                     "details": job_details
                 }
                 self._logger.info(
-                    f"실버 파이프라인 가동 완료 - 총 {len(job_ids)}건 중 "
-                    f"[성공: {success_count}건 / 스킵: {skip_count}건 / 실패: {fail_count}건]"
+                    f"[Silver Pipeline 요약 리포트] 총 {len(job_ids)}건 중 [성공: {success_count}건 / 스킵: {skip_count}건 / 실패: {fail_count}건]"
                 )
                 for detail in job_details:
                     if detail["status"] in ["SKIPPED_EMPTY", "SKIPPED_MISSING_KEY"]:

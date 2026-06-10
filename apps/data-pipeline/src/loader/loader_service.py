@@ -69,6 +69,10 @@ class LoaderService:
         self._logger = LogManager.get_logger(self.__class__.__name__)
         self._loader_cache: Dict[str, ILoader] = {}
 
+        self._success_count: int = 0
+        self._fail_count: int = 0
+        self._failed_jobs: List[str] = []
+
     def _get_or_create_loader(self) -> ILoader:
         """설정값에 지정된 타겟 시스템에 맞는 로더를 반환합니다 (지연 로딩 및 캐싱 적용).
 
@@ -86,7 +90,7 @@ class LoaderService:
             return self._loader_cache[target_system]
 
         # 2. [Cold-Start] 캐시 미스 시에만 동적 모듈 임포트 및 지연 초기화 수행
-        self._logger.info(f"[{target_system.upper()}] 로더 인스턴스 지연 초기화를 시작합니다.")
+        # self._logger.info(f"[{target_system.upper()}] 로더 인스턴스 지연 초기화를 시작합니다.")
 
         try:
             loader_policy = self._config.get_loader(target_system)
@@ -154,9 +158,47 @@ class LoaderService:
                 should_retry=False
             )
 
+        # 무결성 검사 및 추적을 위한 Job ID 추출 (Duck Typing 방어)
+        job_id = "Unknown"
+        if dto.meta and isinstance(dto.meta, dict):
+            job_id = dto.meta.get("job_id", dto.meta.get("task_name", "Unknown"))
+
         # 1. 지연 로딩 및 캐시된 로더 인스턴스 획득 (첫 호출 시에만 초기화 비용 발생)
         loader = self._get_or_create_loader()
+
+        try:
+            # 적재 엔진 가동
+            is_loaded = loader.load(dto)
+            
+            if is_loaded:
+                self._success_count += 1
+            else:
+                self._fail_count += 1
+                self._failed_jobs.append(job_id)
+
+            return loader.load(dto)
+                
+        except Exception as e:
+            self._fail_count += 1
+            self._failed_jobs.append(job_id)
+            raise e
         
-        # 2. 적재 위임 수행
-        # 서비스 계층은 다형성(Polymorphism)을 활용해 상위 인터페이스 메서드만 호출함.
-        return loader.load(dto)
+    def log_batch_summary(self) -> None:
+        """전체 연산 파이프라인 마감 시점에 호출되어, 적재 성공/실패 통계 및 실패 목록을 단 1회 통합 배포합니다."""
+        total_count = self._success_count + self._fail_count
+        
+        # 1. 통합 마감 성적표 출력
+        self._logger.info(
+            f"[Loader 요약 리포트] 총 {total_count}건 중 성공 {self._success_count}건, 실패 {self._fail_count}건"
+        )
+
+        # 2. 실패한 구체적 자산 목록 개별 경고 출력
+        if self._failed_jobs:
+            self._logger.warning(
+                f"[S3_LOAD] 적재 실패한 Job ID: {self._failed_jobs}"
+            )
+            
+        # 3. 차기 배치를 위한 휘발성 정산 자산 자가 청소 (Reset)
+        self._success_count = 0
+        self._fail_count = 0
+        self._failed_jobs.clear()

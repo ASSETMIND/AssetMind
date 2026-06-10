@@ -139,9 +139,9 @@ class S3ZstdLoader(AbstractLoader):
                     "aws_access_key_id": "test",      # LocalStack Dummy Key
                     "aws_secret_access_key": "test"   # LocalStack Dummy Key
                 })
-                self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
-            else:
-                self._logger.info("[운영 환경 감지] 실제 AWS S3 클라이언트로 초기화합니다.")
+                # self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
+            # else:
+                # self._logger.info("[운영 환경 감지] 실제 AWS S3 클라이언트로 초기화합니다.")
 
             # 3. 클라이언트 생성
             return boto3.client(**client_kwargs)
@@ -212,12 +212,17 @@ class S3ZstdLoader(AbstractLoader):
         execution_date_str = os.environ.get("EXECUTION_DATE")
         
         if execution_date_str and len(execution_date_str) == 8:
+            # 배치일 실행 기준, 실제 수집 완료된 데이터의 대상일로 변경
+            base_dt = datetime.datetime.strptime(execution_date_str, "%Y%m%d")
+            target_dt = base_dt - datetime.timedelta(days=1)
+
             # "20260515" 형식을 "year=2026/month=05/day=15"로 파싱
-            year = execution_date_str[:4]
-            month = execution_date_str[4:6]
-            day = execution_date_str[6:8]
+            year = target_dt.strftime("%Y")
+            month = target_dt.strftime("%m")
+            day = target_dt.strftime("%d")
+
             date_path = f"year={year}/month={month}/day={day}"
-            file_date = execution_date_str
+            file_date = target_dt.strftime("%Y%m%d")
         else:
             # 로컬 수동 테스트 등 환경변수가 없을 때만 동작하는 Fallback (물리적 시간)
             self._logger.warning("EXECUTION_DATE가 누락되어 시스템 현재 시간으로 파티션을 생성합니다.")
@@ -318,7 +323,7 @@ class S3ZstdLoader(AbstractLoader):
         )
 
         try:
-            self._logger.info(f"S3 업로드 시작 - Bucket: {self._bucket_name}, Key: {s3_key}")
+            # self._logger.info(f"S3 업로드 시작 - Bucket: {self._bucket_name}, Key: {s3_key}")
             self._boto3_client.upload_fileobj(
                 Fileobj=file_obj,
                 Bucket=self._bucket_name,

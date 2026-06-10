@@ -220,13 +220,16 @@ class ReaderService:
                     is_empty = False
                     if batch is None:
                         is_empty = True
-                    elif hasattr(batch, "empty") and batch.empty:
-                        is_empty = True
+                    # elif hasattr(batch, "empty") and batch.empty:
+                    #     is_empty = True
                     elif isinstance(batch, list):
                         if not batch:
                             is_empty = True
                         elif isinstance(batch[0], dict) and "output2" in batch[0] and not batch[0]["output2"]:
-                            is_empty = True
+                            if "output1" in batch[0] and isinstance(batch[0]["output1"], dict) and batch[0]["output1"]:
+                                is_empty = False  # output1이 살아있으므로 변환기로 통과 허용
+                            else:
+                                is_empty = True
 
                     if is_empty:
                         self._empty_count += 1

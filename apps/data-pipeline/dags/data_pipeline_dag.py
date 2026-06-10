@@ -72,7 +72,7 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
         start_date=pendulum.datetime(start_year, start_month, start_day, tz=timezone),
         schedule=schedule,
         catchup=True,
-        max_active_runs=1,
+        max_active_runs=10,
         tags=["daily", task_key.split('_')[-1]],
     ) as dag:
         
@@ -114,22 +114,22 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
 # ==========================================================
 # 1. Asia 파이프라인 (KST 00:00)
 daily_asia_dag = create_dag(
-    dag_id="daily_asia",
+    dag_id="daily_asia_test",
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
     start_year=2026,
     start_month=5,
-    start_day=26
+    start_day=20
 )
 
 # 2. Global 파이프라인 (EST 00:00)
 daily_global_dag = create_dag(
-    dag_id="daily_global",
+    dag_id="daily_global_test",
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
     start_year=2026,
-    start_month=1,
-    start_day=1
+    start_month=5,
+    start_day=20
 )

@@ -50,7 +50,6 @@ MAX_CONNECTION_LIMIT = 100 # aiohttp 커넥션 풀의 최대 커넥션 수 (Thun
 DNS_CACHE_TTL = 300 # DNS 캐시의 TTL (초 단위)
 TOTAL_TIMEOUT_SECONDS = 30.0 # 전체 요청 타임아웃 (초 단위, 연결 + 응답 대기 시간 포함) - 기존 60에서 하향 조정하여 빠른 실패 유도
 CONNECT_TIMEOUT_SECONDS = 10.0 # 연결 타임아웃 (초 단위, TCP 핸드셰이크 최대 대기 시간) - 신규 추가하여 연결 지연 시 빠르게 실패하도록 유도
-THROTTLE_DELAY_SECONDS: float = 0.15  # 각 요청이 끝난 후 강제 대기(Pacing) 시간 (초 단위, 150ms)
 
 # ==============================================================================
 # [Main Class] AsyncHttpAdapter
@@ -166,9 +165,6 @@ class AsyncHttpAdapter(IHttpClient):
             # 전파되는 것(Leaking)을 막기 위해, 시스템 표준 예외인 NetworkConnectionError로 래핑함.
             # 이를 통해 상위 재시도(Retry) 데코레이터가 인프라 라이브러리의 교체와 무관하게 일관되게 동작함.
             raise NetworkConnectionError(f"GET 요청 실패 ({url}): {str(e)}") from e
-        finally:
-            # Thundering Herd 병목을 완화하기 위해 각 요청이 끝난 후 강제 대기(Pacing)를 적용함.
-            await asyncio.sleep(THROTTLE_DELAY_SECONDS)
 
     @log_decorator(logger_name="HTTP", suppress_error=False)
     @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0, exceptions=(NetworkConnectionError, asyncio.TimeoutError))
@@ -198,9 +194,6 @@ class AsyncHttpAdapter(IHttpClient):
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
              # [설계 의도] GET 메서드와 동일하게 예외를 래핑하여 어댑터의 인터페이스 일관성을 유지함.
              raise NetworkConnectionError(f"POST 요청 실패 ({url}): {str(e)}") from e
-        finally:
-            # Thundering Herd 병목을 완화하기 위해 각 요청이 끝난 후 강제 대기(Pacing)를 적용함.
-            await asyncio.sleep(THROTTLE_DELAY_SECONDS)
 
     async def _handle_response(
         self, 

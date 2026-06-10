@@ -88,6 +88,9 @@ class KISTransformer(AbstractTransformer):
         # 2. 타겟 컬럼 순차 전개 (Flattening & Broadcasting)
         for target in targets:
             if target in df.columns:
+                # 빈 리스트를 [{}] (빈 딕셔너리가 담긴 리스트)로 치환하여 데이터프레임의 행(Row) 생존을 보장합니다.
+                df[target] = df[target].apply(lambda x: [{}] if isinstance(x, list) and len(x) == 0 else x)
+
                 # [설계 의도] List 타입 대응 (output2)
                 # 데이터가 존재하고 첫 번째 요소가 리스트인 경우, pandas 네이티브 explode로 세로(Row) 확장 수행
                 if not df[target].empty and isinstance(df[target].dropna().iloc[0], list):
@@ -135,6 +138,9 @@ class KISTransformer(AbstractTransformer):
 
         # 2. 컬럼명 표준화 변경
         df = df.rename(columns=rename_map)
+
+        # 동시 매핑되어 컬럼명이 중복된 경우, 뒤쪽만 남겨서 컬럼 고유성(Uniqueness)을 강제합니다.
+        df = df.loc[:, ~df.columns.duplicated(keep='last')]
         
         # 3. Data Contract 강제 (정의되지 않은 Garbage Column 원천 드롭)
         target_columns = list(type_map.keys())
