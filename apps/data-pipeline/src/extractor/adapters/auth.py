@@ -28,9 +28,10 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
    - 근거: 대부분의 401/403 에러는 자격 증명(Key/Secret)의 오기입이나 만료로 발생하므로, Exponential Backoff를 수행하는 것은 무의미한 리소스 낭비임.
 """
 
+import os
+import json
 import asyncio
 import hashlib
-import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -46,9 +47,10 @@ from src.common.interfaces import IAuthStrategy, IHttpClient
 # ==============================================================================
 # [Configuration] Constants
 # ==============================================================================
-# [설계 의도] 토큰 만료 10분 전부터 갱신 대상으로 간주하여, 통신 지연으로 인한 
-# 만료 토큰 사용(Unauthorized Error)을 사전 차단(Margin)함.
-TOKEN_EXPIRATION_BUFFER_MINUTES: int = 10
+# [설계 의도] 토큰 만료 1시간(60분) 전부터 갱신 대상으로 간주합니다. 이를 통해 대량의 
+# 자산 데이터 백필/수집 프로세스 구동 중 토큰이 만료되는 현상(Mid-flight Expiration)을 원천 차단하며, 
+# 만료 전 23시간 동안은 캐시를 유지하여 외부 인증 API 호출 빈도를 극한으로 최적화합니다.
+TOKEN_EXPIRATION_BUFFER_MINUTES: int = 60
 
 # [설계 의도] KIS API 응답에서 만료 일시 파싱 실패 시 적용할 Fail-Safe용 기본 수명(12시간).
 DEFAULT_TOKEN_DURATION_HOURS: int = 12
@@ -135,8 +137,12 @@ class KISAuthStrategy(IAuthStrategy):
         """현재 캐싱된 토큰의 갱신 필요 여부를 확인합니다.
 
         Returns:
-            bool: 토큰이 없거나, 만료 버퍼 시간(10분) 이내에 진입한 경우 True.
+            bool: 토큰이 없거나, 만료 버퍼 시간(60분) 이내에 진입한 경우 True.
         """
+        # [수정] 인메모리 캐시가 비어있다면, 새로운 토큰을 발급받기 전에 파일 시스템 캐시를 먼저 확인합니다.
+        if not self._access_token or not self._expires_at:
+            self._load_file_cache()
+
         if not self._access_token or not self._expires_at:
             return True
         
@@ -196,6 +202,37 @@ class KISAuthStrategy(IAuthStrategy):
                 self._expires_at = datetime.now() + timedelta(hours=DEFAULT_TOKEN_DURATION_HOURS)
         else:
             self._expires_at = datetime.now() + timedelta(hours=DEFAULT_TOKEN_DURATION_HOURS)
+
+        # KIS 서버로부터 신규 발급에 성공한 경우, 다음 프로세스가 사용할 수 있도록 파일로 영속화합니다.
+        self._save_file_cache()
+
+    def _load_file_cache(self) -> None:
+        """파일 시스템으로부터 영속화된 토큰 캐시를 로드합니다."""
+        cache_file = os.path.abspath(".kis_token_cache.json")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cache_data = json.load(f)
+                    self._access_token = cache_data.get("access_token")
+                    expires_at_str = cache_data.get("expires_at")
+                    if expires_at_str:
+                        self._expires_at = datetime.fromisoformat(expires_at_str)
+            except Exception:
+                # 파일 깨짐 등의 예외 발생 시 무시하고 새로 발급받도록 Fail-Safe 처리
+                self._access_token = None
+                self._expires_at = None
+
+    def _save_file_cache(self) -> None:
+        """발급받은 유효 토큰 상태를 파일 시스템에 안전하게 저장합니다."""
+        cache_file = os.path.abspath(".kis_token_cache.json")
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "access_token": self._access_token,
+                    "expires_at": self._expires_at.isoformat() if self._expires_at else None
+                }, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
 
 class UPBITAuthStrategy(IAuthStrategy):

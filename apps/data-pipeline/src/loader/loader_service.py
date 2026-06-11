@@ -26,7 +26,7 @@ import logging
 from typing import Dict, Optional
 
 from src.common.config import ConfigManager
-from src.common.dtos import ExtractedDTO
+from src.common.dtos import ExtractedDTO, TransformedDTO
 from src.common.interfaces import ILoader
 from src.common.exceptions import ConfigurationError, LoaderError
 from src.common.log import LogManager
@@ -69,6 +69,10 @@ class LoaderService:
         self._logger = LogManager.get_logger(self.__class__.__name__)
         self._loader_cache: Dict[str, ILoader] = {}
 
+        self._success_count: int = 0
+        self._fail_count: int = 0
+        self._failed_jobs: List[str] = []
+
     def _get_or_create_loader(self) -> ILoader:
         """설정값에 지정된 타겟 시스템에 맞는 로더를 반환합니다 (지연 로딩 및 캐싱 적용).
 
@@ -82,29 +86,31 @@ class LoaderService:
         target_system = self._target_loader.strip().lower()
 
         # 1. [Fast-Path] 캐시에 이미 로더 인스턴스가 존재하면 즉시 반환 (속도 극대화)
-        # [설계 의도] 수천~수만 번 호출되는 적재 파이프라인에서 매번 인스턴스를 생성하는 
-        # 오버헤드를 완벽히 제거하는 Registry/Cache 패턴.
         if target_system in self._loader_cache:
             return self._loader_cache[target_system]
 
         # 2. [Cold-Start] 캐시 미스 시에만 동적 모듈 임포트 및 지연 초기화 수행
-        self._logger.info(f"[{target_system.upper()}] 로더 인스턴스 지연 초기화를 시작합니다.")
+        # self._logger.info(f"[{target_system.upper()}] 로더 인스턴스 지연 초기화를 시작합니다.")
 
         try:
             loader_policy = self._config.get_loader(target_system)
 
-            # [설계 의도] 메인 프로세스 기동 시 불필요한 서드파티 모듈을 로드하지 않도록,
-            # 분기 블록 내부에서 동적 임포트(Dynamic Import)를 수행함.
-            if target_system == "aws":
-                from src.loader.providers.s3_loader import S3Loader
-                loader_instance = S3Loader(
-                    bucket_name=loader_policy.s3.get("bucket_name"),
-                    region=loader_policy.region
+            # 파이프라인 확장을 위해 타겟 시스템 분기를 세분화하고 각 환경에 맞는 구체 로더를 동적 임포트.
+            if target_system == "s3_zstd":
+                from src.loader.providers.s3_zstd_loader import S3ZstdLoader
+                loader_instance = S3ZstdLoader(
+                    bucket_name=loader_policy.bucket_name,
+                    region=loader_policy.region,
+                    prefix=loader_policy.prefix
                 )
                 
-            # elif target_system == "postgres":
-            #     from src.loader.providers.postgresql_loader import PostgreSQLLoader
-            #     loader_instance = PostgreSQLLoader(config=self._config)
+            elif target_system == "s3_parquet":
+                from src.loader.providers.s3_parquet_loader import S3ParquetLoader
+                loader_instance = S3ParquetLoader(
+                    bucket_name=loader_policy.bucket_name,
+                    prefix=loader_policy.prefix,
+                    partition_cols=loader_policy.partition_cols
+                )
                 
             else:
                 raise ConfigurationError(
@@ -117,12 +123,9 @@ class LoaderService:
             return loader_instance
 
         except Exception as e:
-            # [설계 의도] 설정 누락 등 명시적 ConfigurationError는 상위로 Bypassing 처리.
             if isinstance(e, ConfigurationError):
                 raise e
                 
-            # [설계 의도] 예측 못한 에러(ImportError, 네트워크 타임아웃 등)는 
-            # 파이프라인 공통 규격에 맞게 도메인 예외인 LoaderError로 강제 래핑하여 추적성 확보.
             raise LoaderError(
                 message=f"[{target_system.upper()}] 로더 지연 초기화 중 오류 발생",
                 details={"target": target_system, "error": str(e)},
@@ -147,18 +150,55 @@ class LoaderService:
             LoaderError: 입력 DTO 타입이 유효하지 않거나, 하위 로더 실행 중 치명적 예외 발생 시.
         """
         # [설계 의도] 파이프라인 간 데이터 컨트랙트(Contract) 강제 보장.
-        # Duck Typing에 의존하지 않고 명시적으로 ExtractedDTO 타입인지 런타임에 엄격히 검증하여 데이터 오염 차단.
-        if not isinstance(dto, ExtractedDTO):
+        # Duck Typing에 의존하지 않고 명시된 DTO 타입인지 런타임에 엄격히 검증하여 데이터 오염 차단.
+        if not isinstance(dto, (ExtractedDTO, TransformedDTO)):
             raise LoaderError(
-                message=f"잘못된 DTO 타입 전달. ExtractedDTO가 필요합니다. (Type: {type(dto)})",
+                message=f"잘못된 DTO 타입 전달. ExtractedDTO 또는 TransformedDTO가 필요합니다. (Type: {type(dto)})",
                 details={"provided_type": str(type(dto))},
                 should_retry=False
             )
 
+        # 무결성 검사 및 추적을 위한 Job ID 추출 (Duck Typing 방어)
+        job_id = "Unknown"
+        if dto.meta and isinstance(dto.meta, dict):
+            job_id = dto.meta.get("job_id", dto.meta.get("task_name", "Unknown"))
+
         # 1. 지연 로딩 및 캐시된 로더 인스턴스 획득 (첫 호출 시에만 초기화 비용 발생)
         loader = self._get_or_create_loader()
+
+        try:
+            # 적재 엔진 가동
+            is_loaded = loader.load(dto)
+            
+            if is_loaded:
+                self._success_count += 1
+            else:
+                self._fail_count += 1
+                self._failed_jobs.append(job_id)
+
+            return loader.load(dto)
+                
+        except Exception as e:
+            self._fail_count += 1
+            self._failed_jobs.append(job_id)
+            raise e
         
-        # 2. 적재 위임 수행
-        # [설계 의도] 서비스 계층은 구체적인 타겟(S3, DB 등)의 구현을 몰라도 
-        # ILoader 인터페이스의 load 템플릿 메서드 하나만 호출하여 다형성(Polymorphism)을 달성함.
-        return loader.load(dto)
+    def log_batch_summary(self) -> None:
+        """전체 연산 파이프라인 마감 시점에 호출되어, 적재 성공/실패 통계 및 실패 목록을 단 1회 통합 배포합니다."""
+        total_count = self._success_count + self._fail_count
+        
+        # 1. 통합 마감 성적표 출력
+        self._logger.info(
+            f"[Loader 요약 리포트] 총 {total_count}건 중 성공 {self._success_count}건, 실패 {self._fail_count}건"
+        )
+
+        # 2. 실패한 구체적 자산 목록 개별 경고 출력
+        if self._failed_jobs:
+            self._logger.warning(
+                f"[S3_LOAD] 적재 실패한 Job ID: {self._failed_jobs}"
+            )
+            
+        # 3. 차기 배치를 위한 휘발성 정산 자산 자가 청소 (Reset)
+        self._success_count = 0
+        self._fail_count = 0
+        self._failed_jobs.clear()

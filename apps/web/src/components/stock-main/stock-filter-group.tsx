@@ -1,60 +1,89 @@
-import { memo } from 'react';
-import type { RankingType } from '../../hooks/stock/use-stock-value-ranking';
+import type { RankingType } from '../../types/stock';
 
 interface Props {
 	activeType: RankingType;
 	onTypeChange: (type: RankingType) => void;
 }
 
-// 랭킹 필터 버튼 그룹
-function StockFilterGroup({ activeType, onTypeChange }: Props) {
-	const wrapperClass = 'flex items-center rounded-xl bg-[#282932] p-1';
-	const activeBtnClass =
-		'rounded-lg bg-[#41434D] px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm whitespace-nowrap';
-	const inactiveBtnClass =
-		'rounded-lg px-3 py-1.5 text-[13px] font-medium text-gray-400 transition-colors hover:text-gray-200 hover:bg-[#343540] whitespace-nowrap';
+export default function StockFilterGroup({ activeType, onTypeChange }: Props) {
+	const wrapperStyle: React.CSSProperties = {
+		display: 'flex',
+		alignItems: 'center',
+		borderRadius: '12px',
+		backgroundColor: '#1C1D21',
+		padding: '4px',
+		gap: '2px',
+	};
+
+	const activeBtn: React.CSSProperties = {
+		borderRadius: '8px',
+		backgroundColor: '#2C2C30',
+		padding: '6px 12px',
+		fontSize: '13px',
+		fontWeight: 600,
+		color: '#FFFFFF',
+		border: 'none',
+		cursor: 'pointer',
+		whiteSpace: 'nowrap',
+		transition: 'background-color 0.15s',
+	};
+
+	const inactiveBtn: React.CSSProperties = {
+		borderRadius: '8px',
+		backgroundColor: 'transparent',
+		padding: '6px 12px',
+		fontSize: '13px',
+		fontWeight: 400,
+		color: '#9194A1',
+		border: 'none',
+		cursor: 'pointer',
+		whiteSpace: 'nowrap',
+		transition: 'background-color 0.15s',
+	};
 
 	return (
-		<div className='flex gap-3 py-4 overflow-x-auto w-full scrollbar-hide'>
+		<div
+			style={{
+				display: 'flex',
+				gap: '12px',
+				padding: '16px 0',
+				overflowX: 'auto',
+				width: '100%',
+			}}
+		>
 			{/* 지역 필터 */}
-			<div className={wrapperClass}>
-				<button className={activeBtnClass}>전체</button>
-				<button className={inactiveBtnClass}>국내</button>
-				<button className={inactiveBtnClass}>해외</button>
+			<div style={wrapperStyle}>
+				<button style={activeBtn}>전체</button>
+				<button style={inactiveBtn}>국내</button>
+				<button style={inactiveBtn}>해외</button>
 			</div>
 
 			{/* 정렬 기준 필터 */}
-			<div className={wrapperClass}>
+			<div style={wrapperStyle}>
 				<button
-					className={activeType === 'VALUE' ? activeBtnClass : inactiveBtnClass}
+					style={activeType === 'VALUE' ? activeBtn : inactiveBtn}
 					onClick={() => onTypeChange('VALUE')}
 				>
 					거래대금순
 				</button>
 				<button
-					className={
-						activeType === 'VOLUME' ? activeBtnClass : inactiveBtnClass
-					}
+					style={activeType === 'VOLUME' ? activeBtn : inactiveBtn}
 					onClick={() => onTypeChange('VOLUME')}
 				>
 					거래량순
 				</button>
-				<button className={inactiveBtnClass}>급상승</button>
-				<button className={inactiveBtnClass}>급하락</button>
 			</div>
 
 			{/* 시간 필터 */}
-			<div className={wrapperClass}>
-				<button className={activeBtnClass}>실시간</button>
-				<button className={inactiveBtnClass}>1일</button>
-				<button className={inactiveBtnClass}>1주일</button>
-				<button className={inactiveBtnClass}>1개월</button>
-				<button className={inactiveBtnClass}>3개월</button>
-				<button className={inactiveBtnClass}>6개월</button>
-				<button className={inactiveBtnClass}>1년</button>
+			<div style={wrapperStyle}>
+				<button style={activeBtn}>실시간</button>
+				<button style={inactiveBtn}>1일</button>
+				<button style={inactiveBtn}>1주일</button>
+				<button style={inactiveBtn}>1개월</button>
+				<button style={inactiveBtn}>3개월</button>
+				<button style={inactiveBtn}>6개월</button>
+				<button style={inactiveBtn}>1년</button>
 			</div>
 		</div>
 	);
 }
-
-export default memo(StockFilterGroup);

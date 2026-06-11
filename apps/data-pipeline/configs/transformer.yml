@@ -1,0 +1,171 @@
+# ==============================================================================
+# 데이터 정제 정책 (Transformer Policy)
+#
+# 설계 원칙:
+# 1. API 공급자(Provider) 및 데이터의 응답 형태(Schema Family)를 기준으로 그룹핑
+# 2. 코드 수정 없이 YAML 설정만으로 평탄화(Flatten), 컬럼 제거, 타입 캐스팅을 제어
+# ==============================================================================
+
+routing:
+  # 1. KIS 아시아
+  - prefix: "kis_kospi_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_kosdaq_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_vkospi_"
+    schema: "kis_domestic_schema"
+  - prefix: "kis_fx_"
+    schema: "kis_domestic_schema"
+
+  # 2. KIS 글로벌
+  - prefix: "kis_nasdaq_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_snp500_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_dow_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_asia_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_global_"
+    schema: "kis_overseas_schema"
+  - prefix: "kis_commodity_"
+    schema: "kis_overseas_schema"
+
+  # 3. FRED 미국 채권 금리
+  - prefix: "fred_"
+    schema: "fred_base_schema"
+
+  # 4. ECOS 한국 채권 금리
+  - prefix: "ecos_"
+    schema: "ecos_base_schema"
+
+  # 5. 가상자산
+  - prefix: "upbit_"
+    schema: "upbit_base_schema"
+
+policy:
+  # ----------------------------------------------------------------------------
+  # [그룹 1] KIS 국내 지수 일별 데이터 (kospi, kosdaq 공통)
+  # 대상: KIS 국내 주식/지수 API 응답 형태
+  # ----------------------------------------------------------------------------
+  kis_domestic_schema:
+    provider: "kis"
+    # 1. 평탄화(Flattening) 대상 타겟 컬럼
+    # 이 컬럼 내부의 딕셔너리 키들이 새로운 컬럼으로 전개됩니다.
+    explode_target: ["output1", "output2"]
+    # 2. 적재 전 제거할 불필요한 원본 컬럼명 (API 메타데이터 등)
+    drop_columns: ["rt_cd", "msg_cd", "msg1", "msg_detail"]
+    # 3. Silver 계층 표준 스키마 매핑 및 데이터 타입 강제 (Data Contract)
+    schema:
+      # 1. 일자 및 식별 정보 (String)
+      stck_bsop_date: { name: "trade_date", type: "date" } # 주식 영업 일자
+      # hts_kor_isnm: { name: "index_name", type: "string" } # HTS 한글 종목명
+      # bstp_cls_code: { name: "sector_code", type: "string" } # 업종 구분 코드
+      prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
+      # 2. 가격 및 지수 정보 (Float32 - 메모리 최적화)
+      bstp_nmix_prpr: { name: "close", type: "float32" } # 업종 지수 현재가 (종가)
+      bstp_nmix_oprc: { name: "open", type: "float32" } # 업종 지수 시가
+      bstp_nmix_hgpr: { name: "high", type: "float32" } # 업종 지수 최고가
+      bstp_nmix_lwpr: { name: "low", type: "float32" } # 업종 지수 최저가
+      prdy_nmix: { name: "prev_price", type: "float32" } # 전일 지수
+      bstp_nmix_prdy_ctrt: { name: "price_change_rate", type: "float32" } # 업종 지수 전일 대비율
+      # 3. 거래량 및 거래 대금 (Float32)
+      acml_vol: { name: "volume", type: "float32" } # 누적 거래량
+      prdy_vol: { name: "prev_volume", type: "float32" } # 전일 거래량
+      acml_tr_pbmn: { name: "trading_value", type: "float32" } # 누적 거래 대금
+      # 4. 선물 관련 정보 (Float32)
+      futs_prdy_oprc: { name: "futures_prev_open", type: "float32" } # 선물 전일 시가
+      futs_prdy_hgpr: { name: "futures_prev_high", type: "float32" } # 선물 전일 최고가
+      futs_prdy_lwpr: { name: "futures_prev_low", type: "float32" } # 선물 전일 최저가
+
+  # ----------------------------------------------------------------------------
+  # [그룹 2] KIS 해외 지수 (Nasdaq 등)
+  # 대상: KIS 해외 주식/지수 API 응답 (국내와 prefix가 다름)
+  # ----------------------------------------------------------------------------
+  kis_overseas_schema:
+    provider: "kis"
+    explode_target: ["output1", "output2"]
+    drop_columns: ["rt_cd", "msg_cd", "msg1", "msg_detail"]
+    schema:
+      # 1. 일자 및 식별 정보 (String)
+      stck_bsop_date: { name: "trade_date", type: "date" } # 영업 일자
+      prdy_vrss_sign: { name: "price_change_sign", type: "string" } # 전일 대비 부호
+      # 2. 가격 및 지수 정보 (Float32 - 해외지수 및 원자재/상품 하이브리드 바인딩 규격)
+      ovrs_nmix_prpr: { name: "close", type: "float32" }      # 종가 (해외지수용)
+      ovrs_prod_prpr: { name: "close", type: "float32" }      # 종가 (원자재 상품용)
+      ovrs_nmix_oprc: { name: "open", type: "float32" }       # 시가 (해외지수용)
+      ovrs_prod_oprc: { name: "open", type: "float32" }       # 시가 (원자재 상품용)
+      ovrs_nmix_hgpr: { name: "high", type: "float32" }       # 고가 (해외지수용)
+      ovrs_prod_hgpr: { name: "high", type: "float32" }       # 고가 (원자재 상품용)
+      ovrs_nmix_lwpr: { name: "low", type: "float32" }        # 저가 (해외지수용)
+      ovrs_prod_lwpr: { name: "low", type: "float32" }        # 저가 (원자재 상품용)
+      ovrs_nmix_prdy_clpr: { name: "prev_price", type: "float32" }  # 전일 종가 (해외지수용)
+      ovrs_prod_prdy_clpr: { name: "prev_price", type: "float32" }  # 전일 종가 (원자재 상품용)
+      ovrs_nmix_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭 (해외지수용)
+      ovrs_prod_prdy_vrss: { name: "price_change", type: "float32" } # 전일 대비 변동폭 (원자재 상품용)
+      prdy_ctrt: { name: "price_change_rate", type: "float32" } # 전일 대비율
+      # 3. 거래량 (Float32)
+      acml_vol: { name: "volume", type: "float32" } # 누적 거래량
+      prdy_vol: { name: "prev_volume", type: "float32" } # 전일 거래량
+
+  # ----------------------------------------------------------------------------
+  # [그룹 3] FRED 시계열 데이터 공통
+  # ----------------------------------------------------------------------------
+  fred_base_schema:
+    provider: "fred"
+    explode_target: "observations"
+    drop_columns:
+      [
+        "realtime_start",
+        "realtime_end",
+        "observation_start",
+        "observation_end",
+        "units",
+        "output_type",
+        "file_type",
+        "order_by",
+        "sort_order",
+        "count",
+        "offset",
+        "limit",
+      ]
+    schema:
+      date: { name: "trade_date", type: "date" }
+      value: { name: "value", type: "float32" }
+
+  # ----------------------------------------------------------------------------
+  # [그룹 4] ECOS 시계열 데이터 공통
+  # ----------------------------------------------------------------------------
+  ecos_base_schema:
+    provider: "ecos"
+    explode_target: "StatisticSearch"
+    drop_columns: []
+    schema:
+      TIME: { name: "trade_date", type: "date" }
+      DATA_VALUE: { name: "value", type: "float32" }
+
+  # ----------------------------------------------------------------------------
+  # [그룹 5] UPBIT 일별 캔들 데이터 공통
+  # ----------------------------------------------------------------------------
+  upbit_base_schema:
+    provider: "upbit"
+    explode_target: "0"
+    drop_columns: []
+    schema:
+      # 1. 일자 및 식별 정보 (String / Date 타임존 정규화)
+      candle_date_time_kst: { name: "trade_date", type: "date" } # 사내 표준 시계열 주축 (KST 기준 일봉 날짜객체 변환)
+
+      # 2. 캔들 가격 정보 (Float32 메모리 최적화)
+      opening_price: { name: "open", type: "float32" } # 시가
+      high_price: { name: "high", type: "float32" } # 고가
+      low_price: { name: "low", type: "float32" } # 저가
+      trade_price: { name: "close", type: "float32" } # 종가 (현재가)
+      prev_closing_price: { name: "prev_close", type: "float32" } # 전일 종가
+
+      # 3. 전일 대비 변동 정보 (Float32)
+      change_price: { name: "change_price", type: "float32" } # 전일 대비 변동 금액
+      change_rate: { name: "change_rate", type: "float32" } # 전일 대비 변동률
+
+      # 4. 대용량 거래량 및 시스템 식별자 (Float64 / Int64 정밀도 보호 및 오버플로우 원천 방어)
+      candle_acc_trade_price: { name: "trading_value", type: "float64" } # 누적 거래대금 (정밀도 보장)
+      candle_acc_trade_volume: { name: "volume", type: "float64" } # 누적 거래량

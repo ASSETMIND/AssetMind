@@ -1,10 +1,9 @@
 package com.assetmind.server_stock.market_access.application;
 
 import com.assetmind.server_stock.market_access.application.port.RealTimeStockDataPort;
-import com.assetmind.server_stock.market_access.domain.ApiApprovalKey;
-import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties;
 import com.assetmind.server_stock.stock.application.provider.StockMetadataProvider;
 import jakarta.annotation.PreDestroy;
+import java.time.LocalTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +35,10 @@ public class RealTimeMarketService {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void startMarketDataCollection() {
+        if (!isMarketOperatingTime()) {
+            log.info(">>> [RealTimeMarketService] 현재는 장 운영 시간이 아닙니다. '[DailyMarketLifecycleScheduler]' 스케줄러가 연결을 담당합니다.");
+            return;
+        }
         log.info(">>> [RealTimeMarketService] 실시간 주식 데이터 수집 서비스를 시작합니다.");
 
         try {
@@ -67,5 +70,12 @@ public class RealTimeMarketService {
     public void stopMarketDataCollection() {
         log.warn(">>> [RealTimeMarketService] 서버 종료 감지. 연결을 해제합니다.");
         realTimeStockDataPort.disconnect();
+    }
+
+    private boolean isMarketOperatingTime() {
+        LocalTime now = LocalTime.now();
+
+        // 8:30 ~ 16:30 사이의 경우에만 true 반환
+        return !now.isBefore(LocalTime.of(8, 30)) && !now.isAfter(LocalTime.of(16, 30));
     }
 }

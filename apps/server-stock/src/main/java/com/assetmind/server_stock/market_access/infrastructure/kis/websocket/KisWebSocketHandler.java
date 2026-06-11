@@ -1,24 +1,29 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket;
 
 import com.assetmind.server_stock.market_access.application.event.KisWebSocketDisconnectedEvent;
+import com.assetmind.server_stock.market_access.domain.OrderBook;
 import com.assetmind.server_stock.market_access.infrastructure.kis.config.KisProperties.Account;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisSubscriptionRequest;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PingMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -36,6 +41,7 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final KisRealTimeDataParser dataParser;
+    private final KisOrderBookParser orderBookParser;
     private final KisEventMapper eventMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final TaskScheduler taskScheduler;
@@ -50,13 +56,17 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
     // 연결 전 요청을 임시 저장할 대기열 (동기화 리스트)
     private final List<String> pendingSubscriptionList = Collections.synchronizedList(new ArrayList<>());
 
+    // Heartbeat(Ping) 타이머 관리 변수
+    private ScheduledFuture<?> pingTask;
+
     public KisWebSocketHandler(String approveKey, Account account, List<String> chunk, ObjectMapper objectMapper, KisRealTimeDataParser dataParser,
-            KisEventMapper eventMapper, ApplicationEventPublisher eventPublisher, TaskScheduler taskScheduler) {
+            KisOrderBookParser orderBookParser, KisEventMapper eventMapper, ApplicationEventPublisher eventPublisher, TaskScheduler taskScheduler) {
         this.approveKey = approveKey;
         this.account = account;
         this.chunk = chunk;
         this.objectMapper = objectMapper;
         this.dataParser = dataParser;
+        this.orderBookParser = orderBookParser;
         this.eventMapper = eventMapper;
         this.eventPublisher = eventPublisher;
         this.taskScheduler = taskScheduler;
@@ -103,6 +113,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         log.info("[KIS WS Handler] 세션 연결 성공 (Session ID : {})", session.getId());
         this.currentSession = session;
 
+        // Heartbeat(Ping) 스케줄러 등록 60초마다 실행
+        startHeartbeatTimer();
+
         // 대기중인 요청 일괄 처리
         if (!pendingSubscriptionList.isEmpty()) {
 
@@ -116,6 +129,24 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
                 String code = targets.get(i);
                 taskScheduler.schedule(() -> sendSubscriptionRequest(code), Instant.now().plusMillis(i * 50L));
             }
+        }
+    }
+
+    // Ping 전송 타이머 시작 메서드
+    // 60초에 한번씩 연결되어있는 세션을 통해 Ping 메세지를 보낸다.
+    private void startHeartbeatTimer() {
+        if (this.pingTask == null || this.pingTask.isCancelled()) {
+            this.pingTask = this.taskScheduler.scheduleAtFixedRate(() -> {
+                if (currentSession != null && currentSession.isOpen()) {
+                    try {
+                        // Spring WebSocket의 PingMessage 사용 (비어있는 데이터 전송)
+                        currentSession.sendMessage(new PingMessage());
+                        log.debug("[KIS WS Handler] HeartBeat(Ping) 전송 완료");
+                    } catch (IOException e) {
+                        log.error("[KIS WS Handler] HeartBeat(Ping) 전송 실패", e);
+                    }
+                }
+            }, Duration.ofMinutes(1)); // 60초
         }
     }
 
@@ -149,18 +180,34 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         log.info(">>> [KIS WS Handler] 제어 메시지: {}", payload);
     }
 
-    // 실시간 주식 데이터 처리
+    // 실시간 체결 데이터 처리
     private void handleRealTimeData(String payload) {
-        List<KisRealTimeData> dataList = dataParser.parse(payload);
+        String[] parts = payload.split("\\|");
+        String trId = parts[1];
 
-        dataList.forEach(data -> {
-            try {
-                log.info("[KIS WS Handler] 실시간 체결 데이터 : {}", data.toString());
-                eventPublisher.publishEvent(eventMapper.toEvent(data));
-            } catch (Exception e) {
-                log.error("[KIS WS Handler] 개별 체결 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
-            }
-        });
+        if ("H0STCNT0".equals(trId)) {
+            List<KisRealTimeData> dataList = dataParser.parse(payload);
+
+            dataList.forEach(data -> {
+                try {
+                    log.info("[KIS WS Handler] 실시간 체결 데이터 : {}", data.toString());
+                    eventPublisher.publishEvent(eventMapper.toStockTradeEvent(data));
+                } catch (Exception e) {
+                    log.error("[KIS WS Handler] 개별 체결 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
+                }
+            });
+        } else if ("H0STASP0".equals(trId)) {
+            List<OrderBook> dataList = orderBookParser.parse(payload);
+
+            dataList.forEach(data -> {
+                try {
+                    log.info("[KIS WS Handler] 실시간 호가 데이터: {}", data.toString());
+                    eventPublisher.publishEvent(eventMapper.toOrderBookEvent(data));
+                } catch (Exception e) {
+                    log.error("[KIS WS Handler] 호가 데이터 처리 및 발행 중 에러 발생. Data: {}", data, e);
+                }
+            });
+        }
     }
 
     @Override
@@ -170,6 +217,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        // 연결 종료 시 Heartbeat 타이머 해제
+        stopHeartbeatTimer();
+
         log.warn("[KIS WS Handler] 연결 종료됨. Code: {}, Reason: {}", status.getCode(), status.getReason());
         this.currentSession = null;
 
@@ -184,22 +234,27 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
         if (subscribedStock.contains(stockCode)) return;
 
         try {
-            KisSubscriptionRequest request = KisSubscriptionRequest.of(approveKey, stockCode);
-            String jsonPayload = objectMapper.writeValueAsString(request);
-
             if (currentSession != null && currentSession.isOpen()) {
-                currentSession.sendMessage(new TextMessage(jsonPayload));
+                // 체결 데이터 (H0STCNT0) 구독 요청
+                KisSubscriptionRequest executionRequest = KisSubscriptionRequest.of(approveKey, stockCode, "H0STCNT0");
+                currentSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(executionRequest)));
+
+                Thread.sleep(20);
+
+                KisSubscriptionRequest orderBookRequest = KisSubscriptionRequest.of(approveKey, stockCode, "H0STASP0");
+                currentSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(orderBookRequest)));
 
                 subscribedStock.add(stockCode);
+
+                log.info("[KIS WS] 구독 요청 전송 완료 (체결/호가): {}", stockCode);
             }
-            log.info("[KIS WS] 구독 요청 전송 완료: {}", stockCode);
 
         } catch (JsonProcessingException e) {
             log.error("[KIS WS] JSON 변환 오류. 종목코드: {} (구독 건너뜀)", stockCode, e);
         } catch (IOException e) {
             log.error("[KIS WS] 메시지 전송 실패 (I/O Error). 종목코드: {}", stockCode, e);
         } catch (Exception e) {
-            log.error("[KIS WS] 알 수 없는 오류 발생. 종목코드: {}", stockCode, e);
+            log.error("[KIS WS] 구독 요청 중 알 수 없는 오류 발생. 종목코드: {}", stockCode, e);
         }
     }
 
@@ -208,6 +263,9 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
      */
     public void closeConnection() {
         try {
+            // 외부 종료시 Heartbeat 타이머 해제
+            stopHeartbeatTimer();
+
             if (currentSession != null && currentSession.isOpen()) {
                 log.info("[KIS WS] 웹소켓 세션을 정상 종료합니다.");
                 currentSession.close(CloseStatus.NORMAL);
@@ -218,6 +276,14 @@ public class KisWebSocketHandler extends TextWebSocketHandler {
             // 명시적으로 한 번 더 정리
             this.currentSession = null;
             this.subscribedStock.clear();
+        }
+    }
+
+    // Ping 전송 타이머 중지 메서드
+    private void stopHeartbeatTimer() {
+        if (this.pingTask != null && !this.pingTask.isCancelled()) {
+            this.pingTask.cancel(false); // 실행 중인 작업은 강제 중단 X
+            this.pingTask = null;
         }
     }
 }

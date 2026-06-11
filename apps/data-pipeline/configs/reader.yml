@@ -1,0 +1,7 @@
+# [Reader Configuration]
+# 데이터 레이크(S3) 등에서 데이터를 읽어오기 위한 읽기 전용 환경 설정
+# 설계 의도: loader.yml과 동일한 구조를 차용하여 인프라 설정의 일관성을 유지함.
+
+s3_zstd:
+  region: "ap-northeast-2" # AWS 기본 리전 (LocalStack 사용 시에도 Boto3 내부 검증을 위해 필요)
+  bucket_name: "data-pipeline-bronze" # 브론즈 데이터가 적재된 원천 데이터 버킷명

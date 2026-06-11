@@ -6,8 +6,9 @@ authors = [
     {name = "Kim Jun-su"}
 ]
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "apache-airflow (==2.10.2)",
     "boto3 (>=1.42.22,<2.0.0)",
     "pytest (>=9.0.2,<10.0.0)",
     "pyyaml (>=6.0.3,<7.0.0)",
@@ -23,6 +24,10 @@ dependencies = [
     "numpy (>=2.4.2,<3.0.0)",
     "zstandard (>=0.25.0,<0.26.0)",
     "pendulum (>=3.2.0,<4.0.0)",
+    "apache-airflow-providers-postgres (>=5.11.0,<6.0.0)",
+    "psycopg2-binary (>=2.9.12,<3.0.0)",
+    "ipykernel (>=7.2.0,<8.0.0)",
+    "s3fs (>=2026.4.0,<2027.0.0)",
 ]
 
 
@@ -32,7 +37,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"
-apache-airflow = "^3.2.0"
+ipykernel = "^7.2.0"
 
 [tool.pytest.ini_options]
 pythonpath = [

@@ -34,13 +34,17 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
    - 장점: 메모리 덤프나 로깅 시 인증 토큰 및 비밀번호가 평문으로 노출되는 것을 방지함.
    - 단점: 실제 API 호출 시 `.get_secret_value()`를 명시적으로 호출해야 하는 추가 작업이 필요함.
    - 근거: 금융 및 경제 데이터를 수집하는 Production 환경에서는 보안 컴플라이언스 준수가 개발 편의성에 우선해야 함.
+4. @property와 PrivateAttr을 활용한 지연 초기화(Lazy Initialization) 아키텍처:
+   - 장점: S3 Reader와 같이 외부 API 키가 불필요한 컨텍스트에서 ConfigManager를 로드할 때 발생하는 Validation Error(Fail-Fast)를 원천 차단하며, 설정 클래스 간의 의존성을 런타임 호출 시점까지 완벽하게 분리함.
+   - 단점: 설정 객체 생성 시점이 애플리케이션 기동(Init) 시점에서 런타임(Runtime) 호출 시점으로 미뤄지므로, 만약 수집기(Extractor) 환경에서 필수 API 키가 누락되었을 경우 파이프라인 시작 즉시 에러를 뱉지 않고 해당 모듈이 데이터 수집을 시작하는 시점에 에러(Fail-Fast)가 발생함.
+   - 근거: 데이터 레이크하우스 환경에서는 각 도메인(Reader, Loader, Extractor)이 본인에게 필요한 인프라 설정만 완벽하게 검증하는 원칙이 필수적임. 불필요한 환경 변수 결합으로 인해 S3 스트리밍과 같은 독립적인 테스트가 불가능해지는 아키텍처적 결함을 해소하는 것이, 런타임 시점의 미세한 검증 지연 트레이드오프보다 압도적으로 높은 시스템 신뢰성(Reliability)과 확장성(Scalability)을 달성하게 함.
 """
 
 from typing import Dict, Any, List, Literal, Optional, ClassVar, Union
 from pathlib import Path
 import yaml
 
-from pydantic import Field, SecretStr, BaseModel
+from pydantic import Field, PrivateAttr, SecretStr, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.common.exceptions import ConfigurationError
@@ -125,6 +129,7 @@ class PipelineTask(BaseModel):
     """pipeline.yml에 정의된 개별 파이프라인 조립(Task) 스키마."""
     
     description: str
+    layer: Literal["bronze", "silver", "gold"]
     target_loader: str
     extract_jobs: List[str] = Field(default_factory=list)
 
@@ -132,8 +137,10 @@ class AWSLoaderPolicy(BaseModel):
     """AWS S3 데이터 레이크 적재를 위한 환경 설정 스키마."""
     
     region: str
-    s3: Dict[str, str]
-    tuning: Dict[str, int] = Field(default_factory=dict)
+    bucket_name: str
+    prefix: Optional[str] = None
+    partition_cols: Optional[List[str]] = None
+    tuning: Optional[Dict] = None
 
 class PostgresLoaderPolicy(BaseModel):
     """PostgreSQL 데이터 웨어하우스 적재를 위한 환경 설정 스키마."""
@@ -179,12 +186,41 @@ class ConfigManager(BaseSettings):
     log_dir: str = "logs"
     log_filename: str = "app.log"
 
-    # [설계 의도] Composition(합성) 패턴. 프로바이더별 설정을 하위 객체로 위임하여 관리를 단순화.
-    kis: KISSettings = Field(default_factory=KISSettings)
-    fred: FREDSettings = Field(default_factory=FREDSettings)
-    ecos: ECOSSettings = Field(default_factory=ECOSSettings)
-    upbit: UPBITSettings = Field(default_factory=UPBITSettings)
+    # [설계 의도] Pydantic V2에서 스키마 필드로 자동 인식되어 즉시 검증되는 것을 
+    # 방지하기 위해 PrivateAttr을 사용하여 내부 상태 저장소(Cache)를 명시적으로 분리함.
+    _kis_instance: Any = PrivateAttr(default=None)
+    _fred_instance: Any = PrivateAttr(default=None)
+    _ecos_instance: Any = PrivateAttr(default=None)
+    _upbit_instance: Any = PrivateAttr(default=None)
 
+    @property
+    def kis(self) -> KISSettings:
+        """KIS API 설정을 지연 초기화하여 반환합니다."""
+        # [설계 의도] 런타임 최초 접근 시점에만 Pydantic 스키마 검증(Eager Validation) 수행
+        if self._kis_instance is None:
+            self._kis_instance = KISSettings()
+        return self._kis_instance
+
+    @property
+    def fred(self) -> FREDSettings:
+        """FRED API 설정을 지연 초기화하여 반환합니다."""
+        if self._fred_instance is None:
+            self._fred_instance = FREDSettings()
+        return self._fred_instance
+
+    @property
+    def ecos(self) -> ECOSSettings:
+        """ECOS API 설정을 지연 초기화하여 반환합니다."""
+        if self._ecos_instance is None:
+            self._ecos_instance = ECOSSettings()
+        return self._ecos_instance
+
+    @property
+    def upbit(self) -> UPBITSettings:
+        """UPBIT API 설정을 지연 초기화하여 반환합니다."""
+        if self._upbit_instance is None:
+            self._upbit_instance = UPBITSettings()
+        return self._upbit_instance
     # [설계 의도] YAML 파일에서 동적으로 읽어온 정책 데이터를 유지.
     yaml_data: Dict[str, Any] = Field(default_factory=dict)
 
@@ -293,7 +329,7 @@ class ConfigManager(BaseSettings):
             
         # [설계 의도] OCP(개방-폐쇄 원칙)에 따라 적재 타겟에 맞는 구체적인 Pydantic 모델을 
         # 다형성(Polymorphism) 형태로 분기하여 반환. 향후 GCP, Azure 로더 추가 시 확장 용이.
-        if loader_name == "aws":
+        if loader_name in ["s3_zstd", "s3_parquet"]:
             return AWSLoaderPolicy(**loader_data)
         elif loader_name == "postgres":
             return PostgresLoaderPolicy(**loader_data)
@@ -320,3 +356,33 @@ class ConfigManager(BaseSettings):
             raise ConfigurationError(f"Task ID '{task_id}'를 찾을 수 없습니다.")
         
         return PipelineTask(**task_data)
+    
+    def get_reader(self, reader_name: str) -> "AWSLoaderPolicy":
+        """동적으로 특정 대상의 데이터 읽기 정책(Reader Policy)을 추출 및 스키마 검증 후 반환합니다.
+
+        [설계 의도] 
+        EDA 또는 MLOps 파이프라인 기동 전, S3 등 타겟 인프라의 설정 무결성을 
+        선제적으로 검증(Fail-Fast)합니다. 별도의 모델을 생성하지 않고 기존 모델을 활용합니다.
+
+        Args:
+            reader_name (str): 추출하려는 데이터 리더 타겟의 이름 (예: "s3", "aws").
+
+        Returns:
+            AWSLoaderPolicy: 구체화 및 검증이 완료된 기존 AWS 정책 모델.
+
+        Raises:
+            ConfigurationError: 'reader' 모드가 아니거나 지원하지 않는 타겟일 경우.
+        """
+        if self.file_name != "reader":
+            # [설계 의도] 도메인 격리 원칙 보장.
+            raise ConfigurationError("get_reader는 'reader' 설정에서만 호출 가능합니다.")
+            
+        reader_data = self.yaml_data.get(reader_name)
+        if not reader_data:
+            raise ConfigurationError(f"Reader 타겟 '{reader_name}' 설정을 reader.yml에서 찾을 수 없습니다.")
+            
+        if reader_name in ["s3_zstd", "s3_parquet"]:
+            # [설계 의도] DRY 원칙에 입각하여 기존에 정의된 AWSLoaderPolicy를 그대로 재사용
+            return AWSLoaderPolicy(**reader_data)
+        else:
+            raise ConfigurationError(f"현재 지원하지 않는 Reader 타겟입니다: {reader_name}")

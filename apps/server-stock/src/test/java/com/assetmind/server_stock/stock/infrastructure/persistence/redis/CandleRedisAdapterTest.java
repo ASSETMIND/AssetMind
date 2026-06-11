@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
 import com.assetmind.server_stock.stock.domain.enums.CandleType;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.adapter.CandleRedisAdapter;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

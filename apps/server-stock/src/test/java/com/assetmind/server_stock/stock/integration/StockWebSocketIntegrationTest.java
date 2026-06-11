@@ -2,8 +2,10 @@ package com.assetmind.server_stock.stock.integration;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.KisWebSocketHandler;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.assetmind.server_stock.support.IntegrationTestSupport;
 import com.assetmind.server_stock.support.MockKisDataFeeder;
@@ -55,6 +57,9 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
     private KisRealTimeDataParser dataParser;
 
     @Autowired
+    private KisOrderBookParser orderBookParser;
+
+    @Autowired
     private KisEventMapper eventMapper;
 
     @Autowired
@@ -87,6 +92,7 @@ class StockWebSocketIntegrationTest extends IntegrationTestSupport {
                 List.of("035420", "005930"),
                 objectMapper,
                 dataParser,
+                orderBookParser,
                 eventMapper,
                 eventPublisher,
                 taskScheduler

@@ -74,6 +74,10 @@ class ExtractorService:
         """
         self._config = ConfigManager.load("extractor")
         self._logger = LogManager.get_logger("ExtractorService")
+
+        self._success_count: int = 0
+        self._fail_count: int = 0
+        self._failed_jobs: List[str] = []
         
         # [설계 의도] 단위 테스트를 위한 의존성 주입(Dependency Injection)과 
         # 실제 운영 환경에서의 독립적 사용(Standalone Usage)을 모두 지원하기 위한 하이브리드 생명주기 제어.
@@ -271,8 +275,34 @@ class ExtractorService:
         # 2. Parallel Execution
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 3. Log Summary (기존 기능 완벽 복구)
-        success_count = sum(1 for r in results if not isinstance(r, Exception) and r is not None)
-        self._logger.info(f"배치 수집 요약 지표 - 총 {len(job_requests)}건 중 {success_count}건 성공")
+        # 3. Failure Detection & Logging
+        for req, res in zip(job_requests, results):
+            target_id = req[0] if isinstance(req, tuple) else req
+            
+            if isinstance(res, Exception):
+                self._fail_count += 1
+                self._failed_jobs.append(target_id)
+            else:
+                self._success_count += 1
 
         return results
+
+    def log_batch_summary(self) -> None:
+        """전체 수집 연산이 종료된 후, 적재된 수집 성공/실패 계량 통계와 실패 식별자 리스트를 단 1회 공식 발표합니다."""
+        total_count = self._success_count + self._fail_count
+        
+        # 1. 표준 정산 리포트 로깅
+        self._logger.info(
+            f"[Extractor 요약 리포트] 총 {total_count}건 중 성공 {self._success_count}건, 실패 {self._fail_count}건"
+        )
+
+        # 2. 실패한 자산군이 존재할 때만 명시적 개별 추적 경고 처리
+        if self._failed_jobs:
+            self._logger.warning(
+                f"[EXTRACT_WARN] 수집 실패한 Job ID 목록: {self._failed_jobs}"
+            )
+            
+        # 3. 멱등성 가동 유지를 위한 정산 메모리 자가 청소 (Reset)
+        self._success_count = 0
+        self._fail_count = 0
+        self._failed_jobs.clear()

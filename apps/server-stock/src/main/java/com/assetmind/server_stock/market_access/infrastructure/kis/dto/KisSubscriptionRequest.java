@@ -48,10 +48,10 @@ public record KisSubscriptionRequest(
     ) {}
 
     // 사용 편의를 위한 팩토리 메서드
-    public static KisSubscriptionRequest of(String approvalKey, String stockCode) {
+    public static KisSubscriptionRequest of(String approvalKey, String stockCode, String trId) {
         return new KisSubscriptionRequest(
                 new Header(approvalKey, "P", "1", "utf-8"),
-                new Body(new Input("H0STCNT0", stockCode))
+                new Body(new Input(trId, stockCode))
         );
     }
 }

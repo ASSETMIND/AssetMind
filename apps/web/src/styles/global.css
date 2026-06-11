@@ -1,4 +1,4 @@
-/* 파핀스 폰트 정의 */
+/* 폰트 코드 정의 */
 @font-face {
 	font-family: 'Poppins';
 	src: url('/fonts/Poppins-Light.ttf') format('truetype');
@@ -24,31 +24,102 @@
 	font-style: normal;
 }
 
-/* 
-	다크 테마 정의
-	임시값 넣어둠
-*/
 @theme {
-	--font-poppins: 'Poppins';
+	/* ── 기존 토큰 유지 ── */
+	--font-poppins:               'Poppins';
+	--color-bg-main:              #131316;
+	--color-bg-modal:             #1c1d21;
+	--color-bg-input:             #1c1d21;
+	--color-border-modal:         #272727;
+	--color-border-input:         #383a42;
+	--color-text-sub:             #9194a1;
+	--color-text-placeholder:     #808080;
 
-	--color-bg-main: #131316;
-	--color-bg-modal: #1c1d21;
-	--color-bg-input: #1c1d21;
+	/* ── Background ── */
+	--color-background-primary:   #131316;
+	--color-background-surface:   #1C1D21;
+	--color-background-elevated:  #21242C;
+	--color-background-hover:     #2C2C30;
+	--color-background-overlay:   rgba(19,19,22,0.7);
 
-	--color-border-modal: #272727;
-	--color-border-input: #383a42;
+	/* ── Text ── */
+	--color-text-primary:         #FFFFFF;
+	--color-text-secondary:       #9194A1;
+	--color-text-disabled:        #4B4B50;
+	--color-text-placeholder:     #808080;
+	--color-text-error:           #EC1A13;
+	--color-text-success:         #256AF4;
 
-	--color-text-sub: #9194a1;
-	--color-text-placeholder: #808080;
+	/* ── Border ── */
+	--color-border-divider:       #2F3037;
+	--color-border-inputNormal:   #383A42;
+	--color-border-inputHover:    #9194A1;
+	--color-border-inputFocus:    #FFFFFF;
+	--color-border-inputError:    #EC1A13;
+	--color-border-inputSuccess:  #256AF4;
+
+	/* ── Button Large ── */
+	--color-button-large-primary:      #131316;
+	--color-button-large-primaryHover: #2C2C30;
+	--color-button-large-label:        #FFFFFF;
+	--color-button-large-disabled:     #18181B;
+
+	/* ── Button Small ── */
+	--color-button-small-primary:      #6D4AE6;
+	--color-button-small-primaryHover: #5F3FD1;
+	--color-button-small-label:        #FFFFFF;
+
+	/* ── Status ── */
+	--color-status-rise:          #EA580C;
+	--color-status-fall:          #256AF4;
+	--color-status-error:         #EC1A13;
+	--color-status-success:       #256AF4;
+
+	/* ── Social ── */
+	--color-social-kakao-bg:      #FEE500;
+	--color-social-google-bg:     #FFFFFF;
+
+	/* ── Chart ── */
+	--color-chart-set-a:          #C9A24D;
+	--color-chart-set-b:          #4FA3B8;
+	--color-chart-set-c:          #8A6BBE;
+
+	/* ── Typography ── */
+	--text-h1:   48px;
+	--text-t1:   20px;
+	--text-b2:   14px;
+	--text-l3:   14px;
+	--text-l4:   14px;
 }
 
-/* 메인 설정 */
+/* ── Modal ── */
+.modal-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--color-background-overlay);
+	backdrop-filter: blur(2px);
+}
+.modal-container {
+	position: relative;
+	width: 100%;
+	max-width: 480px;
+	padding: 50px 40px;
+	border-radius: 40px;
+	background: var(--color-background-surface);
+	box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+	display: flex;
+	flex-direction: column;
+}
+
 @layer base {
 	body {
 		background-color: var(--color-bg-main);
 		color: white;
 		font-family: var(--font-poppins);
-
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 	}
