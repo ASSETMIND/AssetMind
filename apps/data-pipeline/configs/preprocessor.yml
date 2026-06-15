@@ -1,0 +1,5 @@
+missing_value_diagnosis:
+  lookback_window_size: 20
+  short_gap_threshold_ratio: 0.10
+  medium_gap_threshold_ratio: 0.25
+  co_missing_threshold_ratio: 0.95
