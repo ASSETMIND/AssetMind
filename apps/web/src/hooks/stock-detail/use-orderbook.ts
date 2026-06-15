@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { getOrderbookTopic } from '../../api/stock';
+import { getOrderbook, getOrderbookTopic } from '../../api/stock';
 import type { OrderbookDto, OrderbookLevelDto } from '../../api/stock';
 import type { OrderbookRow } from '../../components/stock-detail/orderbook-table';
 
@@ -23,27 +23,50 @@ export interface OrderbookViewModel {
 
 export type OrderbookStatus = 'skeleton' | 'error' | 'default';
 
+function toViewModel(raw: OrderbookDto, basePrice: number): OrderbookViewModel {
+	const ref = basePrice ?? 0;
+	const sorted = [...raw.levels].sort((a, b) => a.level - b.level);
+	return {
+		asks: sorted.map((l: OrderbookLevelDto) => levelToRow(l.askPrice, l.askSize, ref)),
+		bids: sorted.map((l: OrderbookLevelDto) => levelToRow(l.bidPrice, l.bidSize, ref)),
+		totalAskSize: Number(raw.totalAskSize),
+		totalBidSize: Number(raw.totalBidSize),
+		marketTime:   raw.marketTime,
+	};
+}
+
 export function useOrderbook(stockCode: string, basePrice?: number) {
 	const [raw, setRaw] = useState<OrderbookDto | null>(null);
 	const [status, setStatus] = useState<OrderbookStatus>('skeleton');
 	const clientRef = useRef<Client | null>(null);
+	const wsReceivedRef = useRef(false);
 
-	console.log('[useOrderbook] render - stockCode:', stockCode, 'basePrice:', basePrice);
-
+	// ── REST 스냅샷 선호출 ────────────────────────────────────
 	useEffect(() => {
 		if (!stockCode) return;
+		wsReceivedRef.current = false;
 
-		console.log('[useOrderbook] connecting to SockJS...');
+		getOrderbook(stockCode).then((snapshot) => {
+			if (wsReceivedRef.current) return;
+			if (snapshot) {
+				setRaw(snapshot);
+				setStatus('default');
+			}
+		});
+	}, [stockCode]);
+
+	// ── SockJS WS 연결 ────────────────────────────────────────
+	useEffect(() => {
+		if (!stockCode) return;
 
 		const client = new Client({
 			webSocketFactory: () => new SockJS('http://localhost:9090/ws-stock'),
 			reconnectDelay: 5000,
 			onConnect: () => {
-				console.log('[useOrderbook] STOMP connected!');
 				client.subscribe(getOrderbookTopic(stockCode), (message) => {
 					try {
 						const dto = JSON.parse(message.body) as OrderbookDto;
-						console.log('[useOrderbook] received:', dto);
+						wsReceivedRef.current = true;
 						setRaw(dto);
 						setStatus('default');
 					} catch {
@@ -51,15 +74,11 @@ export function useOrderbook(stockCode: string, basePrice?: number) {
 					}
 				});
 			},
-			onStompError: (frame) => {
-				console.error('[useOrderbook] STOMP error:', frame);
-				setStatus('error');
+			onStompError: () => {
+				setStatus((prev) => prev === 'default' ? 'default' : 'error');
 			},
 			onDisconnect: () => {
-				console.log('[useOrderbook] disconnected');
-				setStatus('skeleton');
 			},
-			onWebSocketError: (e) => console.error('[useOrderbook] WS error:', e),
 		});
 
 		client.activate();
@@ -71,25 +90,8 @@ export function useOrderbook(stockCode: string, basePrice?: number) {
 		};
 	}, [stockCode]);
 
-	const viewModel: OrderbookViewModel | null = raw
-		? (() => {
-				const ref = basePrice ?? 0;
-				const sorted = [...raw.levels].sort((a, b) => a.level - b.level);
-				const asks: OrderbookRow[] = sorted.map((l: OrderbookLevelDto) =>
-					levelToRow(l.askPrice, l.askSize, ref),
-				);
-				const bids: OrderbookRow[] = sorted.map((l: OrderbookLevelDto) =>
-					levelToRow(l.bidPrice, l.bidSize, ref),
-				);
-				return {
-					asks,
-					bids,
-					totalAskSize: Number(raw.totalAskSize),
-					totalBidSize: Number(raw.totalBidSize),
-					marketTime:   raw.marketTime,
-				};
-			})()
-		: null;
+	const viewModel: OrderbookViewModel | null =
+		raw ? toViewModel(raw, basePrice ?? 0) : null;
 
 	return { viewModel, status };
 }
