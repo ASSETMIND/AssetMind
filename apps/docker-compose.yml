@@ -16,7 +16,7 @@ services:
       - app-stock-server-2
     restart: always
 
-  # Stock 서버 1
+  # Stock 서버 1 (수집, 서빙)
   app-stock-server-1:
     build: ./server-stock
     container_name: assetmind-stock-server-1
@@ -25,9 +25,10 @@ services:
     environment:
       - SERVER_PORT=9090
       - SPRING_PROFILES_ACTIVE=local
+      - KIS_WEBSOCKET_ENABLED=true
     restart: always
 
-  # Stock 서버 2
+  # Stock 서버 2 (서빙)
   app-stock-server-2:
     build: ./server-stock
     container_name: assetmind-stock-server-2
@@ -36,6 +37,7 @@ services:
     environment:
       - SERVER_PORT=9090
       - SPRING_PROFILES_ACTIVE=local
+      - KIS_WEBSOCKET_ENABLED=false
     restart: always
     
   # PostgreSQL 컨테이너
