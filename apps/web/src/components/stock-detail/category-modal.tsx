@@ -108,7 +108,7 @@ export const CategoryModal = ({ isOpen, onClose, categoryName, categorySubtitle 
 
 	return (
 		<div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-			<div onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, calc(100vw - 32px))', maxHeight: '90dvh', backgroundColor: PANEL_BG, borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+			<div onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, calc(100vw - 32px))', maxHeight: '90dvh', backgroundColor: PANEL_BG, borderRadius: '16px', overflow: 'clip', display: 'flex', flexDirection: 'column', position: 'relative' }}>
 				<button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 10, width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 					<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1L13 13M13 1L1 13" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round"/></svg>
 				</button>
