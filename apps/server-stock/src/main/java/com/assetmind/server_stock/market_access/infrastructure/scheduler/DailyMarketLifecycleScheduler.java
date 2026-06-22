@@ -5,6 +5,7 @@ import com.assetmind.server_stock.stock.application.provider.StockMetadataProvid
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @RequiredArgsConstructor
 @Component
+@ConditionalOnProperty(name = "kis.websocket.enabled", havingValue = "true")
 public class DailyMarketLifecycleScheduler {
     private final RealTimeStockDataPort realTimeStockDataPort;
 
@@ -34,10 +36,10 @@ public class DailyMarketLifecycleScheduler {
 
             Thread.sleep(1000);
 
-            // KOSPI 80 개의 종목 조회
+            // KOSPI 60 개의 종목 조회
             List<String> targetStocks = stockMetadataProvider.getAllStockCodes();
 
-            // 종목 구독 요청(Adapter 내부에서 40개씩 청킹하여 구독)
+            // 종목 구독 요청(Adapter 내부에서 30개씩 청킹하여 구독)
             realTimeStockDataPort.subscribe(targetStocks);
         } catch (Exception e) {
             log.error("[DailyMarketLifecycleScheduler] 체결 데이터 수집 파이프라인 연결 중 에러 발생", e);

@@ -1,5 +1,6 @@
 global:
-  scrape_interval: 10m
+  scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
   # Auth 서버 수집 설정
