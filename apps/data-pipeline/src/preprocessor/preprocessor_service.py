@@ -24,9 +24,11 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 from typing import Dict, Any, List
 import pandas as pd
 
+from src.common.config import ConfigManager
+from src.common.log import LogManager
 from src.common.decorators.log_decorator import log_decorator
 from src.common.exceptions import PreprocessorServiceError, PreprocessorError
-from preprocessor.preprocessor_factory import PreprocessorFactory
+from src.preprocessor.preprocessor_factory import PreprocessorFactory
 
 # ==============================================================================
 # Main Class/Functions
@@ -44,70 +46,76 @@ class PreprocessorService:
 
     def __init__(self) -> None:
         """기존 ExtractorService 표준 은닉 구조를 완벽히 미러링하여 하위 기구를 자율 인스턴스화합니다."""
+        self._config = ConfigManager.load("preprocessor")
+        self._logger = LogManager.get_logger("PreprocessorService")
         self._preprocessor_factory = PreprocessorFactory()
         self._job_metrics_registry = {}
+        
 
     @log_decorator()
-    def execute_preprocessing_job(self, market_data: pd.DataFrame) -> Any:
-        """내부 팩토리로부터 설정 기반 전처리 태스크 체인을 일괄 수신하여 순차 가공 파이프라이닝을 조율 집행합니다.
+    def execute_preprocessing_job(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+        """팩토리가 조립한 구체 태스크 체인을 순회하며 순차적 전처리 파이프라이닝을 총괄 제어합니다.
 
         Args:
-            market_data (pd.DataFrame): 클렌징 레이어를 통과하여 유입된, 물리적 차원이 보존된 금융 시계열 데이터프레임.
+            market_data (pd.DataFrame): Ingestion 레이어에서 적재되어 넘어온 
+                20거래일 슬라이딩 Lookback 윈도우 원본 금융 시계열 행렬.
 
         Returns:
-            Any: 최종 전처리 시퀀스가 수료되어 하위 ML 모델이 즉시 수용 가능한 마스터 정제 데이터 세트 (또는 복합 리포트 딕셔너리).
+            Dict[str, Any]: 다운스트림 모델 레이어가 직접 소비할 최종 정제 데이터 버킷 및 마스크 행렬 패키지.
 
         Raises:
-            PreprocessorError: 하위 태스크 가드레일 조건 미달 및 팩토리 조립 결함으로 인해 명시 전파된 비즈니스 예외.
-            PreprocessorServiceError: 런타임 행렬 연산 및 커널 메모리 붕괴 등 예기치 못한 인프라 장애 발생 시 포착.
+            PreprocessorServiceError: 체인 오케스트레이션 구동 중 예기치 못한 인프라 자원 부족 
+                또는 수리 연산 패닉 발생 시 최상위 파이프라인 감지를 위해 전파.
         """
+        # [설계 의도] 하위 연산 레이어 진입 전 오케스트레이터 입구에서 인풋 행렬의 데이터 형식을 엄격하게 검증하여,
+        # 규격이 파괴된 인스턴스가 내부 루프에 진입해 전체 시스템을 오염시키는 현상을 방어함.
+        if not isinstance(market_data, pd.DataFrame):
+            raise PreprocessorServiceError(
+                message="서비스 레이어로 주입된 입력 데이터 매트릭스가 유효한 pd.DataFrame 구조가 아닙니다."
+            )
+
         try:
-            # [Design Intent] 당신의 제안대로 job_id 매개변수 주입을 전면 제거하고 팩토리에 일괄 빌드 권한을 위임함
-            preprocessor_tasks: List[Any] = self._preprocessor_factory.create_preprocessor()
-            market_data = market_data.copy()  # 원본 데이터프레임 보호를 위해 복제본으로 작업
+            # [설계 의도] 원본 마켓 데이터의 불변성을 보장하고, 파이프라인 전반의 다중 앙상블 버킷 연산 도중 
+            # 발생할 수 있는 상호 데이터 참조 오염(Side-Effect)을 원천 차단하기 위해 명시적 깊은 복사를 수행함.
+            current_df = market_data.copy()
 
-            # 후행 보간 및 이상치 레이어에 피드백 전파할 공유 컨텍스트 프레임워크 초기화
-            current_preprocessing_target = market_data
-            final_integrated_report: Dict[str, Any] = {}
+            # [설계 의도] 내부 팩토리의 create_preprocessor()를 기동하여 preprocessor.yml 설정 파일의 
+            # 활성화 정책 구조에 맞춰 정렬된 구체 태스크 체인(List[AbstractTask])을 일괄 수신함.
+            preprocessor_tasks = self._preprocessor_factory.create_preprocessor()
 
-            # [순차 오케스트레이션 루프 파이프라이닝 엔진]
-            for task_instance in preprocessor_tasks:
-                task_class_name = task_instance.__class__.__name__
+            # [설계 의도] 특정 태스크가 이전 단계의 결과물(진단서 리포트 등)을 요구하는 선후 종속성 문제를 
+            # 상태 저장소 격리 원칙에 맞춰 안전하게 중계하기 위해 파이프라인 임시 공유 사전을 개설함.
+            pipeline_context: Dict[str, Any] = {}
+            final_artifacts: Dict[str, Any] = {}
 
-                # 1단계: 결측치 탐지 및 진단(MissingValueDiagnosisTask) 구동 분기 조율
-                if task_class_name == "MissingValueDiagnosisTask":
-                    # 진단 태스크는 데이터를 파괴하지 않고 하위 방어용 메타데이터 리포트 사전을 반환함
-                    diagnosis_report: Dict[str, Any] = task_instance.execute(
-                        market_data=current_preprocessing_target
-                    )
-                    
-                    # [다형성 리포트 엔진 적재] 요약 출력 및 공유 컨텍스트 저장을 위해 인메모리 레지스트리와 마스터 레포트에 동시 바인딩
+            # 정렬된 태스크 체인 순차 실행 오케스트레이션 루프
+            for task in preprocessor_tasks:
+                task_name = task.__class__.__name__
+
+                if task_name == "MissingValueDiagnosis":
+                    # [설계 의도] 진단 태스크를 실행하여 자산별 최대 연속 결측장 상태 사전을 획득하고,
+                    # 서비스 로컬 요약 레지스트리 및 후행 보간 태스크 전달용 컨텍스트에 각각 싱크함.
+                    diagnosis_report = task.execute(current_df)
+                    pipeline_context["diagnosis_report"] = diagnosis_report
                     self._job_metrics_registry["MISSING_VALUE_DIAGNOSIS"] = diagnosis_report
-                    final_integrated_report.update(diagnosis_report)
+                    
+                elif task_name == "MissingValueImputation":
+                    imputation_result = task.execute(current_df, pipeline_context["diagnosis_report"])
+                    final_artifacts.update(imputation_result)
+                    
+                    if "imputation_summary_report" in imputation_result:
+                        self._job_metrics_registry["MISSING_VALUE_IMPUTATION"] = imputation_result["imputation_summary_report"]
 
-                # 2단계: [확장성 예약 구역] 향후 추가될 후행 보간 태스크 구동 시 앞선 진단 컨텍스트(final_integrated_report)를 함께 피딩 주입
-                elif task_class_name == "MissingValueImputationTask":
-                    # current_preprocessing_target = task_instance.execute(
-                    #     market_data=current_preprocessing_target,
-                    #     diagnosis_report=final_integrated_report
-                    # )
-                    pass
-
-                # 3단계: [확장성 예약 구역] 이상치 탐지 및 처리 컴포넌트 순차 파이프라이닝 구역
-                elif task_class_name == "OutlierDetectionTask":
-                    pass
-
-            # 전처리 체인 최종 수료 후 취합된 복합 프레임워크 자원을 반환 (진단 레이어 단독 기동 시 리포트 사전 반환 표준 보존)
-            return final_integrated_report if len(preprocessor_tasks) == 1 else current_preprocessing_target
+            return final_artifacts
 
         except PreprocessorError as preprocessor_error:
-            # 하위 연산 및 조립 파일에서 엄격하게 캡슐화되어 올라온 커스텀 예외는 변형 없이 상위 파이프라인으로 직통 전파
+            # 하위 태스크 수리 연산 내부에서 완벽하게 구조화되어 래핑되어 올라온 커스텀 예외는 직통 전파
             raise preprocessor_error
 
         except Exception as original_exception:
-            # 예기치 못한 시스템 메모리 다운 등을 3단계 위계의 전처리 서비스 예외로 최종 봉인 처리
+            # 예기치 못한 인프라 장애나 하드웨어 패닉 상황을 전처리 서비스 예외인 PreprocessorServiceError로 최종 봉인 전파
             raise PreprocessorServiceError(
-                message=f"PreprocessorService에서 외부 인자 거세형 전처리 체인 오케스트레이션 중 인프라 크래시가 감지되었습니다.",
+                message="PreprocessorService에서 전처리 시퀀스 체인 오케스트레이션 구동 중 치명적인 시스템 크래시가 감지되었습니다.",
                 original_exception=original_exception
             )
 
@@ -127,12 +135,18 @@ class PreprocessorService:
                 halted_assets_count = sum(1 for max_run in max_run_dict.values() if max_run >= 6)
 
                 print(
-                    f"[Preprocessor 종합 요약 리포트 - {job_key}] 전체 시장 휴장/시스템 다운 유효 일수: {holiday_count}일 | "
+                    f"[Preprocessor 종합 요약 리포트] 전체 시장 휴장/시스템 다운 유효 일수: {holiday_count}일 | "
                     f"25% 임계치(6일)를 초과한 장기 거래정지 및 위험 오염 자산 수: {halted_assets_count}종"
                 )
 
             elif job_key == "MISSING_VALUE_IMPUTATION":
-                pass
+                short_term_count = metrics_data.get("short_term_locf_asset_count", 0)
+                medium_term_count = metrics_data.get("medium_term_kalman_asset_count", 0)
+                long_term_count = metrics_data.get("long_term_neutralized_asset_count", 0)
+                
+                self._logger.info(f"    - 단기 결측 처리 자산 수 (LOCF/LogReturn/MA 실험군): {short_term_count}종")
+                self._logger.info(f"    - 중기 결측 처리 자산 수 (단변량 Kalman Filter): {medium_term_count}종")
+                self._logger.info(f"    - 장기 결측 격리 무력화 자산 수 (Sample Weights): {long_term_count}종")
 
             elif job_key == "OUTLIER_DETECTION":
                 pass
