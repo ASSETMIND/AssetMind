@@ -541,6 +541,41 @@ class InsufficientLookbackWindowError(PreprocessorError):
         }
         super().__init__(message=message, details=details, should_retry=False)
 
+class ImputationExecutionError(PreprocessorError):
+    """결측치 보간 태스크 레이어(Imputation Task Layer) 연산 중 발생하는 런타임 예외.
+
+    하위 보간 알고리즘(LOCF, 로그 수익률 추세 확장, 이동평균 평균 회귀, 칼만 필터)의 판다스/넘파이/수리
+    연산 과정에서 발생하는 예기치 못한 행렬 차원 비정합성, 선형대수 연산 불능(Singular Matrix Error),
+    타입 불일치 및 메모리 장애 상황을 포착하고 원본 예외와 핵심 컨텍스트(자산 코드 목록, 임퓨터 타입)를
+    유실 없이 상위 오케스트레이터로 전파하기 위해 디자인된 방어적 예외 클래스입니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        imputer_type: str,
+        target_assets: List[str],
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ImputationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            imputer_type (str): 에러가 발생한 구체적 보간 알고리즘 컴포넌트 명칭 
+            target_assets (List[str]): 결측치 보간 도중 문제가 발생한 대상 자산 코드 목록.
+            original_exception (Exception, optional): 하위 라이브러리에서 발생하여 근본 원인이 된 원본 시스템 예외 객체.
+        """
+        details = {
+            "imputer_type": imputer_type,
+            "target_assets": target_assets
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
 class PreprocessorFactoryError(PreprocessorError):
     """PreprocessorFactory 계층에서 하이퍼파라미터 조건 바인딩 및 태스크 객체 생성 중 발생하는 예외.
     
