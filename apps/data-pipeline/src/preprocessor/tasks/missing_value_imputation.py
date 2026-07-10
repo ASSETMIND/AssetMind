@@ -190,17 +190,26 @@ class MissingValueImputation:
 
             # [설계 의도] 인프라 최종 방어 레이어 가동.
             # 수리적 예외 상황으로 인해 행렬 내부 어딘가에 NaN 잔차가 단 1셀이라도 잔존하는 현상을 영구 박멸하기 위해,
-            # 안전벽 목적의 최종 정적 ffill().ffill(axis=1).fillna(0.0) 체인을 통과시켜 100% 무결한 조밀 행렬(Dense Matrix) 차원을 사수함.
+            # 안전벽 목적의 최종 정적 ffill().ffill(axis=0).bfill(axis=0).fillna(0.0) 체인을 통과시켜 100% 무결한 조밀 행렬(Dense Matrix) 차원을 사수함.
             final_protection_chain = lambda target_df: target_df.ffill(axis=0).bfill(axis=0).fillna(0.0)
+            
+            # [설계 의도] 상위 PreprocessorService의 요약 보고(log_preprocessing_summary) 계약 조건을 충족하기 위해
+            # 각 라우팅 분기별 처리 완료 자산 수 메타데이터 구조체를 동적 빌드하여 레지스트리 유실을 복원함.
+            imputation_summary_report = {
+                "short_term_locf_asset_count": len(short_term_assets),
+                "medium_term_kalman_asset_count": len(medium_term_assets),
+                "long_term_neutralized_asset_count": len(long_term_assets)
+            }
             
             return {
                 "bucket_locf": final_protection_chain(bucket_locf),
                 "bucket_log_return": final_protection_chain(bucket_log_return),
                 "bucket_moving_average": final_protection_chain(bucket_moving_average),
                 "missing_indicator_mask": missing_indicator_mask,
-                "target_sample_weights": target_sample_weights
+                "target_sample_weights": target_sample_weights,
+                "imputation_summary_report": imputation_summary_report
             }
-
+        
         except Exception as original_error:
             # 하위 수리 모듈 패닉 또는 인덱싱 에러 포착 및 구조화 예외 전파 체인 봉인
             raise ImputationExecutionError(
