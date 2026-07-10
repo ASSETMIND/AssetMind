@@ -576,6 +576,69 @@ class ImputationExecutionError(PreprocessorError):
             should_retry=False
         )
 
+class OutlierDiagnosisExecutionError(PreprocessorError):
+    """이상치 진단 태스크 레이어(Outlier Diagnosis Task Layer) 연산 중 발생하는 런타임 예외.
+
+    하위 이상치 탐지 알고리즘 전략(IQR, Z-Score, Isolation Forest)의 판다스/넘파이/사이킷런
+    연산 과정에서 발생하는 행렬 차원 비정합성, 모델 피팅 에러, 난수 고정 실패 및 메모리 장애
+    상황을 포착하여 원본 예외와 핵심 컨텍스트를 유실 없이 상위 오케스트레이터로 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        strategy_type: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """OutlierDiagnosisExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            strategy_type (str): 에러가 발생한 구체적인 이상치 탐지 전략 컴포넌트 명칭.
+            original_exception (Exception, optional): 하위 라이브러리에서 발생하여 근본 원인이 된 원본 시스템 예외 객체.
+        """
+        details = {
+            "strategy_type": strategy_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class OutlierRefinementExecutionError(PreprocessorError):
+    """이상치 정제 태스크 레이어(Outlier Refinement Task Layer) 연산 중 발생하는 런타임 예외.
+
+    이상치 진단 리포트의 불리언 마스크를 기반으로 원본 행렬을 알고리즘적 결측치(NaN)로 치환하거나,
+    지정된 상하한 임계값으로 조정(Clipping)하는 판다스 벡터 연산 및 셰이프 매칭 과정에서 발생하는
+    예기치 못한 장애 상황을 포착하고 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        refinement_policy: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """OutlierRefinementExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            refinement_policy (str): 에러가 발생한 구체적인 이상치 정제 처리 정책 명칭.
+            original_exception (Exception, optional): 하위 판다스 연산 레이어에서 발생한 원본 예외 객체.
+        """
+        details = {
+            "refinement_policy": refinement_policy
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
 class PreprocessorFactoryError(PreprocessorError):
     """PreprocessorFactory 계층에서 하이퍼파라미터 조건 바인딩 및 태스크 객체 생성 중 발생하는 예외.
     
