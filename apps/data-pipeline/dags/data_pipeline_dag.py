@@ -106,9 +106,18 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
         )
 
         # 3. Gold Task : 피쳐 엔지니어링 및 파생변수 생성 후 PostgreSQL 적재
+        run_gold = BashOperator(
+            task_id=f"run_gold_{task_key}",
+            bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
+            env={
+                "EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "TARGET_TASK": f"gold_{task_key}"
+            },
+            append_env=True,
+        )
 
         # 4. Task 의존성 (흐름) 제어
-        run_bronze >> run_silver
+        run_bronze >> run_silver >> run_gold
 
     return dag
 
@@ -121,7 +130,7 @@ daily_asia_dag = create_dag(
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
-    start_year=2000,
+    start_year=2025,
     start_month=1,
     start_day=2
 )
@@ -132,7 +141,7 @@ daily_global_dag = create_dag(
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
-    start_year=2000,
+    start_year=2025,
     start_month=1,
     start_day=2
 )
