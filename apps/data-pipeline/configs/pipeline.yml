@@ -254,7 +254,7 @@ tasks:
   silver_daily_asia:
     description: "아시아 지수, 환율, 금리, 가상자산 데이터를 정제 및 결합하여 와이드 테이블 합성"
     layer: "silver"
-    target_loader: "s3_parquet"
+    target_loader: "s3_parquet_silver"
     extract_jobs:
       # ========== [KOSPI 지수 일별 데이터 : 29개] ==========
       - "kis_kospi_daily"
@@ -396,7 +396,7 @@ tasks:
   silver_daily_global:
     description: "미국 및 유럽 주요 지수, 원자재 근월물 데이터를 정제 및 결합하여 와이드 테이블 합성"
     layer: "silver"
-    target_loader: "s3_parquet"
+    target_loader: "s3_parquet_silver"
     extract_jobs:
       # ========== [S&P500 지수 일별 데이터 : 1개] ==========
       - "kis_snp500_daily"
@@ -491,3 +491,13 @@ tasks:
       - fred_us_treasury_5y_daily
       - fred_us_treasury_10y_daily
       - fred_us_treasury_30y_daily
+
+  gold_daily_asia:
+    description: "아시아 지수, 환율, 금리, 가상자산 데이터를 정제 및 결합하여 와이드 테이블 합성"
+    layer: "gold"
+    target_loader: "s3_parquet_gold"
+
+  gold_daily_global:
+    description: "글로벌 지수, 환율, 금리, 가상자산 데이터를 정제 및 결합하여 와이드 테이블 합성"
+    layer: "gold"
+    target_loader: "s3_parquet_gold"
