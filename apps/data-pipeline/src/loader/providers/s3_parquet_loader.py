@@ -84,6 +84,12 @@ class S3ParquetLoader(AbstractLoader):
         
         df: pd.DataFrame = dto.data
         s3_path = f"s3://{self._bucket_name}/{self._prefix}"
+
+        prefix = self._prefix
+        if dto.meta and isinstance(dto.meta, dict) and "bucket_name" in dto.meta:
+            bucket_subpath = dto.meta["bucket_name"]
+            if not prefix.endswith(bucket_subpath):
+                prefix = f"{prefix}/{bucket_subpath}"
         
         # [핵심 수정] LocalStack 엔드포인트 분기 및 storage_options 조립
         storage_options: Dict[str, Any] = {}
