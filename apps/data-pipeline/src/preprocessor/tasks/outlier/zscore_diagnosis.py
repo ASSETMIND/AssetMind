@@ -21,6 +21,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
   - 근거: 우리는 전방 레이어에서 1차 보간(Pass 1)을 수행하여 비정상 공백을 메운 정제된 행렬을 입력받음. 또한, 오탐지 공백은 머신러닝 다변량 모델(Isolation Forest) 버킷과 병렬 교차 대조하여 상호 보완하도록 실험 우주를 설계했으므로, 전통 계량학적 기준인 Z-Score 엔진을 배치하는 것이 타당함.
 """
 
+import numpy as np
 import pandas as pd
 
 from src.preprocessor.tasks.outlier.abstract_diagnosis import AbstractOutlierDiagnosis
@@ -51,22 +52,20 @@ class ZScoreDiagnosis(AbstractOutlierDiagnosis):
         Returns:
             pd.DataFrame: 원본 행렬과 인덱스/컬럼이 1:1 일치하는 불리언 마스크 매트릭스.
         """
-        # [설계 의도] 판다스의 컬럼 벡터 통계량 산출 로직(axis=0)을 가동하여 190종 이상의 자산 컬럼 데이터 전역의
-        # 로컬 대표 통계치(mean, std Series)를 단 1회의 선형 메모리 스캔으로 초고속 확보함.
-        means: pd.Series = df.mean(axis=0)
-        stds: pd.Series = df.std(axis=0)
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        numeric_df = df[numeric_columns]
 
-        # [설계 의도] 금융 시계열 데이터프레임의 특정 컬럼 내 변동성이 제로(0)에 수렴하여 분모가 0이 되는
-        # 수리적 패닉(ZeroDivisionError / NaN Anomaly) 현상을 방어하기 위해 안전 가드 수치를 하한선으로 적용함.
-        min_std_protection = 1e-8
-        stds = stds.replace(0.0, min_std_protection)
+        outlier_mask = pd.DataFrame(False, index=df.index, columns=df.columns)
 
-        # [설계 의도] 미래 시점의 전체 가격 통계량을 미리 당겨와 판정함으로써 인과 관계를 파괴하는 미래 참조 편향(Look-Ahead Bias)을
-        # 완벽 차단하기 위해, 오직 입력으로 들어온 과거 룩백 윈도우 시퀀스 내부 통계량만을 한정 계산에 사용함.
-        z_scores: pd.DataFrame = (df - means) / stds
+        if not numeric_df.empty:
+            means: pd.Series = numeric_df.mean(axis=0)
+            stds: pd.Series = numeric_df.std(axis=0)
 
-        # [설계 의도] 판다스의 브로드캐스팅 연산을 트리거하여 절대값 Z-Score가 설정 임계치를 초과하는지 검증하고,
-        # 원본과 완벽한 차원 불변성(Invariant) 계약을 충족하는 1:1 불리언 마스크 프레임을 사출함.
-        outlier_mask: pd.DataFrame = z_scores.abs() > self._threshold
+            min_std_protection = 1e-8
+            stds = stds.replace(0.0, min_std_protection)
+
+            z_scores: pd.DataFrame = (numeric_df - means) / stds
+            numeric_outlier_mask = z_scores.abs() > self._threshold
+            outlier_mask[numeric_columns] = numeric_outlier_mask
 
         return outlier_mask

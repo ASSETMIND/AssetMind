@@ -21,6 +21,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
   - 근거: 우리는 다운스트림 실험 버킷에 다변량 모델(Isolation Forest)을 교차 배치해 변수를 통제하고 있음. 따라서 일변량 국면에서는 분포 왜곡에 가장 면역력이 높은 IQR 방식을 기저 엔진으로 확보하는 것이 아키텍처 다형성 관점에서 정석임.
 """
 
+import numpy as np
 import pandas as pd
 
 from src.preprocessor.tasks.outlier.abstract_diagnosis import AbstractOutlierDiagnosis
@@ -51,19 +52,20 @@ class IqrDiagnosis(AbstractOutlierDiagnosis):
         Returns:
             pd.DataFrame: 원본 행렬과 인덱스/컬럼이 1:1 일치하는 불리언 마스크 매트릭스.
         """
-        # [설계 의도] 판다스의 컬럼 벡터 연산(axis=0)을 직통 호출하여 190종 이상의 자산 컬럼을 
-        # Python for 루프 없이 단일 연산 텐서 블록으로 밀어넣어 CPU 인메모리 연산 속도를 극대화함.
-        q1: pd.Series = df.quantile(0.25, axis=0)
-        q3: pd.Series = df.quantile(0.75, axis=0)
-        iqr: pd.Series = q3 - q1
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        numeric_df = df[numeric_columns]
 
-        # [설계 의도] 미래 시점의 통계량을 미리 참조하는 Look-Ahead Bias를 완벽히 차단하기 위해,
-        # 오직 현재 주입된 로컬 슬라이딩 윈도우 프레임 내부 정보만을 이용하여 인과적 상하한 경계선을 구축함.
-        lower_bound: pd.Series = q1 - (self._multiplier * iqr)
-        upper_bound: pd.Series = q3 + (self._multiplier * iqr)
+        outlier_mask = pd.DataFrame(False, index=df.index, columns=df.columns)
 
-        # [설계 의도] 원본 데이터프레임의 인덱스 축 구조를 파괴하지 않고 유지하기 위해, 
-        # 비교 연산의 브로드캐스팅(Broadcasting)을 가동시켜 고속으로 1:1 대칭 매트릭스 마스크를 성형함.
-        outlier_mask: pd.DataFrame = (df < lower_bound) | (df > upper_bound)
+        if not numeric_df.empty:
+            q1: pd.Series = numeric_df.quantile(0.25, axis=0)
+            q3: pd.Series = numeric_df.quantile(0.75, axis=0)
+            iqr: pd.Series = q3 - q1
+
+            lower_bound: pd.Series = q1 - (self._multiplier * iqr)
+            upper_bound: pd.Series = q3 + (self._multiplier * iqr)
+
+            numeric_outlier_mask = (numeric_df < lower_bound) | (numeric_df > upper_bound)
+            outlier_mask[numeric_columns] = numeric_outlier_mask
 
         return outlier_mask

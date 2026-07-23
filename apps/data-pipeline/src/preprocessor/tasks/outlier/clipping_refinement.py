@@ -57,22 +57,19 @@ class ClippingRefinement(AbstractOutlierRefinement):
         # 정제 연산 수행 전 메모리 상에 완전히 격리된 독립 카피본을 복성합니다.
         refined_df = df.copy()
 
-        # 자산별(Column) 사분위수 및 IQR 통계량 벡터 일괄 계산
-        q1: pd.Series = df.quantile(0.25, axis=0)
-        q3: pd.Series = df.quantile(0.75, axis=0)
-        iqr: pd.Series = q3 - q1
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        numeric_df = df[numeric_columns]
 
-        # [설계 의도] Look-Ahead Bias(미래 참조 편향)를 원천 봉쇄하기 위해, 오직 주입된 
-        # 로컬 룩백 윈도우 블록 내부의 독립적 통계량만으로 인과적 상상하한선을 구축합니다.
-        lower_bounds: pd.Series = q1 - (self._multiplier * iqr)
-        upper_bounds: pd.Series = q3 + (self._multiplier * iqr)
+        if not numeric_df.empty:
+            q1: pd.Series = numeric_df.quantile(0.25, axis=0)
+            q3: pd.Series = numeric_df.quantile(0.75, axis=0)
+            iqr: pd.Series = q3 - q1
 
-        # [설계 의도] for 루프를 통한 셀 단위 탐색을 배제하고, 판다스의 고속 벡터 연산 API인 .where()를 가동합니다.
-        # mask가 True인 위치(이상치) 중, 상한선을 넘은 좌표는 upper_bounds로, 하한선을 미달한 좌표는 lower_bounds로
-        # 정확히 정렬 매핑하여 수렴(Winsorization) 연산을 단일 패스로 마감합니다.
-        clipped_df = df.clip(lower=lower_bounds, upper=upper_bounds, axis=1)
-        
-        # mask가 True인 좌표만 clipped_df의 값으로 덮어쓰고, False인 정상 좌표는 원본 refined_df 값을 고수함
-        refined_df = refined_df.where(~mask, clipped_df)
+            lower_bound: pd.Series = q1 - (self._multiplier * iqr)
+            upper_bound: pd.Series = q3 + (self._multiplier * iqr)
+
+            # 수치형 컬럼 구역에 대해서만 안전하게 클리핑 집행
+            numeric_clipped = numeric_df.clip(lower=lower_bound, upper=upper_bound, axis=1)
+            refined_df[numeric_columns] = numeric_clipped
 
         return refined_df

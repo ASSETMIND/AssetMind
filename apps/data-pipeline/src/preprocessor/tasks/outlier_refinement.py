@@ -125,21 +125,18 @@ class OutlierRefinement:
         """입력 컨텍스트 사전들의 자료구조 타입 및 필수 수리 분기 키의 상주 여부를 엄격하게 가드레일 검증합니다."""
         if not isinstance(imputation_artifacts, dict) or not isinstance(diagnosis_report, dict):
             raise OutlierRefinementExecutionError(
-                message="정제 태스크로 주입된 아티팩트 구조들이 유효한 Python Dict 형태가 아닙니다.",
-                strategy_type=self.__class__.__name__
+                message="정제 태스크로 주입된 아티팩트 구조들이 유효한 Python Dict 형태가 아닙니다."
             )
 
         required_buckets = ["bucket_locf", "bucket_log_return", "bucket_moving_average"]
         for bucket_key in required_buckets:
             if bucket_key not in imputation_artifacts or not isinstance(imputation_artifacts[bucket_key], pd.DataFrame):
                 raise OutlierRefinementExecutionError(
-                    message=f"이상치 정제를 위한 필수 전방 보간 버킷 프레임인 '{bucket_key}' 요소가 손상되었거나 누락되었습니다.",
-                    strategy_type=self.__class__.__name__
+                    message=f"이상치 정제를 위한 필수 전방 보간 버킷 프레임인 '{bucket_key}' 요소가 손상되었거나 누락되었습니다."
                 )
             if bucket_key not in diagnosis_report:
                 raise OutlierRefinementExecutionError(
-                    message=f"이상치 정제를 위한 필수 진단 리포트 대칭 그룹인 '{bucket_key}' 세트가 누락되었습니다.",
-                    strategy_type=self.__class__.__name__
+                    message=f"이상치 정제를 위한 필수 진단 리포트 대칭 그룹인 '{bucket_key}' 세트가 누락되었습니다."
                 )
 
     def _validate_invariants(self, sample_df: pd.DataFrame, final_artifacts: Dict[str, pd.DataFrame]) -> None:
@@ -147,21 +144,18 @@ class OutlierRefinement:
         # 아키텍처 가드레일: 사출된 최종 버킷 본수가 비즈니스 명세 계약(18개)과 정확히 일치하는지 지엄하게 검동
         if len(final_artifacts) != 18:
             raise OutlierRefinementExecutionError(
-                message=f"불변성 파괴 감지: 사출된 최종 실험 데이터프레임의 총 본수({len(final_artifacts)}개)가 아키텍처 계약 본수(18개)와 불합치합니다.",
-                strategy_type="INVARIANT_COUNT_GUARD"
+                message=f"불변성 파괴 감지: 사출된 최종 실험 데이터프레임의 총 본수({len(final_artifacts)}개)가 아키텍처 계약 본수(18개)와 불합치합니다."
             )
 
         for artifact_key, refined_df in final_artifacts.items():
             # 차원 불변 조건 충족성 검사 (하위 텐서 셰이프 일치성의 마스터 방어벽)
             if sample_df.shape != refined_df.shape:
                 raise OutlierRefinementExecutionError(
-                    message=f"불변성 파괴 감지: 최종 청정 버킷 [{artifact_key}]의 차원 셰이프{refined_df.shape}가 원본{sample_df.shape}과 불일치하여 하위 텐서 연산 붕괴 리스크가 포착되었습니다.",
-                    strategy_type=artifact_key
+                    message=f"불변성 파괴 감지: 최종 청정 버킷 [{artifact_key}]의 차원 셰이프{refined_df.shape}가 원본{sample_df.shape}과 불일치하여 하위 텐서 연산 붕괴 리스크가 포착되었습니다."
                 )
             
             # 시계열 인덱스 및 자산 코드 정렬축 보존 상태 정밀 조밀 대조
             if not sample_df.index.equals(refined_df.index) or not sample_df.columns.equals(refined_df.columns):
                 raise OutlierRefinementExecutionError(
-                    message=f"불변성 파괴 감지: 최종 청정 버킷 [{artifact_key}]의 타임스탬프 인덱스 축 또는 자산코드 정렬 순서가 원본 축과 뒤틀려 데이터 누수 위험이 있습니다.",
-                    strategy_type=artifact_key
+                    message=f"불변성 파괴 감지: 최종 청정 버킷 [{artifact_key}]의 타임스탬프 인덱스 축 또는 자산코드 정렬 순서가 원본 축과 뒤틀려 데이터 누수 위험이 있습니다."
                 )

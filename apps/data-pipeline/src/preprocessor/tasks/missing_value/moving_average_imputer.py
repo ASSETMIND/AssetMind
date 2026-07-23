@@ -76,49 +76,38 @@ class MovingAverageImputer(AbstractImputer):
             return df
 
         try:
-            # [설계 의도] 동렬 앙상블 다중 버킷 실험 구조 환경에서 상호 버킷 간 데이터 프레임 참조 오염 
-            # (Side-Effect)을 철저히 차단하고 데이터 무결성을 보장하기 위해 명시적 깊은 복사를 수행함.
             imputed_df = df.copy()
 
-            # [설계 의도] 외부 YML 설정을 통해 파라미터를 동적으로 안전하게 꺼내오고, 누락 시 도메인 최적 하이퍼파라미터를 방어적으로 매핑함.
             rolling_window = kwargs.get("rolling_window", 20)
             reversion_speed = kwargs.get("reversion_speed", 0.5)
 
-            # [설계 의도] 자산 이질성 사수 원칙에 맞춰 타겟 자산프레임 서브셋 행렬만 슬라이싱하여 격리 연산 블록을 구성함.
             target_df = imputed_df[target_assets]
 
-            # [설계 의도] 1차 베이스라인 위치를 잡기 위해 ffill()을 수행한 데이터프레임을 생성함.
-            # 이 프레임은 이동평균선 산출의 연속성 확보 및 결측 발생 시점의 '직전 가격 위치'를 고정하는 역할을 전담함.
-            base_locf = target_df.ffill(axis=0).bfill(axis=0)
+            # 수치형 자산과 비수치형(문자열/범주형) 자산 격리 분리
+            numeric_assets = target_df.select_dtypes(include=['number']).columns.tolist()
+            non_numeric_assets = [col for col in target_assets if col not in numeric_assets]
 
-            # [설계 의도] 자산별 고유의 역사적 균형선인 이동평균(Moving Average) 행렬을 벡터 연산으로 도출함.
-            # 데이터 초기 진입점의 결측 전파를 방어하기 위해 min_periods=1 제약을 주입하여 수리적 안전성을 사수함.
-            moving_averages = base_locf.rolling(window=rolling_window, min_periods=1).mean()
+            # 1. 비수치형 자산: 이동평균 연산 불가하므로 LOCF(ffill/bfill) 대치
+            if non_numeric_assets:
+                imputed_df[non_numeric_assets] = imputed_df[non_numeric_assets].ffill(axis=0).bfill(axis=0)
 
-            # [설계 의도] Pandas 엔진은 2차원 DataFrame 구조를 .groupby()의 그루퍼 키 배열로 수용하지 못하고 발산합니다.
-            # 따라서 본 모듈의 핵심 철학인 [Univariate Isolation] (단변량 격리 원칙)에 입각하여, 자산별(Column-wise)로 
-            # 1차원 Series 단위의 groupby-cumcount 트릭을 격리 집행함으로써 판다스 엔진의 차원 정합성을 완벽하게 사수합니다.
-            consecutive_nan_counts = pd.DataFrame(index=target_df.index, columns=target_df.columns)
-            for asset in target_assets:
-                asset_indicator = target_df[asset].notna().cumsum(axis=0)
-                consecutive_nan_counts[asset] = target_df[asset].isna().groupby(asset_indicator).cumcount()
+            # 2. 수치형 자산: 이동평균 평균 복귀 관성 보간 연산집행
+            if numeric_assets:
+                num_target_df = target_df[numeric_assets]
+                base_locf = num_target_df.ffill(axis=0).bfill(axis=0)
+                moving_averages = base_locf.rolling(window=rolling_window, min_periods=1).mean()
 
-            # ==============================================================================
-            # [설계 의도] 평균 회귀 차분 방정식의 수학적 벡터화: 
-            # P_t = P_{t-1} + reversion_speed * (MA_t - P_{t-1}) 공식을 연속 결측 구간에 대해 풀면 다음과 같음:
-            # P_t = MA_t + (P_{last_valid} - MA_t) * (1 - reversion_speed)^consecutive_count
-            # 즉, 직전 가격 위치와 이동평균선 간의 이격 거리가 시간 흐름에 따라 (1 - reversion_speed)의 속도로 지수 감쇄하는 원리임.
-            # ==============================================================================
-            decay_factors = (1.0 - reversion_speed) ** consecutive_nan_counts
-            
-            # [설계 의도] 넘파이 브로드캐스팅 엔진을 통해 최종 평균 회귀 보간 행렬을 일괄 합성하여 원본 프레임축에 정밀 대입함.
-            imputed_df[target_assets] = moving_averages + (base_locf - moving_averages) * decay_factors
+                consecutive_nan_counts = pd.DataFrame(index=num_target_df.index, columns=num_target_df.columns)
+                for asset in numeric_assets:
+                    asset_indicator = num_target_df[asset].notna().cumsum(axis=0)
+                    consecutive_nan_counts[asset] = num_target_df[asset].isna().groupby(asset_indicator).cumcount()
+
+                decay_factors = (1.0 - reversion_speed) ** consecutive_nan_counts
+                imputed_df[numeric_assets] = moving_averages + (base_locf - moving_averages) * decay_factors
 
             return imputed_df
 
         except Exception as original_error:
-            # [설계 의도] 판다스/넘파이 내부 수학 연산 중 발생할 수 있는 데이터 타입 비정합성 및 수리 패닉을 포착하여,
-            # 구조화된 장애 문맥과 함께 전처리 레이어 전용 예외인 ImputationExecutionError로 체인 래핑함.
             raise ImputationExecutionError(
                 message="이동평균 기반 평균 회귀(Moving Average Mean Reversion) 보간 연산 중 판다스 수리 엔진에서 치명적 장애가 발생했습니다.",
                 imputer_type=self.__class__.__name__,
