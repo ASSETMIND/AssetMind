@@ -329,7 +329,7 @@ class ConfigManager(BaseSettings):
             
         # [설계 의도] OCP(개방-폐쇄 원칙)에 따라 적재 타겟에 맞는 구체적인 Pydantic 모델을 
         # 다형성(Polymorphism) 형태로 분기하여 반환. 향후 GCP, Azure 로더 추가 시 확장 용이.
-        if loader_name in ["s3_zstd", "s3_parquet"]:
+        if loader_name.startswith("s3_") or loader_name in ["s3_zstd", "s3_parquet"]:
             return AWSLoaderPolicy(**loader_data)
         elif loader_name == "postgres":
             return PostgresLoaderPolicy(**loader_data)
@@ -381,8 +381,8 @@ class ConfigManager(BaseSettings):
         if not reader_data:
             raise ConfigurationError(f"Reader 타겟 '{reader_name}' 설정을 reader.yml에서 찾을 수 없습니다.")
             
-        if reader_name in ["s3_zstd", "s3_parquet"]:
-            # [설계 의도] DRY 원칙에 입각하여 기존에 정의된 AWSLoaderPolicy를 그대로 재사용
+        # S3 계열 판독 정책 동적 지원
+        if reader_name.startswith("s3_") or reader_name in ["s3_zstd", "s3_parquet"]:
             return AWSLoaderPolicy(**reader_data)
         else:
             raise ConfigurationError(f"현재 지원하지 않는 Reader 타겟입니다: {reader_name}")
