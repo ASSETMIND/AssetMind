@@ -36,7 +36,7 @@ from airflow.operators.bash import BashOperator
 # ==============================================================================
 # Task 실패 시 재시도 정책
 RETRIES: int = 3
-RETRY_DELAY_MINUTES: int = 5
+RETRY_DELAY_MINUTES: int = 10
 
 # Airflow 컨테이너 내 파이프라인 소스코드 경로
 PROJECT_ROOT_DIR: str = "/opt/airflow"
@@ -61,9 +61,12 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
     # [설계 의도] 타임존이 명확히 적용된 start_date를 설정하여
     # 글로벌 환경에서도 논리적 실행 날짜 오작동이 발생하지 않도록 강제함.
     default_args = {
-        "owner": "data_engineering_team",
+        "owner": "AssetMind_DE",
+        "depends_on_past": True,
         "retries": RETRIES,
         "retry_delay": timedelta(minutes=RETRY_DELAY_MINUTES),
+        "retry_exponential_backoff": True,
+        "max_retry_delay": timedelta(minutes=30),
     }
 
     with DAG(
@@ -114,22 +117,22 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
 # ==========================================================
 # 1. Asia 파이프라인 (KST 00:00)
 daily_asia_dag = create_dag(
-    dag_id="daily_asia_test",
+    dag_id="daily_asia",
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
-    start_year=2026,
-    start_month=5,
-    start_day=20
+    start_year=2000,
+    start_month=1,
+    start_day=2
 )
 
 # 2. Global 파이프라인 (EST 00:00)
 daily_global_dag = create_dag(
-    dag_id="daily_global_test",
+    dag_id="daily_global",
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
-    start_year=2026,
-    start_month=5,
-    start_day=20
+    start_year=2000,
+    start_month=1,
+    start_day=2
 )

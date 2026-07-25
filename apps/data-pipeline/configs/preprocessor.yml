@@ -1,0 +1,17 @@
+missing_value_diagnosis:
+  lookback_window_size: 20
+  short_gap_threshold_ratio: 0.10
+  medium_gap_threshold_ratio: 0.25
+  co_missing_threshold_ratio: 0.95
+
+missing_value_imputation:
+  routing_rules:
+    short_term_threshold: 0.10
+    medium_term_threshold: 0.25
+  log_return_params:
+    lookback_window: 5
+  moving_average_params:
+    window_size: 3
+  kalman_params:
+    transition_covariance: 0.05
+    observation_covariance: 1.0

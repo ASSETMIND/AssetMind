@@ -97,6 +97,10 @@ class BuilderError(ETLError):
     """Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
     pass
 
+class PreprocessorError(ETLError):
+    """Preprocessor 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    pass
+
 
 # ==============================================================================
 # 4. Extractor Layer Detailed Exceptions
@@ -499,3 +503,125 @@ class BuilderServiceError(BuilderError):
             details["original_exception_type"] = type(original_exception).__name__
             
         super().__init__(message, details=details, should_retry=False)
+
+# ==============================================================================
+# 9. Preprocessor Layer Detailed Exceptions
+# ==============================================================================
+
+class EmptyInputDataError(PreprocessorError):
+    """입력 금융 시계열 데이터프레임이 완전히 비어있을 때 발생하는 예외 클래스.
+    
+    데이터 수집 누락이나 업스트림 파이프라인 중단으로 인해 유입된 데이터가 0건일 때 발생하며,
+    정적 파일 유실/오류이므로 재시도하지 않습니다.
+    """
+
+    def __init__(self, message: str) -> None:
+        """EmptyInputDataError 초기화."""
+        super().__init__(message=message, details={}, should_retry=False)
+
+
+class InsufficientLookbackWindowError(PreprocessorError):
+    """유입된 거래일수가 설정된 슬라이딩 윈도우 크기보다 작아 통계적 진단이 불가능할 때 발생하는 예외 클래스.
+    
+    컨텍스트 확보를 위한 물리 거래일수가 미달인 상태로 슬라이딩 연산 강행 시 발생하는 
+    윈도우 슬라이싱 아웃오브바운드 오류를 차단합니다.
+    """
+
+    def __init__(self, message: str, current_length: int, required_window_size: int) -> None:
+        """InsufficientLookbackWindowError 초기화.
+
+        Args:
+            message (str): 에러 상세 메시지.
+            current_length (int): 실제 유입된 원본 시계열의 물리적 총 거래일수.
+            required_window_size (int): 아키텍처상 요구되는 필수 슬라이딩 룩백 윈도우 크기.
+        """
+        details = {
+            "current_length": current_length,
+            "required_window_size": required_window_size
+        }
+        super().__init__(message=message, details=details, should_retry=False)
+
+class ImputationExecutionError(PreprocessorError):
+    """결측치 보간 태스크 레이어(Imputation Task Layer) 연산 중 발생하는 런타임 예외.
+
+    하위 보간 알고리즘(LOCF, 로그 수익률 추세 확장, 이동평균 평균 회귀, 칼만 필터)의 판다스/넘파이/수리
+    연산 과정에서 발생하는 예기치 못한 행렬 차원 비정합성, 선형대수 연산 불능(Singular Matrix Error),
+    타입 불일치 및 메모리 장애 상황을 포착하고 원본 예외와 핵심 컨텍스트(자산 코드 목록, 임퓨터 타입)를
+    유실 없이 상위 오케스트레이터로 전파하기 위해 디자인된 방어적 예외 클래스입니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        imputer_type: str,
+        target_assets: List[str],
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ImputationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            imputer_type (str): 에러가 발생한 구체적 보간 알고리즘 컴포넌트 명칭 
+            target_assets (List[str]): 결측치 보간 도중 문제가 발생한 대상 자산 코드 목록.
+            original_exception (Exception, optional): 하위 라이브러리에서 발생하여 근본 원인이 된 원본 시스템 예외 객체.
+        """
+        details = {
+            "imputer_type": imputer_type,
+            "target_assets": target_assets
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+class PreprocessorFactoryError(PreprocessorError):
+    """PreprocessorFactory 계층에서 하이퍼파라미터 조건 바인딩 및 태스크 객체 생성 중 발생하는 예외.
+    
+    설정 파일(.yml)의 파라미터 타입 불일치나 지원하지 않는 전략 문자열이 유입되었을 때 발생하며,
+    컴포넌트 조립 단계의 정적 오류이므로 재시도(Retry)하지 않습니다.
+    """
+    
+    def __init__(self, message: str, original_exception: Optional[Exception] = None) -> None:
+        """PreprocessorFactoryError 초기화.
+
+        Args:
+            message (str): 에러 발생 상세 사유 메시지.
+            original_exception (Exception, optional): 근본 원인이 된 시스템 혹은 판다스/넘파이 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+            
+        super().__init__(
+            message=message, 
+            details=details, 
+            original_exception=original_exception, 
+            should_retry=False
+        )
+
+class PreprocessorServiceError(PreprocessorError):
+    """PreprocessorService 계층의 설정 파싱 및 태스크 오케스트레이션 단계에서 발생하는 예외.
+    
+    하위 판다스/넘파이 연산 계층에서 발생하는 예측 불가능한 시스템 장애(MemoryError 등)를 포착하여
+    콘텍스트를 누수 없이 보존하며, 재시도(Retry)가 불가능한 정적 오류로 취급합니다.
+    """
+    
+    def __init__(self, message: str, original_exception: Optional[Exception] = None) -> None:
+        """PreprocessorServiceError 초기화.
+
+        Args:
+            message (str): 에러 발생 상세 사유 메시지.
+            original_exception (Exception, optional): 근본 원인이 된 하위 시스템의 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+            
+        super().__init__(
+            message=message, 
+            details=details, 
+            original_exception=original_exception, 
+            should_retry=False
+        )
