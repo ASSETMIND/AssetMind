@@ -93,18 +93,50 @@ class PreprocessorService:
                 task_name = task.__class__.__name__
 
                 if task_name == "MissingValueDiagnosis":
-                    # [설계 의도] 진단 태스크를 실행하여 자산별 최대 연속 결측장 상태 사전을 획득하고,
-                    # 서비스 로컬 요약 레지스트리 및 후행 보간 태스크 전달용 컨텍스트에 각각 싱크함.
+                    # [설계 의도] 1단계 결측치 진단 태스크를 집행하여 휴장일 및 연속 결측장 사전을 획득하고,
+                    # 서비스 마스터 메타데이터 레지스트리의 제1지점(MISSING_VALUE_DIAGNOSIS)에 즉시 동기화함.
                     diagnosis_report = task.execute(current_df)
                     pipeline_context["diagnosis_report"] = diagnosis_report
                     self._job_metrics_registry["MISSING_VALUE_DIAGNOSIS"] = diagnosis_report
                     
                 elif task_name == "MissingValueImputation":
+                    # [설계 의도] 2단계 1차 보간(Pass 1)을 수행하여 3대 기초 가격 버킷 사전을 빌드함.
+                    # 임퓨터 내부에 요약 메타 리포트가 상주할 경우 이를 제2지점(MISSING_VALUE_IMPUTATION)에 격리 보존함.
                     imputation_result = task.execute(current_df, pipeline_context["diagnosis_report"])
-                    final_artifacts.update(imputation_result)
+                    pipeline_context["imputation_artifacts"] = imputation_result
                     
                     if "imputation_summary_report" in imputation_result:
                         self._job_metrics_registry["MISSING_VALUE_IMPUTATION"] = imputation_result["imputation_summary_report"]
+                    else:
+                        self._job_metrics_registry["MISSING_VALUE_IMPUTATION"] = imputation_result
+
+                elif task_name == "OutlierDiagnosis":
+                    # [설계 의도] 3단계 이상치 다차원 매트릭스 교차 진단을 트리거하여 불리언 마스크 리포트를 빌드하고,
+                    # 이를 오염도 스캔용 소스로 가동하기 위해 제3지점(OUTLIER_DIAGNOSIS) 레지스트리에 정밀 바인딩함.
+                    outlier_report = task.execute(pipeline_context["imputation_artifacts"])
+                    pipeline_context["outlier_diagnosis_report"] = outlier_report
+                    self._job_metrics_registry["OUTLIER_DIAGNOSIS"] = outlier_report
+
+                elif task_name == "OutlierRefinement":
+                    # [설계 의도] 4단계 이상치 정제 태스크를 기동하여 18대 전처리 다형성 분기 우주를 사출함.
+                    refinement_result = task.execute(
+                        pipeline_context["imputation_artifacts"],
+                        pipeline_context["outlier_diagnosis_report"]
+                    )
+                    
+                    # [설계 의도] Two-Pass Imputation & Algorithmic Masking 아키텍처 연쇄 최종 안전벽 기동.
+                    # refine_masking 정책으로 인해 인위적 NaN이 주입된 9대 실험 버킷을 스캔하여 시계열 인과 결을 보존하는 보간 연쇄 집행.
+                    for artifact_key, bucket_df in refinement_result.items():
+                        if "_refine_masking" in artifact_key:
+                            refinement_result[artifact_key] = bucket_df.ffill(axis=0).bfill(axis=0).fillna(0.0)
+                    
+                    # 최종 청정 데이터프레임 버킷 취합 및 다운스트림 텐서 방어벽 목적의 마스크 쌍 패키징 싱크
+                    final_artifacts.update(refinement_result)
+                    final_artifacts["missing_indicator_mask"] = pipeline_context["imputation_artifacts"]["missing_indicator_mask"]
+                    final_artifacts["target_sample_weights"] = pipeline_context["imputation_artifacts"]["target_sample_weights"]
+                    
+                    # 마스터 메타데이터 레지스트리의 최종 제4지점(OUTLIER_REFINEMENT)에 정제 결과 프레임 세트를 전사 싱크 적재.
+                    self._job_metrics_registry["OUTLIER_REFINEMENT"] = refinement_result
 
             return final_artifacts
 
@@ -120,33 +152,79 @@ class PreprocessorService:
             )
 
     def log_preprocessing_summary(self) -> None:
-        """전처리 시퀀스 완료 후 인메모리 레지스트리에 적재된 이질적 요약 리포트 메타데이터를 공식 일괄 적재 발표합니다.
+        """4대 요약 레지스트리에 보존된 메타데이터를 트리 구조로 실시간 동적 해독하여 계층형 정산 리포트를 공식 발표합니다.
 
-        [설계 의도] 서비스 내부에 하드코딩된 문자열 포맷터를 들이밀지 않고,
-        레지스트리에 보존된 도메인 metrics 통계량을 다형성 기반으로 순회 출력하여 구조적 청정 상태를 사수합니다.
+        [설계 의도] 각 전처리 태스크가 독립적으로 적재한 상이한 통계 구조체를 서비스 코드가 유연하게 
+        소화할 수 있도록 방어적 가드 인덱싱을 장착하고, 정밀한 수리 계량을 거쳐 시각화 로그를 사출합니다.
         """
         if not self._job_metrics_registry:
+            self._logger.warning("레지스트리 허브 내부에 정산 발표할 전처리 실행 metrics 메타데이터가 존재하지 않습니다.")
             return
 
-        for job_key, metrics_data in self._job_metrics_registry.items():
-            if job_key == "MISSING_VALUE_DIAGNOSIS":
-                holiday_count = len(metrics_data.get("market_holiday_timestamps", []))
-                max_run_dict = metrics_data.get("asset_max_run_length", {})
-                halted_assets_count = sum(1 for max_run in max_run_dict.values() if max_run >= 6)
+        self._logger.info("[Preprocessor 종합 요약 리포트]")
 
-                print(
-                    f"[Preprocessor 종합 요약 리포트] 전체 시장 휴장/시스템 다운 유효 일수: {holiday_count}일 | "
-                    f"25% 임계치(6일)를 초과한 장기 거래정지 및 위험 오염 자산 수: {halted_assets_count}종"
-                )
+        # 1단계 요약 정산: MISSING_VALUE_DIAGNOSIS
+        if "MISSING_VALUE_DIAGNOSIS" in self._job_metrics_registry:
+            diag_data = self._job_metrics_registry["MISSING_VALUE_DIAGNOSIS"]
+            holiday_count = len(diag_data.get("market_holiday_timestamps", []))
+            max_run_dict = diag_data.get("asset_max_run_length", {})
+            halted_count = sum(1 for r in max_run_dict.values() if r >= 6)
+            
+            self._logger.info(" 1. MISSING_VALUE_DIAGNOSIS (결측치 시공간 탐지 및 진단 국면)")
+            self._logger.info(f"  ├── 시장 공통 휴장 / 시스템 다운 전체 암전 일수 : {holiday_count} 일")
+            self._logger.info(f"  └── 25% 임계치(6일) 초과 장기 거래정지 및 격리 자산수 : {halted_count} 종")
+            self._logger.info("  │")
 
-            elif job_key == "MISSING_VALUE_IMPUTATION":
-                short_term_count = metrics_data.get("short_term_locf_asset_count", 0)
-                medium_term_count = metrics_data.get("medium_term_kalman_asset_count", 0)
-                long_term_count = metrics_data.get("long_term_neutralized_asset_count", 0)
+        # 2단계 요약 정산: MISSING_VALUE_IMPUTATION
+        if "MISSING_VALUE_IMPUTATION" in self._job_metrics_registry:
+            impute_data = self._job_metrics_registry["MISSING_VALUE_IMPUTATION"]
+            # 리포트 사전이거나 통 통째 딕셔너리일 경우를 모두 대비한 방어적 안전 계량 가동
+            short_count = impute_data.get("short_term_locf_asset_count", 0) if isinstance(impute_data, dict) else 0
+            medium_count = impute_data.get("medium_term_kalman_asset_count", 0) if isinstance(impute_data, dict) else 0
+            long_count = impute_data.get("long_term_neutralized_asset_count", 0) if isinstance(impute_data, dict) else 0
+            
+            self._logger.info("2. MISSING_VALUE_IMPUTATION (결측치 다형성 라우팅 보간 국면)")
+            self._logger.info(f"  ├── 단기 결측 처리 자산 수 (LOCF/LogReturn/MA 병렬 분기)  : {short_count} 종")
+            self._logger.info(f"  ├── 중기 결측 처리 자산 수 (단변량 Kalman Filter 평활화)  : {medium_count} 종")
+            self._logger.info(f"  └── 장기 결측 격리 무력화 자산 수 (Loss Neutralization 마스크) : {long_count} 종")
+            self._logger.info("  │")
+
+        # 3단계 요약 정산: OUTLIER_DIAGNOSIS
+        if "OUTLIER_DIAGNOSIS" in self._job_metrics_registry:
+            outlier_diag_data = self._job_metrics_registry["OUTLIER_DIAGNOSIS"]
+            self._logger.info("3. OUTLIER_DIAGNOSIS (이상치 다차원 매트릭스 교차 진단 국면)")
+            
+            bucket_keys = list(outlier_diag_data.keys())
+            for b_idx, b_key in enumerate(bucket_keys):
+                is_last_bucket = (b_idx == len(bucket_keys) - 1)
+                b_prefix = "  └──" if is_last_bucket else "  ├──"
+                self._logger.info(f"{b_prefix} 국면 버킷 명칭: [{b_key}]")
                 
-                self._logger.info(f"    - 단기 결측 처리 자산 수 (LOCF/LogReturn/MA 실험군): {short_term_count}종")
-                self._logger.info(f"    - 중기 결측 처리 자산 수 (단변량 Kalman Filter): {medium_term_count}종")
-                self._logger.info(f"    - 장기 결측 격리 무력화 자산 수 (Sample Weights): {long_term_count}종")
+                engines_dict = outlier_diag_data[b_key]
+                engine_keys = list(engines_dict.keys())
+                for e_idx, e_key in enumerate(engine_keys):
+                    mask_df = engines_dict[e_key]
+                    total_cells = mask_df.size
+                    outlier_cells = mask_df.sum().sum()
+                    contamination_ratio = (outlier_cells / total_cells) * 100 if total_cells > 0 else 0.0
+                    
+                    e_parent_prefix = "        " if is_last_bucket else "  │   "
+                    e_child_prefix = "└──" if (e_idx == len(engine_keys) - 1) else "├──"
+                    
+                    self._logger.info(
+                        f"{e_parent_prefix}{e_child_prefix} 수리 엔진 [{e_key:<16}] -> 오염도: "
+                        f"{contamination_ratio:>5.2f}% (총 {outlier_cells:>3}개 비정상 좌표 검출)"
+                    )
+            self._logger.info("  │")
 
-            elif job_key == "OUTLIER_DETECTION":
-                pass
+        # 4단계 요약 정산: OUTLIER_REFINEMENT
+        if "OUTLIER_REFINEMENT" in self._job_metrics_registry:
+            refine_data = self._job_metrics_registry["OUTLIER_REFINEMENT"]
+            total_buckets = len(refine_data)
+            clipping_count = sum(1 for k in refine_data.keys() if "_refine_clipping" in k)
+            masking_count = sum(1 for k in refine_data.keys() if "_refine_masking" in k)
+            
+            self._logger.info("4. OUTLIER_REFINEMENT (이상치 실험 경로 사출 및 복원 국면)")
+            self._logger.info(f"  ├── 총 병렬 분기 사출 완료된 최종 전처리 실험 우주 버킷 본수 : {total_buckets} 종")
+            self._logger.info(f"  ├── 변동성 방향성 보존형 상하한 조정 (Clipping Refine) 버킷 : {clipping_count} 종")
+            self._logger.info(f"  └── Two-Pass Imputation 연쇄 수료형 마스킹 (Masking Refine) 버킷  : {masking_count} 종")

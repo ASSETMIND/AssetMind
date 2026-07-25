@@ -15,3 +15,20 @@ missing_value_imputation:
   kalman_params:
     transition_covariance: 0.05
     observation_covariance: 1.0
+
+outlier_diagnosis:
+  iqr_params:
+    multiplier: 1.5
+  zscore_params:
+    threshold: 3.0
+  isolation_forest_params:
+    contamination: 0.05
+    random_state: 42
+
+outlier_refinement:
+  clipping_params:
+    multiplier: 1.5
+  neutralization_params:
+    target_value: 0.00
+  algorithmic_masking_params:
+    target_value: "NaN"
