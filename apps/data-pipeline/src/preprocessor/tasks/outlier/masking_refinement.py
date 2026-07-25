@@ -59,10 +59,10 @@ class MaskingRefinement(AbstractOutlierRefinement):
         # [설계 의도] 원본 주가 데이터프레임의 상태 불변성을 유지하고 사이드 이펙트를 완벽히 차단하기 위해,
         # 정제 연산 수행 전 메모리 상에 완전히 격리된 독립 카피본을 복성합니다.
         refined_df = df.copy()
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
 
-        # [설계 의도] 판다스의 고속 C-엔진 벡터화 API인 .mask()를 직통 가동합니다.
-        # mask 행렬 내 불리언 True 좌표를 타겟팅하여 원본 가격을 self._mask_value(np.nan)로 
-        # 단일 인메모리 패스 스캔을 통해 초고속 변환 격리합니다.
-        refined_df = refined_df.mask(mask, self._mask_value)
+        if not numeric_columns.empty:
+            numeric_mask = mask[numeric_columns].astype(bool)
+            refined_df.loc[:, numeric_columns] = refined_df[numeric_columns].mask(numeric_mask, np.nan)
 
         return refined_df

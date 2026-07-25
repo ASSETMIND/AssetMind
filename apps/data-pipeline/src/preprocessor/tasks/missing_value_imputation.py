@@ -113,7 +113,31 @@ class MissingValueImputation:
             )
 
         try:
-            # 20거래일 슬라이딩 윈도우 셰이프 기반 절대 일수 임계치 환산 계산 (20일 * 10% = 2일 / 20일 * 25% = 5일)
+            # [Cold Start Fallback 분기] 20일 미만 유입 시 수렴 불가한 칼만/격리 로직 우회 후 단순 보간 집행
+            is_cold_start = diagnosis_report.get("is_cold_start", False)
+            if is_cold_start:
+                final_protection_chain = lambda target_df: target_df.ffill(axis=0).bfill(axis=0).fillna(0.0)
+                cleaned_df = final_protection_chain(df.copy())
+                
+                missing_indicator_mask = pd.DataFrame(0, index=df.index, columns=df.columns)
+                target_sample_weights = pd.DataFrame(1.0, index=df.index, columns=df.columns)
+                
+                imputation_summary_report = {
+                    "short_term_locf_asset_count": len(df.columns),
+                    "medium_term_kalman_asset_count": 0,
+                    "long_term_neutralized_asset_count": 0
+                }
+                
+                return {
+                    "bucket_locf": cleaned_df.copy(),
+                    "bucket_log_return": cleaned_df.copy(),
+                    "bucket_moving_average": cleaned_df.copy(),
+                    "missing_indicator_mask": missing_indicator_mask,
+                    "target_sample_weights": target_sample_weights,
+                    "imputation_summary_report": imputation_summary_report
+                }
+
+            # 20거래일 정상 윈도우 시 기존 정밀 라우팅 집행
             window_length = len(df)
             short_term_days = int(window_length * self._short_term_threshold)
             medium_term_days = int(window_length * self._medium_term_threshold)

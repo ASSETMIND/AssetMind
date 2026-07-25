@@ -25,11 +25,17 @@ s3_zstd:
   bucket_name: "data-pipeline-bronze"
   prefix: "bronze/market_data" # [추가] S3 내 최상위 디렉토리
 
-s3_parquet:
+s3_parquet_silver:
   <<: *s3_defaults
   bucket_name: "data-pipeline-silver"
   prefix: "silver/market_data" # [추가] S3 내 최상위 디렉토리
   partition_cols: ["year", "month", "day"] # [추가] 하이브 스타일 파티셔닝 키
+
+s3_parquet_gold:
+  <<: *s3_defaults
+  bucket_name: "data-pipeline-gold"
+  prefix: "gold/market_data"
+  partition_cols: ["year", "month", "day"]
 
 # ------------------------------------------------------------------------------
 # [2] 관계형 DB 적재기 설정 (PostgreSQLLoader)

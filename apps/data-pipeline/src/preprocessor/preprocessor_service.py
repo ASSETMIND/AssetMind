@@ -138,6 +138,11 @@ class PreprocessorService:
                     # 마스터 메타데이터 레지스트리의 최종 제4지점(OUTLIER_REFINEMENT)에 정제 결과 프레임 세트를 전사 싱크 적재.
                     self._job_metrics_registry["OUTLIER_REFINEMENT"] = refinement_result
 
+            target_date = market_data.index[-1]
+            for artifact_key, artifact_df in final_artifacts.items():
+                if isinstance(artifact_df, pd.DataFrame):
+                    final_artifacts[artifact_key] = artifact_df.loc[[target_date]]
+
             return final_artifacts
 
         except PreprocessorError as preprocessor_error:

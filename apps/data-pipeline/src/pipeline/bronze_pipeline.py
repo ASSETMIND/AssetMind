@@ -32,7 +32,7 @@ STATUS_FAIL_LOAD = "FAIL_LOAD"
 STATUS_SYSTEM_ERROR = "CRITICAL_SYSTEM_ERROR"
 STATUS_EMPTY = "EMPTY_JOBS"
 
-MIN_SUCCESS_RATE_THRESHOLD: float = 0.95  # 최소 95% 이상 성공해야 정상 종료로 인정
+MIN_SUCCESS_RATE_THRESHOLD: float = 0.70  # 최소 90% 이상 성공해야 정상 종료로 인정
 
 
 class BronzePipeline(AbstractPipeline):

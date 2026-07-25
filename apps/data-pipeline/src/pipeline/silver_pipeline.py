@@ -186,9 +186,10 @@ class SilverPipeline(AbstractPipeline):
 
             final_df = final_df.copy()
 
-            final_df["year"] = final_df["trade_date"].astype(str).str[0:4]
-            final_df["month"] = final_df["trade_date"].astype(str).str[4:6]
-            final_df["day"] = final_df["trade_date"].astype(str).str[6:8]
+            trade_date_dt = pd.to_datetime(final_df["trade_date"])
+            final_df["year"] = trade_date_dt.dt.strftime("%Y")
+            final_df["month"] = trade_date_dt.dt.strftime("%m")
+            final_df["day"] = trade_date_dt.dt.strftime("%d")
 
             # 4. Loader: 최종 결합된 데이터셋을 TransformedDTO에 캡슐화하여 S3ParquetLoader로 분산 파티셔닝 적재 위임.
             transformed_dto = TransformedDTO(
@@ -202,6 +203,8 @@ class SilverPipeline(AbstractPipeline):
 
             is_loaded = await asyncio.to_thread(self._loader_service.execute_load, transformed_dto)
             
+            self._loader_service.log_batch_summary()
+
             if is_loaded:
                 # [설계 의도] 브론즈 규격과 완벽히 통일된 형태의 정산 요약본 생성 및 요약 로깅 수행
                 summary = {

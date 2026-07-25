@@ -74,48 +74,36 @@ class LogReturnImputer(AbstractImputer):
             return df
 
         try:
-            # [설계 의도] 동렬 앙상블 다중 버킷 실험 구조 환경에서 상호 버킷 간 데이터 프레임 참조 오염 
-            # (Side-Effect)을 철저히 차단하고 데이터 무결성을 보장하기 위해 명시적 깊은 복사를 수행함.
             imputed_df = df.copy()
-
-            # [설계 의도] 190종 금융 자산 간의 극단적 이질성(Heterogeneity)을 존중하여 타 자산의 오염 유입을 막기 위해,
-            # 타겟 자산프레임 서브셋 행렬만 슬라이싱하여 격리 연산 블록을 구축함.
             target_df = imputed_df[target_assets]
 
-            # [설계 의도] 금융 시계열의 가격 결정 메커니즘을 반영하기 위해 일별 로그 수익률(Log Return) 행렬을 구함.
-            # 복잡한 파이썬 루프를 배제하고 판다스 내부 C-엔진의 shift 연산 및 넘파이 벡터화 로그 함수를 연동함.
-            log_returns = np.log(target_df / target_df.shift(1))
+            # 수치형 자산과 비수치형(문자열/범주형) 자산 격리 분리
+            numeric_assets = target_df.select_dtypes(include=['number']).columns.tolist()
+            non_numeric_assets = [col for col in target_assets if col not in numeric_assets]
 
-            # [설계 의도] 각 자산 클래스별 최근 윈도우 내 가용 등락 모멘텀의 대표값인 산술 평균 등락률(μ) 벡터를 도출함.
-            # 윈도우 내부 결측으로 인해 발생하는 NaN 값은 통계 추정 왜곡을 막기 위해 산술 평균 계산에서 자동 제외(skipna=True)함.
-            mean_drifts = log_returns.mean(axis=0, skipna=True)
+            # 1. 비수치형 자산: 로그 수익률 수리 연산 불가하므로 LOCF(ffill/bfill) 대치
+            if non_numeric_assets:
+                imputed_df[non_numeric_assets] = imputed_df[non_numeric_assets].ffill(axis=0).bfill(axis=0)
 
-            # [설계 의도] 만약 윈도우 전체가 결측이거나 가용 수익률이 없어 평균 등락률 추정이 불가능한 고립 자산이 존재할 경우,
-            # 수리적 NaN 전파 크래시를 방지하기 위해 추세가 없는 상태(Drift = 0.00, 즉 LOCF와 동일)로 안전하게 결측 대체 디폴트 처리함.
-            mean_drifts = mean_drifts.fillna(0.0)
+            # 2. 수치형 자산: 로그 수익률 추세 관성 복리 외삽 보간 연산집행
+            if numeric_assets:
+                num_target_df = target_df[numeric_assets]
 
-            # [설계 의도] Pandas 엔진은 2차원 DataFrame 구조를 .groupby()의 그루퍼 키 배열로 수용하지 못하고 발산합니다.
-            # 따라서 본 모듈의 핵심 철학인 [Univariate Isolation] (단변량 격리 원칙)에 입각하여, 자산별(Column-wise)로 
-            # 1차원 Series 단위의 groupby-cumcount 트릭을 격리 집행함으로써 판다스 엔진의 차원 정합성을 완벽하게 사수합니다.
-            consecutive_nan_counts = pd.DataFrame(index=target_df.index, columns=target_df.columns)
-            for asset in target_assets:
-                asset_indicator = target_df[asset].notna().cumsum(axis=0)
-                consecutive_nan_counts[asset] = target_df[asset].isna().groupby(asset_indicator).cumcount()
-                
-            # [설계 의도] 결측치를 채우기 위한 베이스라인 위치 확보를 위해 1차적으로 ffill() 및 bfill()을 동결 적용함.
-            # bfill()은 윈도우 첫 진입점(1일 차) 경계 결측 발생 시 차원 방어를 위한 폴백 레이어로 연동함.
-            base_locf = target_df.ffill(axis=0).bfill(axis=0)
+                log_returns = np.log(num_target_df / num_target_df.shift(1))
+                mean_drifts = log_returns.mean(axis=0, skipna=True).fillna(0.0)
 
-            # [설계 의도] 최종 가격 외삽 공식집행: P_t = P_{t-consecutive_count} * exp(consecutive_nan_counts * μ)
-            # 넘파이 브로드캐스팅 엔진을 통해 기 존재하던 LOCF 가격 위치에 고유 추세 모멘텀 가중치를 일괄 정밀 곱 연산 처리함.
-            trend_factors = np.exp(consecutive_nan_counts * mean_drifts)
-            imputed_df[target_assets] = base_locf * trend_factors
+                consecutive_nan_counts = pd.DataFrame(index=num_target_df.index, columns=num_target_df.columns)
+                for asset in numeric_assets:
+                    asset_indicator = num_target_df[asset].notna().cumsum(axis=0)
+                    consecutive_nan_counts[asset] = num_target_df[asset].isna().groupby(asset_indicator).cumcount()
+
+                base_locf = num_target_df.ffill(axis=0).bfill(axis=0)
+                trend_factors = np.exp(consecutive_nan_counts * mean_drifts)
+                imputed_df[numeric_assets] = base_locf * trend_factors
 
             return imputed_df
 
         except Exception as original_error:
-            # [설계 의도] 넘파이/판다스 내부 수학 연산 중 발생할 수 있는 데이터 타입 불일치 및 0 나누기 등의 
-            # 예기치 못한 시스템 패닉을 포착하여 중앙 집중형 로그 구조에 즉시 적재할 수 있도록 전처리 레이어 전용 시스템 예외로 체인 래핑함.
             raise ImputationExecutionError(
                 message="로그 수익률 추세 관성 반영(Log Return Trend Extension) 보간 연산 중 판다스 수리 엔진에서 치명적 장애가 발생했습니다.",
                 imputer_type=self.__class__.__name__,

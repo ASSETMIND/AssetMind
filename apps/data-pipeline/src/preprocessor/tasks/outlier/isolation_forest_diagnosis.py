@@ -22,6 +22,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 """
 
 from typing import Optional
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
@@ -55,30 +56,22 @@ class IsolationForestDiagnosis(AbstractOutlierDiagnosis):
         Returns:
             pd.DataFrame: 원본 행렬과 인덱스/컬럼이 1:1 일치하는 불리언 마스크 매트릭스.
         """
-        # [설계 의도] Isolation Forest는 행(Row)을 샘플 단위로 인지하므로, 주가 데이터프레임을 명시적으로 
-        # 전치(.T)하여 190여 종의 자산을 '샘플'로, 20거래일의 시계열 가격 변동을 '피처'로 치환하여 피팅을 수행합니다.
-        df_transposed: pd.DataFrame = df.T
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        numeric_df = df[numeric_columns].fillna(0.0)
 
-        # [설계 의도] 고차원 공간 데이터의 병렬 연산 및 분할 트리 연산의 인프라 효율을 극대화하기 위해, 
-        # 내부 CPU 자원을 모두 가동하는 n_jobs=-1 멀티프로레싱 가드레일을 장착합니다.
-        model: IsolationForest = IsolationForest(
-            contamination=self._contamination,
-            random_state=self._random_state,
-            n_jobs=-1
-        )
-
-        # 모델 피팅 및 예측 집행 (-1: 다변량 고립 이상치, 1: 정상 패턴)
-        predictions = model.fit_predict(df_transposed)
-        
-        # 이상치 자산 목록 필터링용 불리언 시리즈 변환
-        is_outlier_asset: pd.Series = pd.Series(predictions == -1, index=df_transposed.index)
-
-        # [설계 의도] 원본 가격 데이터프레임과 완벽하게 대칭되는 불변성(Invariant) 차원 계약을 사수하기 위해,
-        # 기본 디폴트 상태가 전 차원 정상(False)인 마스크 프레임을 선제 구축한 후 슬라이싱 매핑합니다.
         outlier_mask: pd.DataFrame = pd.DataFrame(False, index=df.index, columns=df.columns)
 
-        # [설계 의도] 머신러닝 모델이 지목한 이상 자산들의 컬럼 위치를 포착하여 해당 자산의 20거래일 전체 경로 좌표를
-        # True로 마스킹합니다. 이를 통해 후행 정제 레이어가 Two-Pass 기반 재보간 연쇄를 트리거하도록 신호를 발행합니다.
-        outlier_mask.loc[:, is_outlier_asset] = True
+        if not numeric_df.empty and numeric_df.shape[1] > 0:
+            df_transposed: pd.DataFrame = numeric_df.T
+
+            model: IsolationForest = IsolationForest(
+                contamination=self._contamination,
+                random_state=self._random_state,
+                n_jobs=-1
+            )
+
+            predictions = model.fit_predict(df_transposed)
+            is_outlier_asset: pd.Series = pd.Series(predictions == -1, index=df_transposed.index)
+            outlier_mask.loc[:, is_outlier_asset[is_outlier_asset].index] = True
 
         return outlier_mask

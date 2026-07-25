@@ -65,6 +65,10 @@ class PipelineFactory:
         elif layer == "silver":
             from src.pipeline.silver_pipeline import SilverPipeline
             return SilverPipeline(task_name=task_name)
+        
+        elif layer == "gold":
+            from src.pipeline.gold_pipeline import GoldPipeline
+            return GoldPipeline(task_name=task_name)
 
         else:
             raise ConfigurationError(

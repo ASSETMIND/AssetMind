@@ -96,15 +96,8 @@ class MissingValueDiagnosis:
                 message="진단 태스크의 입력 데이터프레임이 빈 상태(Empty DataFrame)로 유입되어 연산을 기동할 수 없습니다."
             )
 
-        if len(market_data_verified) < self._lookback_window_size:
-            raise InsufficientLookbackWindowError(
-                message=(
-                    f"유입된 데이터의 시계열 길이({len(market_data_verified)}일)가 "
-                    f"설정된 슬라이딩 룩백 윈도우 크기({self._lookback_window_size}일)보다 부족하여 시공간 통계 진단이 불가능합니다."
-                ),
-                current_length=len(market_data_verified),
-                required_window_size=self._lookback_window_size
-            )
+        # [Cold Start 감지] 룩백 윈도우 크기 미달 시 예외를 던지지 않고 Cold Start 플래그 설정
+        is_cold_start = len(market_data_verified) < self._lookback_window_size
 
         # 3대 시공간 진단 및 통계적 가중치 생성 서브루틴 구동
         missing_matrix = self._identify_hidden_missing(market_data_verified=market_data_verified)
@@ -115,6 +108,7 @@ class MissingValueDiagnosis:
         )
 
         missing_value_diagnosis_report = {
+            "is_cold_start": is_cold_start,
             "market_holiday_timestamps": market_holiday_timestamps,
             "asset_max_run_length": asset_max_run_length,
             "missing_indicator_mask": missing_indicator_mask,
@@ -137,8 +131,9 @@ class MissingValueDiagnosis:
                   정밀도 임계치 내의 부동소수점 `0.00` 지점은 불리언 `True`, 정상 적재 가격 지점은 `False`로 결합된 매트릭스.
         """
         is_explicit_nan = market_data_verified.isna()
-        is_hidden_zero = np.isclose(market_data_verified, 0.00)
-        missing_matrix = is_explicit_nan | is_hidden_zero
+        numeric_data = market_data_verified.apply(pd.to_numeric, errors="coerce")
+        is_hidden_zero = numeric_data.eq(0.0) | (numeric_data.abs() < 1e-8)
+        missing_matrix = (is_explicit_nan | is_hidden_zero).astype(bool)
         return missing_matrix
 
     def _calculate_temporal_run_length(self, missing_matrix: pd.DataFrame) -> dict:
@@ -211,7 +206,7 @@ class MissingValueDiagnosis:
 
         for column_name, max_run in asset_max_run_length.items():
             if max_run > self._long_gap_threshold_days:
-                specific_missing_positions = missing_matrix[column_name]
+                specific_missing_positions = missing_matrix[column_name].astype(bool)
                 missing_indicator_mask[column_name] = specific_missing_positions
                 target_sample_weights.loc[specific_missing_positions, column_name] = 0.0
 

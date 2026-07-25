@@ -76,22 +76,26 @@ class KalmanImputer(AbstractImputer):
             return df
 
         try:
-            # [설계 의도] 전처리 계층 내 동렬 다중 버킷 실험군 간의 데이터프레임 메모리 참조 오염 
-            # (Side-Effect)을 원천 차단하고 연산의 격리성을 완벽히 사수하기 위해 명시적 깊은 복사를 수행함.
             imputed_df = df.copy()
 
-            # [설계 의도] 외부 YML 설정 구조로부터 유연하게 통계량 파라미터를 인출하고, 누락 시 도메인 최적 디폴트 값으로 안전하게 하향 보정함.
             q_var = kwargs.get("transition_covariance", 0.05)
             r_var = kwargs.get("observation_covariance", 1.0)
 
-            # [설계 의도] 190종 다변량 자산 간의 통계적 간섭을 100% 배제하여 차원의 저주를 피하기 위해,
-            # '단변량 격리 원칙'에 입각하여 자산 코드별로 루프를 순회하며 완전한 독립 독립형 연산 블록을 구축함.
-            for asset in target_assets:
+            target_df = imputed_df[target_assets]
+            
+            # 수치형 자산과 비수치형(문자열/범주형) 자산 격리 분리
+            numeric_assets = target_df.select_dtypes(include=['number']).columns.tolist()
+            non_numeric_assets = [col for col in target_assets if col not in numeric_assets]
+
+            # 1. 비수치형 자산: 칼만 상태공간 연산 불가하므로 LOCF(ffill/bfill) 대치
+            if non_numeric_assets:
+                imputed_df[non_numeric_assets] = imputed_df[non_numeric_assets].ffill(axis=0).bfill(axis=0)
+
+            # 2. 수치형 자산: 단변량 칼만 필터 및 RTS Smoothing 집행
+            for asset in numeric_assets:
                 series = imputed_df[asset].to_numpy().copy()
                 n_samples = len(series)
 
-                # [설계 의도] 시계열 초기 벡터 빌드 단계에서 최초 행이 결측치일 경우 칼만 필터의 초기 상태 추정치(Initial State)가 
-                # 수학적으로 붕괴되므로, 가용할 수 있는 가장 첫 번째 유효 가격 위치를 역추적하여 안전하게 시드(Seed)를 할당함.
                 first_valid_idx = pd.Series(series).first_valid_index()
                 if first_valid_idx is None:
                     # 자산 전체 행이 완벽히 비어 있는 극단 예외 상황의 경우 크래시를 방지하기 위해 0.00 대체 후 우회함.
@@ -153,8 +157,6 @@ class KalmanImputer(AbstractImputer):
             return imputed_df
 
         except Exception as original_error:
-            # [설계 의도] 수리 연산 블록 내부에서 발생할 수 있는 데이터 형 비정합성 및 넘파이 인덱싱 장애를 포착하여,
-            # 장애 당시의 상세 컨텍스트를 봉인한 채 전처리 레이어 통합 전역 시스템 예외로 체인 래핑하여 즉각 전파함.
             raise ImputationExecutionError(
                 message="중기 단변량 칼만 필터 평활화(Univariate Kalman Filter Smoothing) 연산 중 수리 엔진 내부에서 치명적 장애가 발생했습니다.",
                 imputer_type=self.__class__.__name__,
