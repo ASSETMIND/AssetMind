@@ -101,6 +101,10 @@ class PreprocessorError(ETLError):
     """Preprocessor 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
     pass
 
+class ModelError(ETLError):
+    """[M] 모델링, 평가, XAI 및 백테스팅 단계 예외 Base."""
+    pass
+
 
 # ==============================================================================
 # 4. Extractor Layer Detailed Exceptions
@@ -686,5 +690,282 @@ class PreprocessorServiceError(PreprocessorError):
             message=message, 
             details=details, 
             original_exception=original_exception, 
+            should_retry=False
+        )
+
+# ==============================================================================
+# 10. Modeler Layer Detailed Exceptions (새로 추가되는 10번 섹션)
+# ==============================================================================
+
+class ModelNotFittedError(ModelError):
+    """모델 학습(fit)이 완료되지 않은 상태에서 추론, 평가 또는 XAI 연산을 시도할 때 발생하는 예외.
+    
+    미학습 모델 인스턴스에 의한 예측값 왜곡 및 잘못된 파이프라인 구동을 사전에 차단하기 위한 방어적 예외입니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: Optional[str] = None,
+        operation_type: Optional[str] = None
+    ) -> None:
+        """ModelNotFittedError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (Optional[str]): 학습되지 않은 상태로 호출된 모델 컴포넌트 명칭.
+            operation_type (Optional[str]): 실행을 시도한 메서드 명칭 (예: predict, evaluate, calculate_shap_values).
+        """
+        # [설계 의도] 호출된 모델명과 연산 유형을 명시하여 미학습 인스턴스 참조 지점을 로그 시스템에서 신속히 식별함
+        details = {}
+        if model_name:
+            details["model_name"] = model_name
+        if operation_type:
+            details["operation_type"] = operation_type
+
+        super().__init__(
+            message=message,
+            details=details,
+            should_retry=False
+        )
+
+
+class ModelTrainingExecutionError(ModelError):
+    """모델 학습(fit) 또는 튜닝 실행 중 연산 실패, 수리적 발산, 데이터 타입 불일치가 발생할 때 발생하는 예외.
+    
+    알고리즘 내부 학습 실패나 경사하강법 폭주 등 런타임 오류를 포착하여 원본 예외와 함께 상위 오케스트레이터로 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelTrainingExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): 학습을 수행 중이던 모델 컴포넌트 명칭.
+            hyperparameters (Optional[Dict[str, Any]]): 학습 시 주입된 하이퍼파라미터 설정 정보.
+            original_exception (Optional[Exception]): 근본 원인이 된 라이브러리(scikit-learn, XGBoost, PyTorch 등) 원본 예외 객체.
+        """
+        # [설계 의도] 하이퍼파라미터 조합을 details에 포함시켜 실패한 파라미터 영역을 디버깅 단계에서 즉시 재현할 수 있도록 함
+        details = {
+            "model_name": model_name,
+            "hyperparameters": hyperparameters or {}
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ModelEvaluationExecutionError(ModelError):
+    """모델 성능 지표(RMSE, MAE, MDA 등) 계산 및 예측값 정렬/차원 검증 도중 발생하는 예외.
+    
+    입력 X_test와 y_test 간의 행 인덱스 비정합성이나 수리적 평가 지표 연산 불능 상태를 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        metric_name: Optional[str] = None,
+        y_true_shape: Optional[Tuple[int, ...]] = None,
+        y_pred_shape: Optional[Tuple[int, ...]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelEvaluationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): 평가 대상 모델 컴포넌트 명칭.
+            metric_name (Optional[str]): 연산 실패가 발생한 산출 지표 명칭 (예: RMSE, MAE, MDA).
+            y_true_shape (Optional[Tuple[int, ...]]): 실제 정답 라벨 데이터의 형상(Shape).
+            y_pred_shape (Optional[Tuple[int, ...]]): 모델 예측 결과 데이터의 형상(Shape).
+            original_exception (Optional[Exception]): 근본 원인이 된 원본 시스템/numpy 예외 객체.
+        """
+        # [설계 의도] 형상 정보(Tuple)를 기록하여 시계열 인덱스 차원 불일치나 누락으로 인한 지표 오산출을 명확히 진단함
+        details = {
+            "model_name": model_name,
+            "metric_name": metric_name,
+            "y_true_shape": y_true_shape,
+            "y_pred_shape": y_pred_shape
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ModelArtifactError(ModelError):
+    """모델 아티팩트(.pkl, .pt 등)의 파일 저장(save_artifact) 및 복원(load_artifact) 과정에서 발생하는 예외.
+    
+    파일 경로 부재, 직렬화 실패, 권한 오류 또는 체크포인트 무결성 손상을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        artifact_path: str,
+        operation_type: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelArtifactError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            artifact_path (str): 아티팩트 저장 또는 로드를 시도한 물리 파일 경로.
+            operation_type (str): 수행 중이던 I/O 작업 유형 ('save' 또는 'load').
+            original_exception (Optional[Exception]): pickle, joblib, torch I/O 등에서 발생한 원본 예외.
+        """
+        # [설계 의도] 파일 시스템 경로와 작업 유형을 보존하여 스토리지 권한/경로오류 및 체크포인트 파일 손상을 즉시 구분함
+        details = {
+            "artifact_path": artifact_path,
+            "operation_type": operation_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ShapCalculationError(ModelError):
+    """XAI(Explainable AI) 해석을 위한 SHAP Value 산출 및 Explainer 객체 실행 중 발생하는 예외.
+    
+    트리/선형 알고리즘별 Explainer 호환성 오류, 행렬 차원 문제, 메모리 초과 현상을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        explainer_type: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ShapCalculationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): SHAP 해석 대상 모델 명칭.
+            explainer_type (Optional[str]): 사용된 SHAP Explainer 종류 (예: TreeExplainer, LinearExplainer, KernelExplainer).
+            original_exception (Optional[Exception]): shap 라이브러리 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] SHAP Explainer 호환성 여부를 파악할 수 있도록 모델 및 Explainer 유형을 details에 저장함
+        details = {
+            "model_name": model_name,
+            "explainer_type": explainer_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class HyperparameterOptimizationError(ModelError):
+    """Optuna 기반 하이퍼파라미터 최적화(HPO) 실행 중 검색 공간(Search Space) 설정 오류나 Trial 중단 시 발생하는 예외.
+    
+    Stage 1 / Stage 2 HPO 과정에서의 Trial 수렴 실패나 잘못된 파라미터 탐색 범위를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        study_name: str,
+        trial_number: Optional[int] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """HyperparameterOptimizationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            study_name (str): Optuna Study 식별 명칭.
+            trial_number (Optional[int]): 장애가 발생한 특정 Trial 회차 번호.
+            original_exception (Optional[Exception]): Optuna 내부 또는 하위 목적함수에서 발생한 원본 예외.
+        """
+        # [설계 의도] Study 및 실패한 Trial 번호를 추적하여 특정 하이퍼파라미터 조합에서의 예외 상황을 신속히 고립시킴
+        details = {
+            "study_name": study_name,
+            "trial_number": trial_number
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class EnsembleExecutionError(ModelError):
+    """이종 앙상블(Weighted/Stacking) 모델 결합, 가중치 산출 및 서브 모델 병합 연산 중 발생하는 예외.
+    
+    서브 모델 간 예측값 차원 불일치, 가중치 최적화 실패, 스태킹 메타 모델 피팅 오류를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        ensemble_type: str,
+        sub_model_names: Optional[List[str]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """EnsembleExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            ensemble_type (str): 앙상블 기법 유형 (예: WeightedEnsemble, StackingEnsemble).
+            sub_model_names (Optional[List[str]]): 앙상블을 구성하는 하위 서브 모델 명칭 목록.
+            original_exception (Optional[Exception]): 앙상블 결합 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] JSON 직렬화를 위해 서브 모델 목록을 List 타입으로 유지하고 앙상블 결합 방식 컨텍스트를 보존함
+        details = {
+            "ensemble_type": ensemble_type,
+            "sub_model_names": sub_model_names or []
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class BacktestExecutionError(ModelError):
+    """Champion-Challenger 백테스팅(Out-of-Sample / TimeSeriesSplit), 금융 지표 산출, 대응표본 t-검정 도중 발생하는 예외.
+    
+    일자별 오차 차이 계산 불능, t-검정 데이터 부족, Sharpe Ratio 산출 중 분모 0 오류 상황을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        backtest_period: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """BacktestExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            backtest_period (Optional[str]): 백테스팅이 진행 중이던 날짜/시계열 구간 정보.
+            original_exception (Optional[Exception]): 통계 검정(scipy) 또는 금융 지표 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] 통계 검정 실패 및 금융 지표 왜곡이 발생한 백테스팅 시계열 구간을 보존하여 시계열 데이터 결함 원인을 추적함
+        details = {
+            "backtest_period": backtest_period
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
             should_retry=False
         )

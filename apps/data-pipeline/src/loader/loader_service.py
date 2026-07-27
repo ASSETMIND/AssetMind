@@ -179,6 +179,11 @@ class LoaderService:
                 prefix = getattr(loader, "_prefix", "unknown-prefix")
                 partitions = getattr(loader, "_partition_cols", [])
                 
+                # DTO 메타데이터의 서브 경로(bucket_name 또는 job_id)가 존재할 경우 로그 출력 경로에 반영
+                subpath = dto.meta.get("bucket_name") or dto.meta.get("job_id") if (dto.meta and isinstance(dto.meta, dict)) else None
+                if subpath and not prefix.endswith(str(subpath)):
+                    prefix = f"{prefix}/{subpath}"
+
                 physical_uri = f"s3://{bucket}/{prefix} (Partition Columns: {partitions})"
                 if physical_uri not in self._loaded_paths:
                     self._loaded_paths.append(physical_uri)
