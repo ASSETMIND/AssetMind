@@ -130,7 +130,7 @@ daily_asia_dag = create_dag(
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
-    start_year=2025,
+    start_year=2022,
     start_month=1,
     start_day=2
 )
@@ -141,7 +141,7 @@ daily_global_dag = create_dag(
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
-    start_year=2025,
+    start_year=2022,
     start_month=1,
     start_day=2
 )

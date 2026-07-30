@@ -83,15 +83,18 @@ class S3ParquetLoader(AbstractLoader):
         """DataFrame을 PyArrow 엔진을 통해 S3에 분산 파티셔닝하여 적재합니다."""
         
         df: pd.DataFrame = dto.data
-        s3_path = f"s3://{self._bucket_name}/{self._prefix}"
 
+        # DTO 메타데이터의 bucket_name 또는 job_id를 하위 서브 디렉터리 경로로 동적 결합
         prefix = self._prefix
-        if dto.meta and isinstance(dto.meta, dict) and "bucket_name" in dto.meta:
-            bucket_subpath = dto.meta["bucket_name"]
-            if not prefix.endswith(bucket_subpath):
+        if dto.meta and isinstance(dto.meta, dict):
+            bucket_subpath = dto.meta.get("bucket_name") or dto.meta.get("job_id")
+            if bucket_subpath and not prefix.endswith(str(bucket_subpath)):
                 prefix = f"{prefix}/{bucket_subpath}"
         
-        # [핵심 수정] LocalStack 엔드포인트 분기 및 storage_options 조립
+        # 서브 디렉터리가 결합된 최종 prefix를 반영하여 s3_path 생성
+        s3_path = f"s3://{self._bucket_name}/{prefix}"
+
+        # LocalStack 엔드포인트 분기 및 storage_options 조립
         storage_options: Dict[str, Any] = {}
         local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT")
         
