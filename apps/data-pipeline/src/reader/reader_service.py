@@ -23,6 +23,8 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 
 from typing import Any, Dict, Iterator
 
+import pandas as pd
+
 from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.common.decorators.log_decorator import log_decorator
@@ -34,7 +36,7 @@ from src.reader.providers.abstract_reader import AbstractReader
 # ==============================================================================
 # [설계 의도] 파이프라인 호출 시 타겟 스토리지 식별자가 누락될 경우를 대비한 대체값.
 # 금융 원천 데이터의 1차 적재소인 S3 데이터 레이크를 기본값으로 강제하여 분석가의 사용 편의성 증대.
-DEFAULT_READER_TARGET: str = "s3"
+DEFAULT_READER_TARGET: str = "s3_parquet"
 
 # [설계 의도] 1차 EDA 및 Pandas DataFrame 변환 효율을 극대화하는 청크(배치) 사이즈 스윗스팟.
 # 대용량 JSONL 압축 해제 시 메모리 스파이크를 방지하기 위해 매직 넘버를 배제하고 상수로 통제함.
@@ -284,6 +286,44 @@ class ReaderService:
                     )
                     raise e
         except Exception as e:
+            raise e
+        
+    @log_decorator()
+    def read_dataframe(
+        self, 
+        source_path: str, 
+        job_id: str, 
+        source_layer: str = "gold", 
+        **kwargs: Any
+    ) -> pd.DataFrame:
+        """[Reader Facade] 지정된 경로의 S3 데이터를 고속 Bulk DataFrame으로 읽어옵니다.
+
+        Args:
+            source_path (str): S3 파티션 물리 경로.
+            job_id (str): 실행 작업 식별자.
+            source_layer (str): 데이터 레이어 식별자 ('gold', 'silver' 등). 기본값은 'gold'.
+            **kwargs (Any): 하위 리더용 전달 변수.
+        """
+        try:
+            # [설계 의도] 유입된 source_layer('gold', 'silver' 등)를 명시적으로 넘겨 도메인 맥락 정합성을 사수함
+            reader = self._get_or_create_reader(source_layer=source_layer)
+            dataframe_result: pd.DataFrame = reader.read_dataframe(source_path, **kwargs)
+
+            if dataframe_result.empty:
+                self._empty_count += 1
+                self._warning_logs.append(
+                    f"[{self._target_reader.upper()}] Bulk 데이터 공백 감지 (빈값) - Job ID: {job_id}"
+                )
+            else:
+                self._success_count += 1
+
+            return dataframe_result
+
+        except Exception as e:
+            self._fail_count += 1
+            self._warning_logs.append(
+                f"[{self._target_reader.upper()}] Bulk 데이터 로드 실패 - Job ID: {job_id} | 원인: {str(e)}"
+            )
             raise e
 
     @log_decorator()
