@@ -36,6 +36,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 
 import io
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterator, List
 
 import boto3
@@ -53,6 +54,10 @@ from src.common.config import ConfigManager
 # 너무 작으면 I/O 컨텍스트 스위칭이 빈번해지고, 너무 크면 OOM이 발생할 수 있으므로
 # S3 청크 사이즈 기준(8MB~16MB)에 맞춰 최적화된 16MB를 할당.
 ZSTD_READ_BUFFER_BYTES: int = 16 * 1024 * 1024
+
+# [설계 의도] S3 병렬 다운로드 시 메모리 피크 스파이크를 방지하면서 
+# 네트워크 Latency 병목을 해소하기 위한 최적 스레드 워커 수 제한값 (4~8 권장)
+MAX_THREAD_WORKERS: int = 8
 
 # ==============================================================================
 # Main Class/Functions
@@ -165,68 +170,48 @@ class S3ZstdStreamingReader(AbstractReader):
             DataReadStreamError: S3 다운로드 실패, 압축 해제 오류, JSON 파싱 실패 시 발생.
         """
         try:
-            # 1. Paginator를 사용하여 Prefix 하위의 모든 객체 목록 순회
+            # 1. Paginator를 사용하여 Prefix 하위의 대상 객체 Key 목록 수집
             paginator = self._client.get_paginator('list_objects_v2')
             pages = paginator.paginate(Bucket=self._bucket_name, Prefix=source_path)
 
-            total_records = 0
-            file_count = 0
-            batch_buffer: List[Dict[str, Any]] = []
-
+            target_object_keys: List[str] = []
             for page in pages:
                 if 'Contents' not in page:
                     continue
 
-                for obj in page['Contents']:
-                    key = obj['Key']
-                    
-                    # 2. 파일 확장자 필터링 (가비지 파일 무시)
-                    if not (key.endswith('.jsonl.zst') or key.endswith('.json.zst')):
-                        continue
+                for object_metadata in page['Contents']:
+                    object_key = object_metadata['Key']
+                    if object_key.endswith('.jsonl.zst') or object_key.endswith('.json.zst'):
+                        target_object_keys.append(object_key)
 
-                    file_count += 1
-                    self.logger.debug(f"[{self.provider_name}] 파티션 파일 처리 중: {key}")
+            if not target_object_keys:
+                self.logger.warning(f"[{self.provider_name}] 지정된 파티션({source_path}) 내부에 처리할 '.zst' 파일이 없습니다.")
+                return
 
-                    # 3. 개별 파일 스트리밍 파이프라인
-                    response = self._client.get_object(Bucket=self._bucket_name, Key=key)
-                    streaming_body = response['Body']
+            batch_buffer: List[Dict[str, Any]] = []
 
-                    dctx = zstd.ZstdDecompressor()
-                    zstd_reader = dctx.stream_reader(
-                        streaming_body, 
-                        read_across_frames=True, 
-                        read_size=16 * 1024 * 1024
-                    )
-                    text_stream = io.TextIOWrapper(zstd_reader, encoding='utf-8')
+            # 2. ThreadPoolExecutor를 활용한 S3 I/O 및 압축해제 파싱 병렬 처리
+            with ThreadPoolExecutor(max_workers=MAX_THREAD_WORKERS) as executor:
+                future_to_key = {
+                    executor.submit(self._fetch_and_parse_zstd_object, object_key): object_key
+                    for object_key in target_object_keys
+                }
 
-                    for line_number, line in enumerate(text_stream, start=1):
-                        stripped_line = line.strip()
-                        if not stripped_line:
-                            continue
-                            
-                        try:
-                            batch_buffer.append(json.loads(stripped_line))
-                            total_records += 1
-                        except json.JSONDecodeError as e:
-                            self.logger.error(f"[{self.provider_name}] JSON 파싱 스킵 (Line {line_number} in {key}): {e}")
-                            continue
+                for future in as_completed(future_to_key):
+                    object_key = future_to_key[future]
+                    self.logger.debug(f"[{self.provider_name}] 파티션 파일 처리 완료: {object_key}")
+                    parsed_records = future.result()
 
-                        # 4. 버퍼가 설정된 배치 사이즈에 도달하면 즉시 Yield
-                        if len(batch_buffer) >= batch_size:
-                            yield batch_buffer
-                            batch_buffer = []
+                    batch_buffer.extend(parsed_records)
 
-                    # 리소스 릭(Leak) 방지 명시적 종료
-                    text_stream.close()
-                    zstd_reader.close()
-                    streaming_body.close()
+                    # 3. 버퍼가 설정된 배치 사이즈에 도달하면 즉시 Yield
+                    while len(batch_buffer) >= batch_size:
+                        yield batch_buffer[:batch_size]
+                        batch_buffer = batch_buffer[batch_size:]
 
-            # 5. 모든 파티션 파일을 순환한 후 잔여 버퍼 반환
+            # 4. 모든 파티션 파일 처리 완료 후 잔여 버퍼 반환
             if batch_buffer:
                 yield batch_buffer
-                
-            if file_count == 0:
-                self.logger.warning(f"[{self.provider_name}] 지정된 파티션({source_path}) 내부에 처리할 '.zst' 파일이 없습니다.")
             
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
@@ -242,3 +227,43 @@ class S3ZstdStreamingReader(AbstractReader):
                 source_path=source_path,
                 original_exception=e
             ) from e
+        
+    def _fetch_and_parse_zstd_object(self, object_key: str) -> List[Dict[str, Any]]:
+        """S3 단일 Zstandard 압축 객체를 스트리밍 읽기하여 JSONL 파싱 후 레코드 리스트를 반환합니다.
+
+        Args:
+            object_key (str): 읽어올 S3 객체의 Key.
+
+        Returns:
+            List[Dict[str, Any]]: 파싱이 완료된 JSON 레코드 리스트.
+        """
+        records_list: List[Dict[str, Any]] = []
+        response = self._client.get_object(Bucket=self._bucket_name, Key=object_key)
+        streaming_body = response['Body']
+
+        decompressor = zstd.ZstdDecompressor()
+        zstd_reader = decompressor.stream_reader(
+            streaming_body,
+            read_across_frames=True,
+            read_size=ZSTD_READ_BUFFER_BYTES
+        )
+        text_stream = io.TextIOWrapper(zstd_reader, encoding='utf-8')
+
+        try:
+            for line_number, line in enumerate(text_stream, start=1):
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
+                try:
+                    records_list.append(json.loads(stripped_line))
+                except json.JSONDecodeError as exception:
+                    self.logger.error(
+                        f"[{self.provider_name}] JSON 파싱 스킵 (Line {line_number} in {object_key}): {exception}"
+                    )
+                    continue
+        finally:
+            text_stream.close()
+            zstd_reader.close()
+            streaming_body.close()
+
+        return records_list
