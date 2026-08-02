@@ -114,7 +114,7 @@ class ReaderService:
                     region=reader_policy.region
                 )
             
-            elif self._target_reader in ["s3_parquet"]:
+            elif self._target_reader in ["s3_parquet", "s3_parquet_gold"]:
                 from src.reader.providers.s3_parquet_reader import S3ParquetStreamingReader
                 
                 # [설계 의도] source_layer가 silver일 경우 reader.yml에 설정된 기본 브론즈 버킷 명세를 차단하고

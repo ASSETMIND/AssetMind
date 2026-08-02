@@ -219,7 +219,8 @@ class GoldPipeline(AbstractPipeline):
                             "task_name": self._task_name,
                             "execution_date": target_date_str,
                             "layer": "gold",
-                            "bucket_name": artifact_key
+                            "bucket_name": f"{self._task_name}/{artifact_key}",
+                            "job_id": artifact_key
                         }
                     )
                     

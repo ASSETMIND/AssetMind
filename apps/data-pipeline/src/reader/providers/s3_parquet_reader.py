@@ -33,6 +33,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
+import re
 from typing import Any, Dict, Iterator, List, Optional
 
 import boto3
@@ -236,6 +237,7 @@ class S3ParquetStreamingReader(AbstractReader):
         [설계 의도]
         CPython dict 객체 변환(to_pylist) 오버헤드를 0으로 차단하고,
         Boto3 SDK의 Automatic Retry(Exponential Backoff)를 사용하여 네트워크 안정성을 확보합니다.
+        S3 Key 경로(year=YYYY/month=MM/day=DD)에서 Hive 파티션 날짜를 파싱하여 PyArrow Table 컬럼으로 동적 결합합니다.
 
         Args:
             s3_key_str (str): S3 Parquet 객체 Key.
@@ -251,7 +253,21 @@ class S3ParquetStreamingReader(AbstractReader):
             binary_content: bytes = s3_response["Body"].read()
 
             # [설계 의도] C++ 레벨 PyArrow 메모리 버퍼로 변환하여 Zero-Copy 수집
-            return pq.read_table(io.BytesIO(binary_content))
+            parquet_table: pa.Table = pq.read_table(io.BytesIO(binary_content))
+
+            # [설계 의도] S3 Key 경로에서 Hive 파티션(year/month/day)을 추출하여 컬럼 벡터로 바인딩
+            date_match = re.search(r"year=(\d{4})/month=(\d{2})/day=(\d{2})", s3_key_str)
+            if date_match:
+                year_val = int(date_match.group(1))
+                month_val = int(date_match.group(2))
+                day_val = int(date_match.group(3))
+                num_rows = parquet_table.num_rows
+
+                parquet_table = parquet_table.append_column("year", pa.array([year_val] * num_rows, type=pa.int64()))
+                parquet_table = parquet_table.append_column("month", pa.array([month_val] * num_rows, type=pa.int64()))
+                parquet_table = parquet_table.append_column("day", pa.array([day_val] * num_rows, type=pa.int64()))
+
+            return parquet_table
 
         except Exception as error_context:
             self.logger.warning(
@@ -306,17 +322,26 @@ class S3ParquetStreamingReader(AbstractReader):
 
             if not pyarrow_tables:
                 return pd.DataFrame()
+            
+            # [설계 의도] 파티션/일자별 피처 개수 차이(Schema Mismatch)가 존재하는 환경에서
+            # PyArrow Strict Check로 인한 ArrowInvalid 크래시를 방지하기 위해 promote_options="permissive"
+            # (또는 Pandas Concat Fallback)를 적용하여 모든 피처 컬럼을 유연하게 병합함.
+            try:
+                combined_table: pa.Table = pa.concat_tables(pyarrow_tables, promote_options="permissive")
+                combined_dataframe: pd.DataFrame = combined_table.to_pandas()
+            except (pa.ArrowInvalid, TypeError):
+                # PyArrow 버전 호환성 및 다종 스키마 대응용 Fallback: 개별 Table을 DataFrame으로 변환 후 Pandas Concat 수행
+                dfs = [t.to_pandas() for t in pyarrow_tables]
+                combined_dataframe: pd.DataFrame = pd.concat(dfs, ignore_index=True)
 
-            # [설계 의도] C++ 레이어 상에서 Zero-Copy Table Concat 연산 수행 후 단 1회만 to_pandas() 실행
-            combined_table: pa.Table = pa.concat_tables(pyarrow_tables)
-            combined_dataframe: pd.DataFrame = combined_table.to_pandas()
-
-            # [설계 의도] Hive 파티션 날짜 복원
+            # [설계 의도] Hive 파티션 날짜 복원 및 Wide DataFrame 메모리 단편화(Fragmentation) 박멸
             if all(col in combined_dataframe.columns for col in ["year", "month", "day"]):
-                combined_dataframe["trade_date"] = pd.to_datetime(
+                trade_date_series = pd.to_datetime(
                     combined_dataframe[["year", "month", "day"]]
                 )
                 combined_dataframe.drop(columns=["year", "month", "day"], inplace=True)
+                # pd.concat(axis=1) 방식으로 trade_date를 최전방에 결합하여 PerformanceWarning 방지 및 메모리 정돈
+                combined_dataframe = pd.concat([trade_date_series.rename("trade_date"), combined_dataframe], axis=1)
 
             return combined_dataframe
 
