@@ -33,6 +33,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
+import os
 import re
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -40,6 +41,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import pandas as pd
 import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 
 from src.reader.providers.abstract_reader import AbstractReader
@@ -275,86 +278,58 @@ class S3ParquetStreamingReader(AbstractReader):
             )
             return None
 
-    def _generate_dataframe(self, source_path: str, **kwargs: Any) -> pd.DataFrame:
-        """Boto3 ThreadPoolExecutor 병렬 다운로드 및 PyArrow Table Zero-Copy 병합 엔진을 기동합니다.
+    def _get_pyarrow_s3_filesystem(self) -> pafs.S3FileSystem:
+        """LocalStack(로컬) 및 AWS S3 프로덕션 환경에 동적으로 바인딩되는 
+        PyArrow Native C++ S3FileSystem 인스턴스를 생성합니다.
+        """
+        local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT", "")
+        if local_endpoint:
+            endpoint_clean = local_endpoint.replace("http://", "").replace("https://", "")
+            scheme = "http" if "http://" in local_endpoint else "https"
+            return pafs.S3FileSystem(
+                endpoint_override=endpoint_clean,
+                access_key=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+                secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
+                scheme=scheme,
+                region=self._region
+            )
+        return pafs.S3FileSystem(region=self._region)
 
-        Args:
-            source_path (str): 대상 S3 파티션 Prefix.
-            **kwargs (Any): max_workers 등 추가 옵션.
-
-        Returns:
-            pd.DataFrame: 고속 통합 완료된 시계열 데이터프레임.
-
-        Raises:
-            DataReadStreamError: S3 Paginator 스캔 또는 병렬 다운로드 실패 시 전파.
+    def _generate_dataframe(self, source_path: str, **kwargs) -> pd.DataFrame:
+        """PyArrow C++ Native S3FileSystem과 Dataset API를 활용하여 S3 Hive 파티션 데이터를
+        C++ 레벨 멀티스레드로 Zero-Copy 고속 스캔 및 인메모리 병합을 수행합니다.
         """
         try:
-            paginator = self._client.get_paginator('list_objects_v2')
-            page_iterator = paginator.paginate(
-                Bucket=self._bucket_name,
-                Prefix=source_path
+            s3_fs = self._get_pyarrow_s3_filesystem()
+            clean_source_path = source_path.strip("/")
+            target_s3_uri = f"{self._bucket_name}/{clean_source_path}"
+
+            # [설계 의도] PyArrow C++ Dataset 엔진으로 S3 Hive 파티션(year/month/day) 자동 인식 및 스캔
+            dataset: ds.Dataset = ds.dataset(
+                target_s3_uri,
+                filesystem=s3_fs,
+                format="parquet",
+                partitioning="hive"
             )
 
-            target_s3_keys: List[str] = []
-            for page in page_iterator:
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        if obj['Key'].endswith('.parquet'):
-                            target_s3_keys.append(obj['Key'])
-
-            if not target_s3_keys:
-                self.logger.warning(f"[{self.provider_name}] 경로({source_path}) 내 Parquet 파일이 존재하지 않습니다.")
+            table: pa.Table = dataset.to_table()
+            if table.num_rows == 0:
                 return pd.DataFrame()
 
-            # [설계 의도] ThreadPoolExecutor(max_workers=8)로 네트워크 RTT 병목을 상쇄함
-            pyarrow_tables: List[pa.Table] = []
-            max_workers_count: int = kwargs.get("max_workers", 8)
+            # [설계 의도] PyArrow Table을 단 1회의 to_pandas() 연산으로 변환하여 메모리 복사 최소화
+            combined_dataframe: pd.DataFrame = table.to_pandas()
 
-            with ThreadPoolExecutor(max_workers=max_workers_count) as executor:
-                future_to_key = {
-                    executor.submit(self._download_single_parquet_table, key): key 
-                    for key in target_s3_keys
-                }
-                for future in as_completed(future_to_key):
-                    table_result = future.result()
-                    if table_result is not None:
-                        pyarrow_tables.append(table_result)
-
-            if not pyarrow_tables:
-                return pd.DataFrame()
-            
-            # [설계 의도] 파티션/일자별 피처 개수 차이(Schema Mismatch)가 존재하는 환경에서
-            # PyArrow Strict Check로 인한 ArrowInvalid 크래시를 방지하기 위해 promote_options="permissive"
-            # (또는 Pandas Concat Fallback)를 적용하여 모든 피처 컬럼을 유연하게 병합함.
-            try:
-                combined_table: pa.Table = pa.concat_tables(pyarrow_tables, promote_options="permissive")
-                combined_dataframe: pd.DataFrame = combined_table.to_pandas()
-            except (pa.ArrowInvalid, TypeError):
-                # PyArrow 버전 호환성 및 다종 스키마 대응용 Fallback: 개별 Table을 DataFrame으로 변환 후 Pandas Concat 수행
-                dfs = [t.to_pandas() for t in pyarrow_tables]
-                combined_dataframe: pd.DataFrame = pd.concat(dfs, ignore_index=True)
-
-            # [설계 의도] Hive 파티션 날짜 복원 및 Wide DataFrame 메모리 단편화(Fragmentation) 박멸
+            # [설계 의도] Hive 파티션(year, month, day)에서 trade_date 생성 및 pd.concat(axis=1)으로 PerformanceWarning 방지
             if all(col in combined_dataframe.columns for col in ["year", "month", "day"]):
-                trade_date_series = pd.to_datetime(
-                    combined_dataframe[["year", "month", "day"]]
-                )
+                trade_date_series = pd.to_datetime(combined_dataframe[["year", "month", "day"]])
                 combined_dataframe.drop(columns=["year", "month", "day"], inplace=True)
-                # pd.concat(axis=1) 방식으로 trade_date를 최전방에 결합하여 PerformanceWarning 방지 및 메모리 정돈
                 combined_dataframe = pd.concat([trade_date_series.rename("trade_date"), combined_dataframe], axis=1)
 
             return combined_dataframe
 
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            raise DataReadStreamError(
-                message=f"S3 실버 파티션 접근 실패 (오류 코드: {error_code})",
-                source_path=source_path,
-                original_exception=e
-            ) from e
         except Exception as e:
             raise DataReadStreamError(
-                message="S3 Bulk Dataframe 수집 연산 중 예기치 않은 결함이 발생했습니다.",
+                message=f"[{self.provider_name}] S3 Parquet Dataset C++ Native 고속 로드 중 오류가 발생했습니다.",
                 source_path=source_path,
                 original_exception=e
             ) from e
