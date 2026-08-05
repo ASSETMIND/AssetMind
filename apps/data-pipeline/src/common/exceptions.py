@@ -94,15 +94,19 @@ class ReaderError(ETLError):
     pass
 
 class BuilderError(ETLError):
-    """Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    """[B] Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
     pass
 
 class PreprocessorError(ETLError):
-    """Preprocessor 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    """[P] Preprocessor 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
     pass
 
 class ModelError(ETLError):
     """[M] 모델링, 평가, XAI 및 백테스팅 단계 예외 Base."""
+    pass
+
+class FeatureError(ETLError):
+    """[F] 피처 엔지니어링 및 정상성 변환 단계 예외 Base."""
     pass
 
 
@@ -694,7 +698,7 @@ class PreprocessorServiceError(PreprocessorError):
         )
 
 # ==============================================================================
-# 10. Modeler Layer Detailed Exceptions (새로 추가되는 10번 섹션)
+# 10. Modeler Layer Detailed Exceptions
 # ==============================================================================
 
 class ModelNotFittedError(ModelError):
