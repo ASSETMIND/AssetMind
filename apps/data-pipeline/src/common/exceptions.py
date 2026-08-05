@@ -973,3 +973,168 @@ class BacktestExecutionError(ModelError):
             original_exception=original_exception,
             should_retry=False
         )
+
+# ==============================================================================
+# 11. Feature Layer Detailed Exceptions
+# ==============================================================================
+
+class FeatureInitializationError(FeatureError):
+    """Feature Factory 및 Config 매핑 단계에서 파라미터 바인딩이나 Task 객체 생성 중 발생하는 예외.
+    
+    설정 파일(.yml) 내 파라미터 타입 불일치나 존재하지 않는 피처 Task 명칭 유입 시 발생하며,
+    컴포넌트 조립 단계의 정적 오류이므로 재시도(Retry)하지 않습니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        task_name: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureInitializationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            task_name (Optional[str]): 초기화에 실패한 피처 태스크 명칭.
+            original_exception (Optional[Exception]): 근본 원인이 된 원본 시스템 예외.
+        """
+        # [설계 의도] 초기화 실패 태스크를 details 사전으로 관리하여 파이프라인 기동 전 바인딩 오류를 명확히 진단함
+        details = {}
+        if task_name:
+            details["task_name"] = task_name
+
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class RequiredColumnNotFoundError(FeatureError):
+    """피처 산출에 필요한 필수 원본 컬럼(가격, 거래량, 금리 등)이 데이터프레임에 존재하지 않을 때 발생하는 예외.
+    
+    Lookback 윈도우 계산 전 입력 데이터의 스키마 무결성을 검증하여,
+    잘못된 컬럼 참조로 인한 계산 중단이나 데이터 오염을 조기에 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        missing_columns: List[str],
+        task_name: Optional[str] = None
+    ) -> None:
+        """RequiredColumnNotFoundError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            missing_columns (List[str]): 누락된 필수 컬럼명 목록 (JSON 직렬화를 위해 List 사용).
+            task_name (Optional[str]): 컬럼 누락이 감지된 피처 태스크 명칭.
+        """
+        # [설계 의도] 누락된 컬럼 목록을 List로 정형화하여 LogManager를 통한 JSON 직렬화 시 파싱 오류를 방지함
+        details = {
+            "missing_columns": missing_columns,
+            "task_name": task_name or "UnknownTask"
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            should_retry=False
+        )
+
+
+class FeatureCalculationExecutionError(FeatureError):
+    """피처 엔지니어링 태스크(Task) 연산 중 발생하는 런타임 수리/통계 예외.
+    
+    롤링 윈도우 시계열 연산, 롤링 왜도/첨도 계산, 이동평균 이격도 산출 시 발생하는
+    0으로 나누기(ZeroDivision), 수리적 발산, 행렬 차원 비정합성을 포착하여 원본 예외와 함께 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        feature_name: str,
+        task_name: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureCalculationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            feature_name (str): 산출 실패가 발생한 구체적인 피처 컬럼 명칭.
+            task_name (str): 연산을 수행 중이던 피처 태스크 컴포넌트 명칭.
+            original_exception (Optional[Exception]): 근본 원인이 된 pandas/numpy/scipy 원본 예외.
+        """
+        # [설계 의도] 실패한 피처 컬럼 및 태스크 명칭을 details에 세분화하여 디버깅 시 연산 실패 지점을 즉시 격리함
+        details = {
+            "feature_name": feature_name,
+            "task_name": task_name
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class TargetGenerationError(FeatureError):
+    """예측 타겟 변수(target_return_20d) 산출 및 시계열 shift 연산 중 발생하는 예외.
+    
+    1달 Horizon($T+20$) 타겟 생성 시 Horizon 경계 아웃오브바운드, 타겟 컬럼 유출(Leakage)
+    또는 연속 결측으로 인한 정답 라벨 손상 상황을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        target_horizon: int = 20,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """TargetGenerationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            target_horizon (int): 설정된 타겟 예측 기간 (기본값: 20영업일).
+            original_exception (Optional[Exception]): 타겟 생성 중 발생한 원본 예외.
+        """
+        # [설계 의도] 타겟 생성 시 설정된 Horizon 정보를 기록하여 타겟 변수 산출 오염 원인을 명확히 추적함
+        details = {
+            "target_horizon": target_horizon
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class FeatureServiceError(FeatureError):
+    """FeatureService 오케스트레이션 및 파이프라인 제어 단계에서 발생하는 최상위 예외.
+    
+    하위 피처 태스크 파이프라인 순차 기동 중 발생하는 시스템 장애나
+    최종 피처 행렬 사출 계약 파괴 상황을 포착하여 보존합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureServiceError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            original_exception (Optional[Exception]): 근본 원인이 된 하위 시스템의 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
