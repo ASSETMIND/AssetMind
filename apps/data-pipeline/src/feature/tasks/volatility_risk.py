@@ -31,7 +31,7 @@ from typing import List, Dict, Any
 import numpy as np
 import pandas as pd
 
-from feature.tasks.abstract_feature import AbstractFeature
+from src.feature.tasks.abstract_feature import AbstractFeature
 from src.common.exceptions import FeatureCalculationExecutionError
 
 

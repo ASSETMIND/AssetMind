@@ -7,7 +7,7 @@
 
 [전체 데이터 흐름 설명 (Input -> Output)]
 1. Input: 상위 파이프라인 컨트롤러로부터 매개변수 주입 없이 원본/정제 금융 시계열 데이터프레임(`market_data: pd.DataFrame`) 유입.
-2. Build Chain: `FeatureFactory.create_feature_tasks()`를 호출하여 feature.yml 명세에 따라 생성 및 결합된 태스크 객체 리스트 수신.
+2. Build Chain: `FeatureFactory.create_features()`를 호출하여 feature.yml 명세에 따라 생성 및 결합된 태스크 객체 리스트 수신.
 3. Execution Loop: 조립된 태스크 리스트를 순회하며 `market_data = task.calculate(market_data)` 파이프라이닝 연산 순차 실행.
 4. Output: 예측 타겟 변수 및 5개 파생 피처 그룹 연산이 완벽히 완료된 최종 데이터프레임(`pd.DataFrame`) 반환.
 
@@ -25,8 +25,8 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 import pandas as pd
 from typing import List, Optional
 
-from feature.feature_factory import FeatureFactory
-from feature.tasks.abstract_feature import AbstractFeatureTask
+from src.feature.feature_factory import FeatureFactory
+from src.feature.tasks.abstract_feature import AbstractFeature
 from src.common.exceptions import FeatureServiceError, FeatureError
 
 
@@ -57,7 +57,7 @@ class FeatureService:
 
         try:
             # [설계 의도] 상위 파이프라인은 인자 없이 팩토리를 기동하여 feature.yml 기준의 최신 태스크 체인을 결합받음
-            feature_tasks: List[AbstractFeatureTask] = self._feature_factory.create_feature_tasks()
+            feature_tasks: List[AbstractFeature] = self._feature_factory.create_features()
 
             if not feature_tasks:
                 raise FeatureServiceError(

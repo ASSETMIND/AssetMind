@@ -25,10 +25,7 @@ from abc import ABC, abstractmethod
 from typing import List
 import pandas as pd
 
-from src.common.exceptions import (
-    RequiredColumnNotFoundError,
-    FeatureCalculationExecutionError
-)
+from src.common.exceptions import RequiredColumnNotFoundError
 
 
 class AbstractFeature(ABC):

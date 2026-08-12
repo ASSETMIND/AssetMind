@@ -27,7 +27,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 import numpy as np
 import pandas as pd
 
-from feature.tasks.abstract_feature import AbstractFeature
+from src.feature.tasks.abstract_feature import AbstractFeature
 from src.common.exceptions import TargetGenerationError
 
 class TargetFeature(AbstractFeature):

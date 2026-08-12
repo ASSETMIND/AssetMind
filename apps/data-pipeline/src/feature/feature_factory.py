@@ -39,8 +39,8 @@ class FeatureFactory:
 
     def __init__(self) -> None:
         """FeatureFactory 인스턴스를 초기화하고 싱글톤 ConfigManager를 바인딩합니다."""
-        # [설계 의도] ConfigManager 싱글톤 인스턴스를 직접 바인딩하여 외부 설정 주입 종속성 차단
-        self._config: ConfigManager = ConfigManager()
+        # ConfigManager 싱글톤 인스턴스를 직접 바인딩하여 외부 설정 주입 종속성 차단
+        self._config: ConfigManager = ConfigManager.load("feature")
 
     def create_features(self) -> List[AbstractFeature]:
         """feature.yml 설정 명세를 파싱하여 순차 구동할 피처 태스크 인스턴스 체인을 일괄 결합 생성합니다.
@@ -54,7 +54,7 @@ class FeatureFactory:
         try:
             features: List[AbstractFeature] = []
 
-            # [설계 의도] ConfigManager로부터 feature_engineering 라인업 명세 일괄 로드
+            # ConfigManager로부터 feature_engineering 라인업 명세 일괄 로드
             feature_engineering_configs: List[Dict[str, Any]] = (
                 self._config.get("feature_engineering") or []
             )
@@ -74,8 +74,8 @@ class FeatureFactory:
 
                 params: Dict[str, Any] = task_config.get("params", {})
 
-                # TargetTask (예측 타겟 변수 생성 태스크)
-                if task_name == "TargetTask":
+                # TargetFeature (예측 타겟 변수 생성 태스크)
+                if task_name == "TargetFeature":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -91,7 +91,7 @@ class FeatureFactory:
                     )
 
                 # TrendMomentumTask (추세 및 모멘텀 지표 생성 태스크)
-                elif task_name == "TrendMomentumTask":
+                elif task_name == "TrendMomentum":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -100,6 +100,7 @@ class FeatureFactory:
                     features.append(
                         TrendMomentum(
                             task_name=task_name,
+                            source_price=params["source_price"],
                             return_lookback_days=params["return_lookback_days"],
                             moving_average_ratios=params["moving_average_ratios"],
                             risk_adjusted_window_days=params["risk_adjusted_window_days"]
@@ -107,7 +108,7 @@ class FeatureFactory:
                     )
 
                 # VolatilityRiskTask (변동성 및 리스크 레짐 지표 생성 태스크)
-                elif task_name == "VolatilityRiskTask":
+                elif task_name == "VolatilityRisk":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -121,6 +122,7 @@ class FeatureFactory:
                     features.append(
                         VolatilityRisk(
                             task_name=task_name,
+                            source_price=params["source_price"],
                             volatility_lookback_days=params["volatility_lookback_days"],
                             volatility_regime_windows=params["volatility_regime_windows"],
                             higher_moments_window_days=params["higher_moments_window_days"],
@@ -129,7 +131,7 @@ class FeatureFactory:
                     )
 
                 # MacroCrossAssetTask (매크로 및 교차 자산 지표 생성 태스크)
-                elif task_name == "MacroCrossAssetTask":
+                elif task_name == "MacroCrossAsset":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -151,7 +153,7 @@ class FeatureFactory:
                     )
 
                 # DerivativesVolumeTask (파생상품 및 거래량 수급 지표 생성 태스크)
-                elif task_name == "DerivativesVolumeTask":
+                elif task_name == "DerivativesVolume":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -171,7 +173,7 @@ class FeatureFactory:
                     )
 
                 # CalendarSeasonalityTask (계절성 및 달력 주기성 지표 생성 태스크)
-                elif task_name == "CalendarSeasonalityTask":
+                elif task_name == "CalendarSeasonality":
                     self._validate_required_params(
                         task_name=task_name,
                         params=params,
@@ -223,7 +225,7 @@ class FeatureFactory:
         Raises:
             FeatureInitializationError: 필수 키가 단 하나라도 누락된 경우 즉시 발생.
         """
-        # [설계 의도] params.get()으로 기본값을 조용히 채우는 silent failure 방지. 누락 시 즉시 파이프라인 차단.
+        # params.get()으로 기본값을 조용히 채우는 silent failure 방지. 누락 시 즉시 파이프라인 차단.
         missing_keys: List[str] = [
             key for key in required_keys if key not in params
         ]
