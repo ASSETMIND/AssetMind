@@ -158,16 +158,11 @@ class KISExtractor(AbstractExtractor):
             if policy.domain == "domestic-stock" and len(iscd) == 5: #and iscd.startswith("0"):
                 merged_params["FID_INPUT_ISCD"] = iscd[1:]
         
-        if policy.domain != "domestic-stock":
-            await asyncio.sleep(random.uniform(0.1, 0.5))
-
-        # print(f"DEBUG_KIS_REQUEST - JOB_ID: {request.job_id} | URL: {url} | TR_ID: {headers['tr_id']} | PARAMS: {merged_params}")
+        # KIS API Rate Limit(초당 5회) 준수 및 국내 지수 동시 호출 시 TPS 초과 방지를 위한 비동기 Jitter 적용
+        await asyncio.sleep(random.uniform(0.1, 0.5))
 
         # 6. 비동기 호출 수행 및 응답 저장
         response_data = await self.http_client.get(url, headers=headers, params=merged_params)
-        
-        # [임시 디버깅용] 서버가 반환한 실제 JSON 데이터 출력
-        # print(f"DEBUG_KIS_RESPONSE - JOB_ID: {request.job_id} | BODY: {response_data}")
         
         return response_data
 
