@@ -83,6 +83,13 @@ class S3ParquetLoader(AbstractLoader):
         """DataFrame을 PyArrow 엔진을 통해 S3에 분산 파티셔닝하여 적재합니다."""
         
         df: pd.DataFrame = dto.data
+        file_identifier: str = (
+            getattr(dto, "job_id", None)
+            or dto.meta.get("job_id")
+            or dto.meta.get("task_key")
+            or dto.meta.get("task_name")
+            or "data"
+        )
 
         # DTO 메타데이터의 bucket_name 또는 job_id를 하위 서브 디렉터리 경로로 동적 결합
         prefix = self._prefix
@@ -116,7 +123,7 @@ class S3ParquetLoader(AbstractLoader):
                 partition_cols=self._partition_cols,
                 index=False,
                 storage_options=storage_options,
-                existing_data_behavior="delete_matching"
+                basename_template=f"{file_identifier}_{{i}}.parquet"
             )
             self._logger.info(f"S3ParquetLoader: S3에 Parquet 파일로 성공적으로 적재되었습니다. (Path: {s3_path})")
             return True
