@@ -9,3 +9,7 @@ s3_zstd:
 s3_parquet:
   region: "ap-northeast-2" # AWS 기본 리전 (LocalStack 사용 시에도 Boto3 내부 검증을 위해 필요)
   bucket_name: "data-pipeline-silver" # 실버 데이터가 적재된 버킷명
+
+s3_parquet_gold:
+  region: "ap-northeast-2"
+  bucket_name: "data-pipeline-gold"

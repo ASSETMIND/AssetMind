@@ -30,12 +30,19 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
    - 근거: 실버 파이프라인을 통과한 하루치 파티션 분할 파일은 단일 파일당 수십 MB 이내로 통제되므로 워커 노드의 가용 자원 안에서 안전하게 고속 처리가 가능함.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
-from typing import Any, Dict, Iterator, List
+import os
+import re
+from typing import Any, Dict, Iterator, List, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+import pandas as pd
+import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 
 from src.reader.providers.abstract_reader import AbstractReader
@@ -223,6 +230,119 @@ class S3ParquetStreamingReader(AbstractReader):
         except Exception as e:
             raise DataReadStreamError(
                 message="S3 실버 Parquet 스트리밍 제너레이터 구동 중 예기치 않은 구조적 오류가 발생했습니다.",
+                source_path=source_path,
+                original_exception=e
+            ) from e
+        
+    def _download_single_parquet_table(self, s3_key_str: str) -> Optional[pa.Table]:
+        """S3 단일 Parquet 객체를 바이너리로 병렬 다운로드하여 PyArrow Table로 Zero-Copy 변환합니다.
+
+        [설계 의도]
+        CPython dict 객체 변환(to_pylist) 오버헤드를 0으로 차단하고,
+        Boto3 SDK의 Automatic Retry(Exponential Backoff)를 사용하여 네트워크 안정성을 확보합니다.
+        S3 Key 경로(year=YYYY/month=MM/day=DD)에서 Hive 파티션 날짜를 파싱하여 PyArrow Table 컬럼으로 동적 결합합니다.
+
+        Args:
+            s3_key_str (str): S3 Parquet 객체 Key.
+
+        Returns:
+            Optional[pa.Table]: PyArrow 메모리 테이블 (실패 시 None).
+        """
+        try:
+            s3_response = self._client.get_object(
+                Bucket=self._bucket_name,
+                Key=s3_key_str
+            )
+            binary_content: bytes = s3_response["Body"].read()
+
+            # [설계 의도] C++ 레벨 PyArrow 메모리 버퍼로 변환하여 Zero-Copy 수집
+            parquet_table: pa.Table = pq.read_table(io.BytesIO(binary_content))
+
+            # [설계 의도] S3 Key 경로에서 Hive 파티션(year/month/day)을 추출하여 컬럼 벡터로 바인딩
+            date_match = re.search(r"year=(\d{4})/month=(\d{2})/day=(\d{2})", s3_key_str)
+            if date_match:
+                year_val = int(date_match.group(1))
+                month_val = int(date_match.group(2))
+                day_val = int(date_match.group(3))
+                num_rows = parquet_table.num_rows
+
+                parquet_table = parquet_table.append_column("year", pa.array([year_val] * num_rows, type=pa.int64()))
+                parquet_table = parquet_table.append_column("month", pa.array([month_val] * num_rows, type=pa.int64()))
+                parquet_table = parquet_table.append_column("day", pa.array([day_val] * num_rows, type=pa.int64()))
+
+            return parquet_table
+
+        except Exception as error_context:
+            self.logger.warning(
+                f"[{self.provider_name}] 단일 Parquet 다운로드 중 지연 감지 - Key: {s3_key_str} | 원인: {str(error_context)}"
+            )
+            return None
+
+    def _get_pyarrow_s3_filesystem(self) -> pafs.S3FileSystem:
+        """LocalStack(로컬) 및 AWS S3 프로덕션 환경에 동적으로 바인딩되는 
+        PyArrow Native C++ S3FileSystem 인스턴스를 생성합니다.
+        """
+        local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT", "")
+        if local_endpoint:
+            endpoint_clean = local_endpoint.replace("http://", "").replace("https://", "")
+            scheme = "http" if "http://" in local_endpoint else "https"
+            return pafs.S3FileSystem(
+                endpoint_override=endpoint_clean,
+                access_key=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+                secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
+                scheme=scheme,
+                region=self._region
+            )
+        return pafs.S3FileSystem(region=self._region)
+
+    def _generate_dataframe(self, source_path: str, **kwargs) -> pd.DataFrame:
+        """PyArrow C++ Native S3FileSystem과 Dataset API를 활용하여 S3 Hive 파티션 데이터를
+        C++ 레벨 멀티스레드로 Zero-Copy 고속 스캔 및 인메모리 병합을 수행합니다.
+        """
+        try:
+            s3_fs = self._get_pyarrow_s3_filesystem()
+            clean_source_path = source_path.strip("/")
+            target_s3_uri = f"{self._bucket_name}/{clean_source_path}"
+
+            # [설계 의도] PyArrow C++ Dataset 엔진으로 S3 Hive 파티션(year/month/day) 자동 인식 및 스캔
+            dataset: ds.Dataset = ds.dataset(
+                target_s3_uri,
+                filesystem=s3_fs,
+                format="parquet",
+                partitioning="hive"
+            )
+
+            table: pa.Table = dataset.to_table()
+            if table.num_rows == 0:
+                return pd.DataFrame()
+
+            # [설계 의도] PyArrow Table을 단 1회의 to_pandas() 연산으로 변환하여 메모리 복사 최소화
+            combined_dataframe: pd.DataFrame = table.to_pandas()
+
+            # [설계 의도] Hive 파티션(year, month, day)에서 trade_date 생성 및 pd.concat(axis=1)으로 PerformanceWarning 방지
+            if all(col in combined_dataframe.columns for col in ["year", "month", "day"]):
+                trade_date_series = pd.to_datetime(combined_dataframe[["year", "month", "day"]])
+                combined_dataframe.drop(columns=["year", "month", "day"], inplace=True)
+                combined_dataframe = pd.concat([trade_date_series.rename("trade_date"), combined_dataframe], axis=1)
+
+            # [설계 의도] PyArrow Hive 파티션 스캔 시 최하위 디렉터리 접근으로 가상 파티션 컬럼이 미생성된 경우, source_path 명세 경로에서 trade_date 직접 복원
+            if "trade_date" not in combined_dataframe.columns:
+                import re
+                matched_date_path = re.search(r"year=(\d{4})/month=(\d{2})/day=(\d{2})", source_path)
+                if matched_date_path:
+                    parsed_trade_date = f"{matched_date_path.group(1)}-{matched_date_path.group(2)}-{matched_date_path.group(3)}"
+                    combined_dataframe.insert(0, "trade_date", pd.to_datetime(parsed_trade_date))
+
+            # [설계 의도] S3 파티션 내 이종 태스크 파일들(asia/global 등)의 결합으로 유입된 중복 trade_date 행을 단일 와이드 행(Single Wide Row)으로 축약 통합
+            if "trade_date" in combined_dataframe.columns:
+                combined_dataframe["trade_date"] = pd.to_datetime(combined_dataframe["trade_date"])
+                combined_dataframe = combined_dataframe.groupby("trade_date", as_index=False).first()
+                   
+            return combined_dataframe
+
+        except Exception as e:
+            raise DataReadStreamError(
+                message=f"[{self.provider_name}] S3 Parquet Dataset C++ Native 고속 로드 중 오류가 발생했습니다.",
                 source_path=source_path,
                 original_exception=e
             ) from e

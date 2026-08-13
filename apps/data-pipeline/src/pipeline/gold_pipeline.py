@@ -151,6 +151,8 @@ class GoldPipeline(AbstractPipeline):
             
             assert "trade_date" in market_data.columns, "실버 레이어 스키마 무결성 파괴: trade_date 컬럼 누락"
             market_data["trade_date"] = pd.to_datetime(market_data["trade_date"])
+            # [설계 의도] S3 파티션 내 이종 태스크 파일들(asia/global 등)의 청크 수집으로 유입된 중복 trade_date 행들을 단일 와이드 행(Single Wide Row)으로 압축 통합
+            market_data = market_data.groupby("trade_date", as_index=False).first()
             market_data = market_data.sort_values("trade_date").reset_index(drop=True)
             market_data = market_data.set_index("trade_date")
             
@@ -219,7 +221,8 @@ class GoldPipeline(AbstractPipeline):
                             "task_name": self._task_name,
                             "execution_date": target_date_str,
                             "layer": "gold",
-                            "bucket_name": artifact_key
+                            "bucket_name": f"{self._task_name}/{artifact_key}",
+                            "job_id": artifact_key
                         }
                     )
                     
