@@ -61,15 +61,17 @@ def elasticnet_importance(
     Returns:
         pd.Series: 0~1 사이로 Min-Max 정규화된 ElasticNet 피처 스코어.
     """
-    # [설계 의도] L1(희소성)과 L2(그룹핑)를 결합하여 다공선성 피처 그룹을 집단 발탁
+    # [설계 의도] Scikit-Learn 유한성(Finite) 검증 통과 및 계수 왜곡 방지를 위해 시계열 전진 대치 후 중앙값 보간
+    imputed_X_train = X_train.ffill().fillna(X_train.median())
+
     elasticnet_cv_model = ElasticNetCV(
         l1_ratio=l1_ratio,
         cv=cv_folds,
         random_state=42,
-        max_iter=5000,
+        max_iter=2000,
         n_jobs=-1
     )
-    elasticnet_cv_model.fit(X_train, y_train)
+    elasticnet_cv_model.fit(imputed_X_train, y_train)
 
     absolute_coefficients: np.ndarray = np.abs(elasticnet_cv_model.coef_)
     max_val: float = float(absolute_coefficients.max())
@@ -136,13 +138,16 @@ def random_forest_importance(
     Returns:
         pd.Series: 0~1 사이로 Min-Max 정규화된 RandomForest 피처 스코어.
     """
+    # [설계 의도] RandomForestRegressor의 NaN 입력 불가 제약을 해결하기 위해 중앙값 기반 보간 적용
+    imputed_X_train = X_train.ffill().fillna(X_train.median())
+
     random_forest_model = RandomForestRegressor(
         n_estimators=n_estimators,
         max_depth=max_depth,
         random_state=42,
         n_jobs=-1
     )
-    random_forest_model.fit(X_train, y_train)
+    random_forest_model.fit(imputed_X_train, y_train)
 
     raw_importances: np.ndarray = random_forest_model.feature_importances_
     max_val: float = float(raw_importances.max())
@@ -199,17 +204,42 @@ def combine_feature_ranks(
     return combined_rank_series.sort_values(ascending=False)
 
 
-def select_top_features_by_score(
-    combined_scores: pd.Series,
-    top_k: int = 50
+def select_important_features(
+    feature_scores: pd.Series,
+    cumulative_threshold: float = 0.80,
+    min_features: int = 20,
+    max_features: int = 50
 ) -> List[str]:
-    """통합 스코어 기준 상위 top_k개 피처 이름 리스트를 추출합니다.
+    """누적 중요도 비율에 도달할 때까지 핵심 피처를 동적으로 선별하되, 상·하한 가드레일로 차원을 제한합니다.
 
     Args:
-        combined_scores (pd.Series): 내림차순 정렬된 결합 스코어.
-        top_k (int): 선별할 피처 개수 (기본값: 50).
+        feature_scores (pd.Series): 피처별 앙상블 중요도 스코어 (내림차순 정렬).
+        cumulative_threshold (float): 목표 누적 중요도 설명력 비율 (기본값: 0.80 = 80%).
+        min_features (int): 최소 확보 피처 수 하한선 (기본값: 20).
+        max_features (int): 과적합 방지 피처 수 상한선 (기본값: 50, Fan & Lv 2008 기준).
 
     Returns:
-        List[str]: 발탁된 상위 top_k개 피처 이름 명단.
+        List[str]: 유계 동적 선별을 통과한 핵심 피처 컬럼명 리스트.
     """
-    return combined_scores.head(top_k).index.tolist()
+    sorted_scores = feature_scores.sort_values(ascending=False)
+    total_score = sorted_scores.sum()
+
+    # 스코어 합이 0이거나 데이터가 부족할 경우 최소 개수 기준으로 단순 슬라이싱
+    if total_score <= 0 or len(sorted_scores) <= min_features:
+        return sorted_scores.head(min_features).index.tolist()
+
+    # [설계 의도] 상대 중요도 정규화 및 누적합(Cumsum) 계산
+    cumulative_importance_ratio = (sorted_scores / total_score).cumsum()
+
+    # [설계 의도] 누적 중요도 80% 달성 시점의 동적 피처 개수 산출
+    threshold_mask = cumulative_importance_ratio >= cumulative_threshold
+    if threshold_mask.any():
+        dynamic_feature_count = int(threshold_mask.values.argmax() + 1)
+    else:
+        dynamic_feature_count = len(sorted_scores)
+
+    # [설계 의도] 학술 가드레일(Fan & Lv 2008) 적용: 20 <= K <= 50 클리핑
+    bounded_feature_count = max(min_features, min(dynamic_feature_count, max_features))
+    bounded_feature_count = min(bounded_feature_count, len(sorted_scores))
+
+    return sorted_scores.head(bounded_feature_count).index.tolist()

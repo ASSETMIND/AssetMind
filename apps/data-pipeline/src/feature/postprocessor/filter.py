@@ -42,3 +42,25 @@ def filter_constant_features(
     filtered_X_train: pd.DataFrame = X_train.drop(columns=removed_feature_names)
 
     return filtered_X_train, removed_feature_names
+
+def filter_missing_ratio(
+    X_train: pd.DataFrame,
+    max_missing_ratio: float = 0.2
+) -> Tuple[pd.DataFrame, List[str]]:
+    """피처 내 결측치(NaN)의 비율이 max_missing_ratio를 초과하는 고결측 오염 컬럼을 감지하여 제거합니다.
+
+    Args:
+        X_train (pd.DataFrame): 학습 피처 데이터프레임.
+        max_missing_ratio (float): 허용 가능한 최대 결측치 비율 (기본값: 0.2 = 20%).
+
+    Returns:
+        Tuple[pd.DataFrame, List[str]]: 정제된 X_train 및 제거된 피처 컬럼 이름 리스트.
+    """
+    # [설계 의도] 피처별 NaN 결측치 비율 산출 (Dong & Peng 2013, Gu et al. 2020 학술 기준 적용)
+    missing_ratios: pd.Series = X_train.isna().mean()
+
+    # 임계치(20%) 초과 고결측 피처 컬럼 추출 및 제거
+    removed_feature_names: List[str] = missing_ratios[missing_ratios > max_missing_ratio].index.tolist()
+    filtered_X_train: pd.DataFrame = X_train.drop(columns=removed_feature_names)
+
+    return filtered_X_train, removed_feature_names
