@@ -18,48 +18,47 @@ x-airflow-common: &airflow-common
   depends_on:
     airflow-postgres:
       condition: service_healthy
-    localstack:
+    minio:
       condition: service_healthy
     postgres:
       condition: service_healthy
 
 services:
-  # 1. 메인 스토리지 컨테이너 (LocalStack)
-  localstack:
-    image: localstack/localstack:4.4.0
-    container_name: local_s3_mock
-    ports:
-      - "4566:4566"
-    environment:
-      - SERVICES=s3
-      - PERSISTENCE=1 # LocalStack 데이터 지속성 활성화
-      - LS_LOG=WARN # 불필요한 I/O 로그를 줄여 메모리 절약
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-    volumes:
-      - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 3s
-      timeout: 5s
-      retries: 10
+  # 1. 메인 오브젝트 스토리지 (MinIO - S3 Lakehouse)
+  minio:
+    image: minio/minio:latest
+    container_name: local_s3_storage
     restart: unless-stopped
-
-  # 2. 버킷 자동 생성 전용 1회용 컨테이너 (Init Container)
-  aws-cli-init:
-    image: amazon/aws-cli:latest
-    container_name: local_s3_setup
-    depends_on:
-      localstack:
-        condition: service_healthy
+    ports:
+      - "9000:9000" # S3 API 엔드포인트
+      - "9001:9001" # Web UI 콘솔 포트
     environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
-      - ./scripts/init_aws.sh:/tmp/init_aws.sh
-    entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
+      - ./minio_data:/data # 호스트 디스크에 실제 파일 영속화 (RAM 소모 0)
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: local_s3_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${AWS_ACCESS_KEY_ID:-minioadmin} ${AWS_SECRET_ACCESS_KEY:-minioadmin};
+      /usr/bin/mc mb myminio/data-pipeline-bronze --ignore-existing;
+      /usr/bin/mc mb myminio/data-pipeline-silver --ignore-existing;
+      /usr/bin/mc mb myminio/data-pipeline-gold --ignore-existing;
+      echo 'S3 Bronze/Silver/Gold Buckets Initialization Completed!';
+      exit 0;
+      "
 
   # 1. Metadata DB
   airflow-postgres:
@@ -99,7 +98,7 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
-      localstack:
+      minio:
         condition: service_healthy
       # Rationale: DB 초기화 스크립트가 완벽히 종료된 후에만 웹서버를 기동하여 Race Condition 원천 차단
       airflow-init:
@@ -113,7 +112,7 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
-      localstack:
+      minio:
         condition: service_healthy
       # Rationale: 동일하게 초기화 완료 후 스케줄러 기동
       airflow-init:
