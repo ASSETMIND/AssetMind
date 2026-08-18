@@ -110,7 +110,6 @@ class S3ZstdLoader(AbstractLoader):
     def _init_s3_client(self) -> Any:
         """런타임 환경에 최적화된 Boto3 S3 클라이언트를 동적으로 초기화합니다.
         
-        [설계 의도] 
         비즈니스 로직과 클라이언트 생성 로직을 분리하여 OCP(개방-폐쇄 원칙)를 준수합니다.
         이를 통해 향후 AWS STS(AssumeRole) 연동이나, 환경 변수를 활용한 로컬 모킹(LocalStack) 
         오버라이딩 시 메인 적재 로직의 수정 없이 유연하게 인프라 계층을 교체할 수 있습니다.
@@ -132,12 +131,10 @@ class S3ZstdLoader(AbstractLoader):
             local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT")
             
             if local_endpoint:
-                # [설계 의도] 통합 테스트 환경(Docker Compose)에서 외부망(Real AWS)을 타지 않고 
-                # LocalStack 컨테이너로 안전하게 트래픽을 라우팅하기 위한 오버라이드 훅.
                 client_kwargs.update({
                     "endpoint_url": local_endpoint,
-                    "aws_access_key_id": "test",      # LocalStack Dummy Key
-                    "aws_secret_access_key": "test"   # LocalStack Dummy Key
+                    "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID"),
+                    "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY")
                 })
                 # self._logger.info(f"[개발 환경 감지] LocalStack S3 클라이언트로 초기화합니다. (Endpoint: {local_endpoint})")
             # else:

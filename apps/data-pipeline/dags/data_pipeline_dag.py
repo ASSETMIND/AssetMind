@@ -38,6 +38,9 @@ from airflow.operators.bash import BashOperator
 RETRIES: int = 3
 RETRY_DELAY_MINUTES: int = 10
 
+# Airflow DAG 동시 실행 제한
+MAX_ACTIVE_RUNS: int = 4
+
 # Airflow 컨테이너 내 파이프라인 소스코드 경로
 PROJECT_ROOT_DIR: str = "/opt/airflow"
 
@@ -75,7 +78,7 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
         start_date=pendulum.datetime(start_year, start_month, start_day, tz=timezone),
         schedule=schedule,
         catchup=True,
-        max_active_runs=10,
+        max_active_runs=MAX_ACTIVE_RUNS,
         tags=["daily", task_key.split('_')[-1]],
     ) as dag:
         
