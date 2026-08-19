@@ -325,6 +325,19 @@ class S3ParquetStreamingReader(AbstractReader):
                 combined_dataframe.drop(columns=["year", "month", "day"], inplace=True)
                 combined_dataframe = pd.concat([trade_date_series.rename("trade_date"), combined_dataframe], axis=1)
 
+            # [설계 의도] PyArrow Hive 파티션 스캔 시 최하위 디렉터리 접근으로 가상 파티션 컬럼이 미생성된 경우, source_path 명세 경로에서 trade_date 직접 복원
+            if "trade_date" not in combined_dataframe.columns:
+                import re
+                matched_date_path = re.search(r"year=(\d{4})/month=(\d{2})/day=(\d{2})", source_path)
+                if matched_date_path:
+                    parsed_trade_date = f"{matched_date_path.group(1)}-{matched_date_path.group(2)}-{matched_date_path.group(3)}"
+                    combined_dataframe.insert(0, "trade_date", pd.to_datetime(parsed_trade_date))
+
+            # [설계 의도] S3 파티션 내 이종 태스크 파일들(asia/global 등)의 결합으로 유입된 중복 trade_date 행을 단일 와이드 행(Single Wide Row)으로 축약 통합
+            if "trade_date" in combined_dataframe.columns:
+                combined_dataframe["trade_date"] = pd.to_datetime(combined_dataframe["trade_date"])
+                combined_dataframe = combined_dataframe.groupby("trade_date", as_index=False).first()
+                   
             return combined_dataframe
 
         except Exception as e:

@@ -1,45 +1,83 @@
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { twMerge } from 'tailwind-merge';
 
-// 버튼 사이즈 정의
-export type ButtonSize = 'sm' | 'md' | 'lg';
+type ButtonVariant = 'primary' | 'secondary' | 'kakao' | 'google';
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
-// ComponentPropsWithoutRef를 사용해 자유로운 커스터마이징 가능
-type Props = React.ComponentPropsWithoutRef<'button'> & {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+	children: ReactNode;
+	variant?: ButtonVariant;
 	size?: ButtonSize;
-};
+	fullWidth?: boolean;
+	isLoading?: boolean;
+	loadingText?: string;
+}
 
-/*
-	className을 통해 추가적인 스타일 오버라이딩을 허용
-	size 속성을 통해 사전 정의된 크기 스타일을 적용
-*/
-export default function Button(props: Props) {
-	// 기본사이즈 md
-	const { className, children, size = 'md', ...rest } = props;
+// Storybook tailwind.config.ts 기준
+// button.large.primary = #131316 (어두운 검정) → size lg
+// button.small.primary = #6D4AE6 (보라색) → size sm/md
+
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
+	children,
+	variant = 'primary',
+	size = 'md',
+	fullWidth = false,
+	isLoading = false,
+	loadingText = '로딩 중...',
+	disabled,
+	className,
+	...props
+}, ref) => {
+
+	const baseStyles = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 cursor-pointer';
+
+	const getVariantStyle = () => {
+		if (variant === 'primary') {
+			if (size === 'lg') {
+				// button.large.primary
+				return 'bg-[#131316] text-white hover:bg-[#2C2C30]';
+			}
+			// button.small.primary
+			return 'bg-[#6D4AE6] text-white hover:bg-[#5F3FD1]';
+		}
+		if (variant === 'secondary') return 'bg-[#21242C] text-white hover:bg-[#2C2C30]';
+		if (variant === 'kakao')     return 'bg-[#FEE500] text-[#191919] hover:opacity-90';
+		if (variant === 'google')    return 'bg-white border border-[#383A42] text-[#191919] hover:bg-gray-50';
+		return '';
+	};
+
+	const sizes: Record<ButtonSize, string> = {
+		sm:   'h-9 px-3 text-[14px]',
+		md:   'h-[52px] px-6 text-[14px]',
+		lg:   'h-[54px] px-8 text-[16px] w-full',
+		icon: 'w-12 h-12 rounded-full p-0',
+	};
 
 	return (
 		<button
+			ref={ref}
 			className={twMerge(
-				'flex w-full items-center justify-center font-medium border cursor-pointer',
-				getButtonSizeStyle(size),
-				className
+				baseStyles,
+				getVariantStyle(),
+				sizes[size],
+				fullWidth ? 'w-full' : '',
+				className,
 			)}
-			{...rest}
+			disabled={disabled || isLoading}
+			{...props}
 		>
-			{children}
+			{isLoading ? (
+				<>
+					<svg className='animate-spin -ml-1 mr-2 h-4 w-4' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' aria-hidden='true'>
+						<circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' />
+						<path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z' />
+					</svg>
+					<span>{loadingText}</span>
+				</>
+			) : children}
 		</button>
 	);
-}
+});
 
-// 사이즈 정의에 대한 함수
-function getButtonSizeStyle(size: ButtonSize) {
-	switch (size) {
-		case 'sm':
-			return 'h-9 rounded-md px-3 text-sm';
-		case 'md':
-			return 'h-11 rounded-lg px-4 text-base';
-		case 'lg':
-			return 'h-14 rounded-xl px-6 text-lg';
-		default:
-			throw new Error(`Unsupported type size: ${size}`);
-	}
-}
+Button.displayName = 'Button';
+export default Button;

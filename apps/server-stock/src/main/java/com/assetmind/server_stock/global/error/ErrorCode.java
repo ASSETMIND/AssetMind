@@ -13,7 +13,11 @@ public enum ErrorCode {
     NOT_FOUND_STOCK(HttpStatus.NOT_FOUND, "S002", "주식 데이터를 찾을 수 없습니다."),
 
     // Chart 에러
-    INVALID_CHART_PARAMETER(HttpStatus.BAD_REQUEST, "S003", "유효하지 않은 입력값 입니다.");
+    INVALID_CHART_PARAMETER(HttpStatus.BAD_REQUEST, "S003", "유효하지 않은 입력값 입니다."),
+
+    // OrderBook 에러
+    INVALID_ORDER_BOOK_PARAMETER(HttpStatus.BAD_REQUEST, "S004", "유효하지 않는 입력값 입니다."),
+    UNSUPPORTED_ORDER_BOOK(HttpStatus.BAD_REQUEST, "S005", "실시간 호가를 지원하지 않는 종목입니다.");
 
     private final HttpStatus status;
     private final String code;

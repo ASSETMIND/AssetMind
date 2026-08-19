@@ -63,7 +63,7 @@ class ChartControllerTest {
                 .candles(List.of(candle))
                 .build();
 
-        given(chartService.getCandles(eq(stockCode), eq(timeframe), eq(endTime), eq(limit)))
+        given(chartService.getNCandles(eq(stockCode), eq(timeframe), eq(endTime), eq(limit)))
                 .willReturn(responseDto);
 
         // when & then

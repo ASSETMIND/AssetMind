@@ -1,6 +1,6 @@
 package com.assetmind.server_stock.stock.presentation.dto;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity.StockPriceRedisEntity;
 import lombok.Builder;
 
 /**

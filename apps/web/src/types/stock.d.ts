@@ -57,3 +57,29 @@ export interface SurgeAlertPayload {
 	changeRate: string;
 	alertTime: string;
 }
+
+// ─── UI 컴포넌트 타입 ─────────────────────────────────────────
+
+export interface StockRow {
+	id: string;
+	rank: number;
+	isFavorite: boolean;
+	logoUrl?: string;
+	name: string;
+	price: number;
+	changeRate: number;
+	tradeAmount: number;
+	buyRatio: number;
+	tickerState?: 'rise' | 'fall' | 'idle';
+}
+
+export type RankingType = 'VALUE' | 'VOLUME';
+
+export type PageState =
+	| 'default'
+	| 'skeleton'
+	| 'realtime'
+	| 'error'
+	| 'empty'
+	| 'market-closed'
+	| 'extreme';

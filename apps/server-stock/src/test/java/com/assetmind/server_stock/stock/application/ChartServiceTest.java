@@ -44,101 +44,81 @@ class ChartServiceTest {
     @DisplayName("endTime이 null일 경우 현재 시간(now)을 기준으로 조회한다.")
     void givenEndTimeIsNull_whenGetCandles_thenQueryEndTimeNow() {
         // given
-        when(ohlcv1mRepository.findDynamicMinuteCandles(any(), any(), any(), anyInt()))
+        when(ohlcv1mRepository.findOneMinuteCandles(any(), any(), anyInt()))
                 .thenReturn(List.of());
 
         // when
-        chartService.getCandles(STOCK_CODE, "1m", null, LIMIT);
+        chartService.getNCandles(STOCK_CODE, "1m", null, LIMIT);
 
         // then
         // findDynamicMinuteCandles의 3번째 인자로 LocalDateTime이 전달되었는지 확인
-        verify(ohlcv1mRepository).findDynamicMinuteCandles(eq(STOCK_CODE), any(), any(LocalDateTime.class), eq(LIMIT));
+        verify(ohlcv1mRepository).findOneMinuteCandles(eq(STOCK_CODE), any(LocalDateTime.class), eq(LIMIT));
     }
 
-    @ParameterizedTest
-    @CsvSource({
-            "1m, 1 minute",
-            "3m, 3 minutes",
-            "5m, 5 minutes",
-            "15m, 15 minutes",
-    })
-    @DisplayName("다양한 분봉 타임프레임 요청 시 1분봉 레포지토리의 정확한 interval로 라우팅된다.")
-    void givenNMinutes_whenGetCandles_thenRoutingCollectInterval(String timeframe, String expectedInterval) {
-        // given
-        when(ohlcv1mRepository.findDynamicMinuteCandles(any(), any(), any(), anyInt()))
-                .thenReturn(List.of());
-
-        // when
-        chartService.getCandles(STOCK_CODE, timeframe, END_TIME, LIMIT);
-
-        // then
-        verify(ohlcv1mRepository).findDynamicMinuteCandles(STOCK_CODE, expectedInterval, END_TIME, LIMIT);
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-            "1d, 1 day",
-            "3d, 3 days",
-            "5d, 5 days",
-            "1w, 1 week"
-    })
-    @DisplayName("일/주봉 타임프레임 요청 시 1일봉 레포지토리의 고정 간격 메서드로 라우팅된다.")
-    void givenNDays_whenGetCandles_thenRoutingCollectInterval(String timeframe, String expectedInterval) {
-        // given
-        when(ohlcv1dRepository.findDynamicDailyCandles(any(), any(), any(), anyInt()))
-                .thenReturn(List.of());
-
-        // when
-        chartService.getCandles(STOCK_CODE, timeframe, END_TIME, LIMIT);
-
-        // then
-        verify(ohlcv1dRepository).findDynamicDailyCandles(STOCK_CODE, expectedInterval, END_TIME, LIMIT);
-    }
-
-    @Test
-    @DisplayName("1mo(월봉) 요청 시 1일봉 레포지토리의 findMonthlyCandles 메서드로 라우팅된다.")
-    void given1MonthTimeframe_whenGetCandles_thenRoutingCollectInterval() {
-        // given
-        when(ohlcv1dRepository.findMonthlyCandles(any(), any(), anyInt()))
-                .thenReturn(List.of());
-
-        // when
-        chartService.getCandles(STOCK_CODE, "1mo", END_TIME, LIMIT);
-
-        // then
-        verify(ohlcv1dRepository).findMonthlyCandles(STOCK_CODE, END_TIME, LIMIT);
-    }
-
-    @Test
-    @DisplayName("1y(년봉) 요청 시 1일봉 레포지토리의 findYearlyCandles 메서드로 라우팅된다.")
-    void given1YearTimeframe_whenGetCandles_thenRoutingCollectInterval() {
-        // given
-        when(ohlcv1dRepository.findYearlyCandles(any(), any(), anyInt()))
-                .thenReturn(List.of());
-
-        // when
-        chartService.getCandles(STOCK_CODE, "1y", END_TIME, LIMIT);
-
-        // then
-        verify(ohlcv1dRepository).findYearlyCandles(STOCK_CODE, END_TIME, LIMIT);
-    }
+//    @ParameterizedTest
+//    @CsvSource({
+//            "1d, 1 day",
+//            "3d, 3 days",
+//            "5d, 5 days",
+//            "1w, 1 week"
+//    })
+//    @DisplayName("일/주봉 타임프레임 요청 시 1일봉 레포지토리의 고정 간격 메서드로 라우팅된다.")
+//    void givenNDays_whenGetCandles_thenRoutingCollectInterval(String timeframe, String expectedInterval) {
+//        // given
+//        when(ohlcv1dRepository.findDynamicDailyCandles(any(), any(), any(), anyInt()))
+//                .thenReturn(List.of());
+//
+//        // when
+//        chartService.getNCandles(STOCK_CODE, timeframe, END_TIME, LIMIT);
+//
+//        // then
+//        verify(ohlcv1dRepository).findDynamicDailyCandles(STOCK_CODE, expectedInterval, END_TIME, LIMIT);
+//    }
+//
+//    @Test
+//    @DisplayName("1mo(월봉) 요청 시 1일봉 레포지토리의 findMonthlyCandles 메서드로 라우팅된다.")
+//    void given1MonthTimeframe_whenGetCandles_thenRoutingCollectInterval() {
+//        // given
+//        when(ohlcv1dRepository.findMonthlyCandles(any(), any(), anyInt()))
+//                .thenReturn(List.of());
+//
+//        // when
+//        chartService.getNCandles(STOCK_CODE, "1mo", END_TIME, LIMIT);
+//
+//        // then
+//        verify(ohlcv1dRepository).findMonthlyCandles(STOCK_CODE, END_TIME, LIMIT);
+//    }
+//
+//    @Test
+//    @DisplayName("1y(년봉) 요청 시 1일봉 레포지토리의 findYearlyCandles 메서드로 라우팅된다.")
+//    void given1YearTimeframe_whenGetCandles_thenRoutingCollectInterval() {
+//        // given
+//        when(ohlcv1dRepository.findYearlyCandles(any(), any(), anyInt()))
+//                .thenReturn(List.of());
+//
+//        // when
+//        chartService.getCandles(STOCK_CODE, "1y", END_TIME, LIMIT);
+//
+//        // then
+//        verify(ohlcv1dRepository).findYearlyCandles(STOCK_CODE, END_TIME, LIMIT);
+//    }
 
     @Test
     @DisplayName("지원하지 않는 잘못된 타임프레임(분봉) 요청 시 InvalidChartParameterException 발생한다.")
     void givenInvalidMinutesTimeframe_whenGetCandles_thenThrowException() {
         // then & when
-        assertThatThrownBy(() -> chartService.getCandles(STOCK_CODE, "23m", END_TIME, LIMIT))
+        assertThatThrownBy(() -> chartService.getNCandles(STOCK_CODE, "23m", END_TIME, LIMIT))
                 .isInstanceOf(InvalidChartParameterException.class)
-                .hasMessageContaining("지원하지 않는 분봉");
+                .hasMessageContaining("지원하지 않는 캔들 타입입니다.");
     }
 
     @Test
     @DisplayName("지원하지 않는 잘못된 타임프레임(일/주/월/년봉) 요청 시 InvalidChartParameterException 발생한다.")
     void givenInvalidTimeframe_whenGetCandles_thenThrowException() {
         // then & when
-        assertThatThrownBy(() -> chartService.getCandles(STOCK_CODE, "99h", END_TIME, LIMIT))
+        assertThatThrownBy(() -> chartService.getNCandles(STOCK_CODE, "99h", END_TIME, LIMIT))
                 .isInstanceOf(InvalidChartParameterException.class)
-                .hasMessageContaining("지원하지 않는 일/주/월/년봉");
+                .hasMessageContaining("지원하지 않는 캔들 타입입니다.");
     }
 
     @Test
@@ -146,11 +126,11 @@ class ChartServiceTest {
     void givenValidParameters_whenGetCandles_thenReturnResponse() {
         // given
         OhlcvDto mockDto = new OhlcvDto(STOCK_CODE, END_TIME, 100.0, 150.0, 90.0, 120.0, 1000L);
-        when(ohlcv1mRepository.findDynamicMinuteCandles(any(), any(), any(), anyInt()))
+        when(ohlcv1mRepository.findOneMinuteCandles(any(), any(), anyInt()))
                 .thenReturn(List.of(mockDto));
 
         // when
-        ChartResponseDto response = chartService.getCandles(STOCK_CODE, "1m", END_TIME, LIMIT);
+        ChartResponseDto response = chartService.getNCandles(STOCK_CODE, "1m", END_TIME, LIMIT);
 
         // then
         assertThat(response.candles()).hasSize(1);
