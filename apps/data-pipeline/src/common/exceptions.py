@@ -1077,6 +1077,41 @@ class FeatureCalculationExecutionError(FeatureError):
             should_retry=False
         )
 
+class DatasetSplitExecutionError(FeatureError):
+    """시계열 데이터셋 분할(Dataset Split) 및 Purged Gap 격리 구동 중 발생하는 예외.
+
+    Gold Feature Engineering 완료 데이터프레임을 Train, Validation, Test, Inference 파티션으로
+    시간 순서에 따라 분할할 때 스키마 불일치, 유효 데이터 수량 부족 또는 파라미터 분할 오류가
+    발생할 경우 상위 오케스트레이터로 전파됩니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        split_mode: str = "train_test",
+        forecast_horizon: int = 20,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """DatasetSplitExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            split_mode (str): 설정된 데이터셋 분할 모드 (기본값: 'train_test').
+            forecast_horizon (int): 설정된 예측 Horizon 및 Purged Gap 기간 (기본값: 20영업일).
+            original_exception (Optional[Exception]): 데이터셋 분할 중 발생한 원본 예외.
+        """
+        # [설계 의도] 시계열 분할 구동 시 설정된 분할 모드와 Horizon 정보를 기록하여 파티션 격리 오염 원인을 명확히 추적함
+        details = {
+            "split_mode": split_mode,
+            "forecast_horizon": forecast_horizon
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
 
 class TargetGenerationError(FeatureError):
     """예측 타겟 변수(target_return_20d) 산출 및 시계열 shift 연산 중 발생하는 예외.
