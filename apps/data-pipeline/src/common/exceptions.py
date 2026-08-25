@@ -94,7 +94,19 @@ class ReaderError(ETLError):
     pass
 
 class BuilderError(ETLError):
-    """Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    """[B] Builder 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    pass
+
+class PreprocessorError(ETLError):
+    """[P] Preprocessor 계층에서 발생하는 예외를 정의하는 커스텀 에러 클래스."""
+    pass
+
+class ModelError(ETLError):
+    """[M] 모델링, 평가, XAI 및 백테스팅 단계 예외 Base."""
+    pass
+
+class FeatureError(ETLError):
+    """[F] 피처 엔지니어링 및 정상성 변환 단계 예외 Base."""
     pass
 
 
@@ -499,3 +511,665 @@ class BuilderServiceError(BuilderError):
             details["original_exception_type"] = type(original_exception).__name__
             
         super().__init__(message, details=details, should_retry=False)
+
+# ==============================================================================
+# 9. Preprocessor Layer Detailed Exceptions
+# ==============================================================================
+
+class EmptyInputDataError(PreprocessorError):
+    """입력 금융 시계열 데이터프레임이 완전히 비어있을 때 발생하는 예외 클래스.
+    
+    데이터 수집 누락이나 업스트림 파이프라인 중단으로 인해 유입된 데이터가 0건일 때 발생하며,
+    정적 파일 유실/오류이므로 재시도하지 않습니다.
+    """
+
+    def __init__(self, message: str) -> None:
+        """EmptyInputDataError 초기화."""
+        super().__init__(message=message, details={}, should_retry=False)
+
+
+class InsufficientLookbackWindowError(PreprocessorError):
+    """유입된 거래일수가 설정된 슬라이딩 윈도우 크기보다 작아 통계적 진단이 불가능할 때 발생하는 예외 클래스.
+    
+    컨텍스트 확보를 위한 물리 거래일수가 미달인 상태로 슬라이딩 연산 강행 시 발생하는 
+    윈도우 슬라이싱 아웃오브바운드 오류를 차단합니다.
+    """
+
+    def __init__(self, message: str, current_length: int, required_window_size: int) -> None:
+        """InsufficientLookbackWindowError 초기화.
+
+        Args:
+            message (str): 에러 상세 메시지.
+            current_length (int): 실제 유입된 원본 시계열의 물리적 총 거래일수.
+            required_window_size (int): 아키텍처상 요구되는 필수 슬라이딩 룩백 윈도우 크기.
+        """
+        details = {
+            "current_length": current_length,
+            "required_window_size": required_window_size
+        }
+        super().__init__(message=message, details=details, should_retry=False)
+
+class ImputationExecutionError(PreprocessorError):
+    """결측치 보간 태스크 레이어(Imputation Task Layer) 연산 중 발생하는 런타임 예외.
+
+    하위 보간 알고리즘(LOCF, 로그 수익률 추세 확장, 이동평균 평균 회귀, 칼만 필터)의 판다스/넘파이/수리
+    연산 과정에서 발생하는 예기치 못한 행렬 차원 비정합성, 선형대수 연산 불능(Singular Matrix Error),
+    타입 불일치 및 메모리 장애 상황을 포착하고 원본 예외와 핵심 컨텍스트(자산 코드 목록, 임퓨터 타입)를
+    유실 없이 상위 오케스트레이터로 전파하기 위해 디자인된 방어적 예외 클래스입니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        imputer_type: str,
+        target_assets: List[str],
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ImputationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            imputer_type (str): 에러가 발생한 구체적 보간 알고리즘 컴포넌트 명칭 
+            target_assets (List[str]): 결측치 보간 도중 문제가 발생한 대상 자산 코드 목록.
+            original_exception (Exception, optional): 하위 라이브러리에서 발생하여 근본 원인이 된 원본 시스템 예외 객체.
+        """
+        details = {
+            "imputer_type": imputer_type,
+            "target_assets": target_assets
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+class OutlierDiagnosisExecutionError(PreprocessorError):
+    """이상치 진단 태스크 레이어(Outlier Diagnosis Task Layer) 연산 중 발생하는 런타임 예외.
+
+    하위 이상치 탐지 알고리즘 전략(IQR, Z-Score, Isolation Forest)의 판다스/넘파이/사이킷런
+    연산 과정에서 발생하는 행렬 차원 비정합성, 모델 피팅 에러, 난수 고정 실패 및 메모리 장애
+    상황을 포착하여 원본 예외와 핵심 컨텍스트를 유실 없이 상위 오케스트레이터로 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        strategy_type: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """OutlierDiagnosisExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            strategy_type (str): 에러가 발생한 구체적인 이상치 탐지 전략 컴포넌트 명칭.
+            original_exception (Exception, optional): 하위 라이브러리에서 발생하여 근본 원인이 된 원본 시스템 예외 객체.
+        """
+        details = {
+            "strategy_type": strategy_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class OutlierRefinementExecutionError(PreprocessorError):
+    """이상치 정제 태스크 레이어(Outlier Refinement Task Layer) 연산 중 발생하는 런타임 예외.
+
+    이상치 진단 리포트의 불리언 마스크를 기반으로 원본 행렬을 알고리즘적 결측치(NaN)로 치환하거나,
+    지정된 상하한 임계값으로 조정(Clipping)하는 판다스 벡터 연산 및 셰이프 매칭 과정에서 발생하는
+    예기치 못한 장애 상황을 포착하고 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        refinement_policy: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """OutlierRefinementExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            refinement_policy (str): 에러가 발생한 구체적인 이상치 정제 처리 정책 명칭.
+            original_exception (Exception, optional): 하위 판다스 연산 레이어에서 발생한 원본 예외 객체.
+        """
+        details = {
+            "refinement_policy": refinement_policy
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+class PreprocessorFactoryError(PreprocessorError):
+    """PreprocessorFactory 계층에서 하이퍼파라미터 조건 바인딩 및 태스크 객체 생성 중 발생하는 예외.
+    
+    설정 파일(.yml)의 파라미터 타입 불일치나 지원하지 않는 전략 문자열이 유입되었을 때 발생하며,
+    컴포넌트 조립 단계의 정적 오류이므로 재시도(Retry)하지 않습니다.
+    """
+    
+    def __init__(self, message: str, original_exception: Optional[Exception] = None) -> None:
+        """PreprocessorFactoryError 초기화.
+
+        Args:
+            message (str): 에러 발생 상세 사유 메시지.
+            original_exception (Exception, optional): 근본 원인이 된 시스템 혹은 판다스/넘파이 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+            
+        super().__init__(
+            message=message, 
+            details=details, 
+            original_exception=original_exception, 
+            should_retry=False
+        )
+
+class PreprocessorServiceError(PreprocessorError):
+    """PreprocessorService 계층의 설정 파싱 및 태스크 오케스트레이션 단계에서 발생하는 예외.
+    
+    하위 판다스/넘파이 연산 계층에서 발생하는 예측 불가능한 시스템 장애(MemoryError 등)를 포착하여
+    콘텍스트를 누수 없이 보존하며, 재시도(Retry)가 불가능한 정적 오류로 취급합니다.
+    """
+    
+    def __init__(self, message: str, original_exception: Optional[Exception] = None) -> None:
+        """PreprocessorServiceError 초기화.
+
+        Args:
+            message (str): 에러 발생 상세 사유 메시지.
+            original_exception (Exception, optional): 근본 원인이 된 하위 시스템의 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+            
+        super().__init__(
+            message=message, 
+            details=details, 
+            original_exception=original_exception, 
+            should_retry=False
+        )
+
+# ==============================================================================
+# 10. Modeler Layer Detailed Exceptions
+# ==============================================================================
+
+class ModelNotFittedError(ModelError):
+    """모델 학습(fit)이 완료되지 않은 상태에서 추론, 평가 또는 XAI 연산을 시도할 때 발생하는 예외.
+    
+    미학습 모델 인스턴스에 의한 예측값 왜곡 및 잘못된 파이프라인 구동을 사전에 차단하기 위한 방어적 예외입니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: Optional[str] = None,
+        operation_type: Optional[str] = None
+    ) -> None:
+        """ModelNotFittedError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (Optional[str]): 학습되지 않은 상태로 호출된 모델 컴포넌트 명칭.
+            operation_type (Optional[str]): 실행을 시도한 메서드 명칭 (예: predict, evaluate, calculate_shap_values).
+        """
+        # [설계 의도] 호출된 모델명과 연산 유형을 명시하여 미학습 인스턴스 참조 지점을 로그 시스템에서 신속히 식별함
+        details = {}
+        if model_name:
+            details["model_name"] = model_name
+        if operation_type:
+            details["operation_type"] = operation_type
+
+        super().__init__(
+            message=message,
+            details=details,
+            should_retry=False
+        )
+
+
+class ModelTrainingExecutionError(ModelError):
+    """모델 학습(fit) 또는 튜닝 실행 중 연산 실패, 수리적 발산, 데이터 타입 불일치가 발생할 때 발생하는 예외.
+    
+    알고리즘 내부 학습 실패나 경사하강법 폭주 등 런타임 오류를 포착하여 원본 예외와 함께 상위 오케스트레이터로 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        hyperparameters: Optional[Dict[str, Any]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelTrainingExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): 학습을 수행 중이던 모델 컴포넌트 명칭.
+            hyperparameters (Optional[Dict[str, Any]]): 학습 시 주입된 하이퍼파라미터 설정 정보.
+            original_exception (Optional[Exception]): 근본 원인이 된 라이브러리(scikit-learn, XGBoost, PyTorch 등) 원본 예외 객체.
+        """
+        # [설계 의도] 하이퍼파라미터 조합을 details에 포함시켜 실패한 파라미터 영역을 디버깅 단계에서 즉시 재현할 수 있도록 함
+        details = {
+            "model_name": model_name,
+            "hyperparameters": hyperparameters or {}
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ModelEvaluationExecutionError(ModelError):
+    """모델 성능 지표(RMSE, MAE, MDA 등) 계산 및 예측값 정렬/차원 검증 도중 발생하는 예외.
+    
+    입력 X_test와 y_test 간의 행 인덱스 비정합성이나 수리적 평가 지표 연산 불능 상태를 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        metric_name: Optional[str] = None,
+        y_true_shape: Optional[Tuple[int, ...]] = None,
+        y_pred_shape: Optional[Tuple[int, ...]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelEvaluationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): 평가 대상 모델 컴포넌트 명칭.
+            metric_name (Optional[str]): 연산 실패가 발생한 산출 지표 명칭 (예: RMSE, MAE, MDA).
+            y_true_shape (Optional[Tuple[int, ...]]): 실제 정답 라벨 데이터의 형상(Shape).
+            y_pred_shape (Optional[Tuple[int, ...]]): 모델 예측 결과 데이터의 형상(Shape).
+            original_exception (Optional[Exception]): 근본 원인이 된 원본 시스템/numpy 예외 객체.
+        """
+        # [설계 의도] 형상 정보(Tuple)를 기록하여 시계열 인덱스 차원 불일치나 누락으로 인한 지표 오산출을 명확히 진단함
+        details = {
+            "model_name": model_name,
+            "metric_name": metric_name,
+            "y_true_shape": y_true_shape,
+            "y_pred_shape": y_pred_shape
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ModelArtifactError(ModelError):
+    """모델 아티팩트(.pkl, .pt 등)의 파일 저장(save_artifact) 및 복원(load_artifact) 과정에서 발생하는 예외.
+    
+    파일 경로 부재, 직렬화 실패, 권한 오류 또는 체크포인트 무결성 손상을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        artifact_path: str,
+        operation_type: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ModelArtifactError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            artifact_path (str): 아티팩트 저장 또는 로드를 시도한 물리 파일 경로.
+            operation_type (str): 수행 중이던 I/O 작업 유형 ('save' 또는 'load').
+            original_exception (Optional[Exception]): pickle, joblib, torch I/O 등에서 발생한 원본 예외.
+        """
+        # [설계 의도] 파일 시스템 경로와 작업 유형을 보존하여 스토리지 권한/경로오류 및 체크포인트 파일 손상을 즉시 구분함
+        details = {
+            "artifact_path": artifact_path,
+            "operation_type": operation_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class ShapCalculationError(ModelError):
+    """XAI(Explainable AI) 해석을 위한 SHAP Value 산출 및 Explainer 객체 실행 중 발생하는 예외.
+    
+    트리/선형 알고리즘별 Explainer 호환성 오류, 행렬 차원 문제, 메모리 초과 현상을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_name: str,
+        explainer_type: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """ShapCalculationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            model_name (str): SHAP 해석 대상 모델 명칭.
+            explainer_type (Optional[str]): 사용된 SHAP Explainer 종류 (예: TreeExplainer, LinearExplainer, KernelExplainer).
+            original_exception (Optional[Exception]): shap 라이브러리 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] SHAP Explainer 호환성 여부를 파악할 수 있도록 모델 및 Explainer 유형을 details에 저장함
+        details = {
+            "model_name": model_name,
+            "explainer_type": explainer_type
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class HyperparameterOptimizationError(ModelError):
+    """Optuna 기반 하이퍼파라미터 최적화(HPO) 실행 중 검색 공간(Search Space) 설정 오류나 Trial 중단 시 발생하는 예외.
+    
+    Stage 1 / Stage 2 HPO 과정에서의 Trial 수렴 실패나 잘못된 파라미터 탐색 범위를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        study_name: str,
+        trial_number: Optional[int] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """HyperparameterOptimizationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            study_name (str): Optuna Study 식별 명칭.
+            trial_number (Optional[int]): 장애가 발생한 특정 Trial 회차 번호.
+            original_exception (Optional[Exception]): Optuna 내부 또는 하위 목적함수에서 발생한 원본 예외.
+        """
+        # [설계 의도] Study 및 실패한 Trial 번호를 추적하여 특정 하이퍼파라미터 조합에서의 예외 상황을 신속히 고립시킴
+        details = {
+            "study_name": study_name,
+            "trial_number": trial_number
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class EnsembleExecutionError(ModelError):
+    """이종 앙상블(Weighted/Stacking) 모델 결합, 가중치 산출 및 서브 모델 병합 연산 중 발생하는 예외.
+    
+    서브 모델 간 예측값 차원 불일치, 가중치 최적화 실패, 스태킹 메타 모델 피팅 오류를 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        ensemble_type: str,
+        sub_model_names: Optional[List[str]] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """EnsembleExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            ensemble_type (str): 앙상블 기법 유형 (예: WeightedEnsemble, StackingEnsemble).
+            sub_model_names (Optional[List[str]]): 앙상블을 구성하는 하위 서브 모델 명칭 목록.
+            original_exception (Optional[Exception]): 앙상블 결합 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] JSON 직렬화를 위해 서브 모델 목록을 List 타입으로 유지하고 앙상블 결합 방식 컨텍스트를 보존함
+        details = {
+            "ensemble_type": ensemble_type,
+            "sub_model_names": sub_model_names or []
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class BacktestExecutionError(ModelError):
+    """Champion-Challenger 백테스팅(Out-of-Sample / TimeSeriesSplit), 금융 지표 산출, 대응표본 t-검정 도중 발생하는 예외.
+    
+    일자별 오차 차이 계산 불능, t-검정 데이터 부족, Sharpe Ratio 산출 중 분모 0 오류 상황을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        backtest_period: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """BacktestExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            backtest_period (Optional[str]): 백테스팅이 진행 중이던 날짜/시계열 구간 정보.
+            original_exception (Optional[Exception]): 통계 검정(scipy) 또는 금융 지표 연산 중 발생한 원본 예외.
+        """
+        # [설계 의도] 통계 검정 실패 및 금융 지표 왜곡이 발생한 백테스팅 시계열 구간을 보존하여 시계열 데이터 결함 원인을 추적함
+        details = {
+            "backtest_period": backtest_period
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+# ==============================================================================
+# 11. Feature Layer Detailed Exceptions
+# ==============================================================================
+
+class FeatureInitializationError(FeatureError):
+    """Feature Factory 및 Config 매핑 단계에서 파라미터 바인딩이나 Task 객체 생성 중 발생하는 예외.
+    
+    설정 파일(.yml) 내 파라미터 타입 불일치나 존재하지 않는 피처 Task 명칭 유입 시 발생하며,
+    컴포넌트 조립 단계의 정적 오류이므로 재시도(Retry)하지 않습니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        task_name: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureInitializationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            task_name (Optional[str]): 초기화에 실패한 피처 태스크 명칭.
+            original_exception (Optional[Exception]): 근본 원인이 된 원본 시스템 예외.
+        """
+        # [설계 의도] 초기화 실패 태스크를 details 사전으로 관리하여 파이프라인 기동 전 바인딩 오류를 명확히 진단함
+        details = {}
+        if task_name:
+            details["task_name"] = task_name
+
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class RequiredColumnNotFoundError(FeatureError):
+    """피처 산출에 필요한 필수 원본 컬럼(가격, 거래량, 금리 등)이 데이터프레임에 존재하지 않을 때 발생하는 예외.
+    
+    Lookback 윈도우 계산 전 입력 데이터의 스키마 무결성을 검증하여,
+    잘못된 컬럼 참조로 인한 계산 중단이나 데이터 오염을 조기에 차단합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        missing_columns: List[str],
+        task_name: Optional[str] = None
+    ) -> None:
+        """RequiredColumnNotFoundError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            missing_columns (List[str]): 누락된 필수 컬럼명 목록 (JSON 직렬화를 위해 List 사용).
+            task_name (Optional[str]): 컬럼 누락이 감지된 피처 태스크 명칭.
+        """
+        # [설계 의도] 누락된 컬럼 목록을 List로 정형화하여 LogManager를 통한 JSON 직렬화 시 파싱 오류를 방지함
+        details = {
+            "missing_columns": missing_columns,
+            "task_name": task_name or "UnknownTask"
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            should_retry=False
+        )
+
+
+class FeatureCalculationExecutionError(FeatureError):
+    """피처 엔지니어링 태스크(Task) 연산 중 발생하는 런타임 수리/통계 예외.
+    
+    롤링 윈도우 시계열 연산, 롤링 왜도/첨도 계산, 이동평균 이격도 산출 시 발생하는
+    0으로 나누기(ZeroDivision), 수리적 발산, 행렬 차원 비정합성을 포착하여 원본 예외와 함께 전파합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        feature_name: str,
+        task_name: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureCalculationExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            feature_name (str): 산출 실패가 발생한 구체적인 피처 컬럼 명칭.
+            task_name (str): 연산을 수행 중이던 피처 태스크 컴포넌트 명칭.
+            original_exception (Optional[Exception]): 근본 원인이 된 pandas/numpy/scipy 원본 예외.
+        """
+        # [설계 의도] 실패한 피처 컬럼 및 태스크 명칭을 details에 세분화하여 디버깅 시 연산 실패 지점을 즉시 격리함
+        details = {
+            "feature_name": feature_name,
+            "task_name": task_name
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+class DatasetSplitExecutionError(FeatureError):
+    """시계열 데이터셋 분할(Dataset Split) 및 Purged Gap 격리 구동 중 발생하는 예외.
+
+    Gold Feature Engineering 완료 데이터프레임을 Train, Validation, Test, Inference 파티션으로
+    시간 순서에 따라 분할할 때 스키마 불일치, 유효 데이터 수량 부족 또는 파라미터 분할 오류가
+    발생할 경우 상위 오케스트레이터로 전파됩니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        split_mode: str = "train_test",
+        forecast_horizon: int = 20,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """DatasetSplitExecutionError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            split_mode (str): 설정된 데이터셋 분할 모드 (기본값: 'train_test').
+            forecast_horizon (int): 설정된 예측 Horizon 및 Purged Gap 기간 (기본값: 20영업일).
+            original_exception (Optional[Exception]): 데이터셋 분할 중 발생한 원본 예외.
+        """
+        # [설계 의도] 시계열 분할 구동 시 설정된 분할 모드와 Horizon 정보를 기록하여 파티션 격리 오염 원인을 명확히 추적함
+        details = {
+            "split_mode": split_mode,
+            "forecast_horizon": forecast_horizon
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class TargetGenerationError(FeatureError):
+    """예측 타겟 변수(target_return_20d) 산출 및 시계열 shift 연산 중 발생하는 예외.
+    
+    1달 Horizon($T+20$) 타겟 생성 시 Horizon 경계 아웃오브바운드, 타겟 컬럼 유출(Leakage)
+    또는 연속 결측으로 인한 정답 라벨 손상 상황을 포착합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        target_horizon: int = 20,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """TargetGenerationError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            target_horizon (int): 설정된 타겟 예측 기간 (기본값: 20영업일).
+            original_exception (Optional[Exception]): 타겟 생성 중 발생한 원본 예외.
+        """
+        # [설계 의도] 타겟 생성 시 설정된 Horizon 정보를 기록하여 타겟 변수 산출 오염 원인을 명확히 추적함
+        details = {
+            "target_horizon": target_horizon
+        }
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )
+
+
+class FeatureServiceError(FeatureError):
+    """FeatureService 오케스트레이션 및 파이프라인 제어 단계에서 발생하는 최상위 예외.
+    
+    하위 피처 태스크 파이프라인 순차 기동 중 발생하는 시스템 장애나
+    최종 피처 행렬 사출 계약 파괴 상황을 포착하여 보존합니다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        original_exception: Optional[Exception] = None
+    ) -> None:
+        """FeatureServiceError 예외 인스턴스를 초기화합니다.
+
+        Args:
+            message (str): 장애 발생 사유에 대한 상세 설명 메시지.
+            original_exception (Optional[Exception]): 근본 원인이 된 하위 시스템의 원본 예외 객체.
+        """
+        details = {}
+        if original_exception:
+            details["original_exception_type"] = type(original_exception).__name__
+
+        super().__init__(
+            message=message,
+            details=details,
+            original_exception=original_exception,
+            should_retry=False
+        )

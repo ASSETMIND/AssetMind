@@ -23,6 +23,9 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
   - 근거: 수십~수백 개의 서로 다른 금융 지표(TR_ID)를 수집해야 하는 KIS API 특성상, 코드 수준의 강한 결합(Hardcoding)보다 유연성(Flexibility) 확보가 시스템 확장성 측면에서 압도적으로 중요하므로 이 설계를 채택함.
 """
 
+import random
+import asyncio
+
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -154,14 +157,12 @@ class KISExtractor(AbstractExtractor):
             # 국내 지수: KIS 규격은 4자리(예: 0021)입니다. YAML에 5자리(예: 00021)로 인입될 경우 보정합니다.
             if policy.domain == "domestic-stock" and len(iscd) == 5: #and iscd.startswith("0"):
                 merged_params["FID_INPUT_ISCD"] = iscd[1:]
-                
-        # print(f"DEBUG_KIS_REQUEST - JOB_ID: {request.job_id} | URL: {url} | TR_ID: {headers['tr_id']} | PARAMS: {merged_params}")
+        
+        # KIS API Rate Limit(초당 5회) 준수 및 국내 지수 동시 호출 시 TPS 초과 방지를 위한 비동기 Jitter 적용
+        await asyncio.sleep(random.uniform(0.1, 0.5))
 
         # 6. 비동기 호출 수행 및 응답 저장
         response_data = await self.http_client.get(url, headers=headers, params=merged_params)
-        
-        # [임시 디버깅용] 서버가 반환한 실제 JSON 데이터 출력
-        # print(f"DEBUG_KIS_RESPONSE - JOB_ID: {request.job_id} | BODY: {response_data}")
         
         return response_data
 

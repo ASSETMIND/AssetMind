@@ -4,4 +4,7 @@ __pycache__/
 .localstack/
 
 # Jupyter Notebooks
-*.ipynb
+
+notebooks/test/*
+
+minio_data/*

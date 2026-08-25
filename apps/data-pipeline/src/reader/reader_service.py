@@ -23,6 +23,8 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 
 from typing import Any, Dict, Iterator
 
+import pandas as pd
+
 from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.common.decorators.log_decorator import log_decorator
@@ -34,7 +36,7 @@ from src.reader.providers.abstract_reader import AbstractReader
 # ==============================================================================
 # [설계 의도] 파이프라인 호출 시 타겟 스토리지 식별자가 누락될 경우를 대비한 대체값.
 # 금융 원천 데이터의 1차 적재소인 S3 데이터 레이크를 기본값으로 강제하여 분석가의 사용 편의성 증대.
-DEFAULT_READER_TARGET: str = "s3"
+DEFAULT_READER_TARGET: str = "s3_parquet"
 
 # [설계 의도] 1차 EDA 및 Pandas DataFrame 변환 효율을 극대화하는 청크(배치) 사이즈 스윗스팟.
 # 대용량 JSONL 압축 해제 시 메모리 스파이크를 방지하기 위해 매직 넘버를 배제하고 상수로 통제함.
@@ -76,8 +78,11 @@ class ReaderService:
         self._fail_count = 0
         self._warning_logs: list[str] = []
 
-    def _get_or_create_reader(self) -> AbstractReader:
+    def _get_or_create_reader(self, source_layer: str = "bronze") -> AbstractReader:
         """설정값에 기반하여 대상 스토리지 I/O 리더 인스턴스를 지연 초기화 및 반환합니다.
+
+        Args:
+            source_layer (str): 메달리온 아키텍처 레이어 식별자 ('bronze', 'silver'). 기본값은 "bronze".
 
         Returns:
             AbstractReader: 대상 스토리지 I/O 준비(인증/연결)가 완료된 구체 리더 인스턴스.
@@ -86,30 +91,42 @@ class ReaderService:
             ConfigurationError: 환경 설정 파일(reader.yml) 내 지원하지 않는 타겟이 입력된 경우.
             ReaderInitializationError: 구체 클래스의 동적 임포트(Dynamic Import) 혹은 네트워크 연결 실패 시.
         """
-        # 1. [Fast-Path] 캐시 히트(Cache Hit) 시 즉시 반환
-        # [설계 의도] 단일 프로세스에서 수백 개의 S3 Object 키를 순차적으로 호출할 때 
-        # O(1) 시간 복잡도로 인스턴스를 반환하여 MLOps 파이프라인의 처리 속도를 보장함.
-        if self._target_reader in self._reader_cache:
-            return self._reader_cache[self._target_reader]
+        # 1. [Fast-Path] 레이어 인지(Layer-Aware)형 캐시 히트(Cache Hit) 판별
+        # [설계 의도] 동일 리더 유형(s3_parquet)이라도 브론즈/실버 레이어의 물리적 타겟 버킷이 완전히 다르므로, 
+        # 레지스트리 캐시 키에 레이어 명세를 합성하여 브론즈 버킷으로의 커넥션 고착화 현상을 원천 방지함.
+        cache_key = f"{self._target_reader}_{source_layer.strip().lower()}"
+        if cache_key in self._reader_cache:
+            return self._reader_cache[cache_key]
 
         try:
             reader_policy = self._config.get_reader(self._target_reader)
 
-            # [설계 의도] 분기 블록 내부 동적 임포트(Dynamic Import).
-            # S3 리더만 필요한 환경에서 불필요하게 psycopg2(Postgres) 엔진이 로드되어 
-            # 메모리가 낭비되거나 ImportError가 발생하는 것을 방어함.
+            # [설계 의도] 분기 블록 내부 동적 임포트(Dynamic Import) 및 물리 버킷 동적 라우팅 구현.
             if self._target_reader in ["s3_zstd"]:
                 from src.reader.providers.s3_zstd_reader import S3ZstdStreamingReader
                 
+                bucket_name = reader_policy.bucket_name
+                if source_layer.strip().lower() == "silver":
+                    bucket_name = "data-pipeline-silver"
+
                 reader_instance = S3ZstdStreamingReader(
-                    bucket_name=reader_policy.bucket_name,
+                    bucket_name=bucket_name,
                     region=reader_policy.region
                 )
             
-            # 확장을 고려한 예약 구조 (PostgreSQL 등 추가 시 주석 해제 후 구현)
-            # elif self._target_reader == "postgres":
-            #     from src.reader.providers.postgres_reader import PostgresReader
-            #     reader_instance = PostgresReader(...)
+            elif self._target_reader in ["s3_parquet", "s3_parquet_gold"]:
+                from src.reader.providers.s3_parquet_reader import S3ParquetStreamingReader
+                
+                # [설계 의도] source_layer가 silver일 경우 reader.yml에 설정된 기본 브론즈 버킷 명세를 차단하고
+                # 실제 실버 스토리지 타겟인 'data-pipeline-silver'로 커넥션을 강제 라우팅함.
+                bucket_name = reader_policy.bucket_name
+                if source_layer.strip().lower() == "silver":
+                    bucket_name = "data-pipeline-silver"
+
+                reader_instance = S3ParquetStreamingReader(
+                    bucket_name=bucket_name,
+                    region=reader_policy.region
+                )
                 
             else:
                 raise ConfigurationError(
@@ -117,8 +134,8 @@ class ReaderService:
                     key_name="global_reader.target"
                 )
 
-            # 정상적으로 생성된 객체를 향후 재사용하기 위해 레지스트리에 등록
-            self._reader_cache[self._target_reader] = reader_instance
+            # 레이어별 결합 식별 키로 인메모리 레지스트리에 저장
+            self._reader_cache[cache_key] = reader_instance
             return reader_instance
 
         except Exception as e:
@@ -183,20 +200,37 @@ class ReaderService:
         
         layer_prefix = source_layer.strip().lower()
         
-        # 3. [구조적 매핑] 브론즈 레이어의 Hive-Style 파티셔닝 디렉토리 Prefix 구조 생성
-        # 예: bronze/market_data/provider=ecos/job=ecos_kdb_1y_daily/year=2026/month=05/day=23/
-        source_path = (
-            f"{layer_prefix}/market_data/"
-            f"provider={provider}/"
-            f"job={clean_job_id}/"
-            f"year={year}/"
-            f"month={month}/"
-            f"day={day}/"
-        )
+        # 3. [구조적 매핑] 메달리온 레이어별 물리 저장 레이아웃에 따른 S3 Prefix 경로 동적 빌드
+        # [설계 의도] 실버 파이프라인은 pandas/pyarrow 엔진을 통해 정수형(int) 파티셔닝으로 분산 적재되므로 
+        # S3 물리 디렉터리 명칭 생성 시 0이 채워지지 않습니다(예: month=1). 
+        # 따라서 문맥상 유입된 자릿수 패딩 날짜를 int형 변환 후 재직렬화하여 문자열 불일치 에러를 완벽히 차단합니다.
+        if layer_prefix == "bronze":
+            source_path = (
+                f"bronze/market_data/"
+                f"provider={provider}/"
+                f"job={clean_job_id}/"
+                f"year={year}/"
+                f"month={month}/"
+                f"day={day}/"
+            )
+        elif layer_prefix == "silver":
+            source_path = (
+                f"silver/market_data/"
+                f"{clean_job_id}/"
+                f"year={year}/"
+                f"month={month}/"
+                f"day={day}/"
+            )
+        else:
+            raise ReaderServiceError(
+                message=f"지원하지 않는 소스 레이어 유형입니다. (유입 레이어 식별자: {source_layer})",
+                target_reader=self._target_reader
+            )
 
-        # 2. 인스턴스 획득 및 구체 리더(S3ZstdStreamingReader)로 정합성 규격에 맞게 호출 위임
+        # 4. 인스턴스 획득 및 구체 리더(S3ParquetStreamingReader)로 정합성 규격에 맞게 호출 위임
         try:
-            reader = self._get_or_create_reader()
+            # [설계 의도] 레이어 식별자를 파라미터로 명시 전달하여 캐시 고착화가 깨진 정상 버킷 객체를 획득함.
+            reader = self._get_or_create_reader(source_layer=layer_prefix)
             raw_stream = reader.read_stream(
                 source_path=source_path,
                 batch_size=batch_size
@@ -253,6 +287,44 @@ class ReaderService:
                     )
                     raise e
         except Exception as e:
+            raise e
+        
+    @log_decorator()
+    def read_dataframe(
+        self, 
+        source_path: str, 
+        job_id: str, 
+        source_layer: str = "gold", 
+        **kwargs: Any
+    ) -> pd.DataFrame:
+        """[Reader Facade] 지정된 경로의 S3 데이터를 고속 Bulk DataFrame으로 읽어옵니다.
+
+        Args:
+            source_path (str): S3 파티션 물리 경로.
+            job_id (str): 실행 작업 식별자.
+            source_layer (str): 데이터 레이어 식별자 ('gold', 'silver' 등). 기본값은 'gold'.
+            **kwargs (Any): 하위 리더용 전달 변수.
+        """
+        try:
+            # [설계 의도] 유입된 source_layer('gold', 'silver' 등)를 명시적으로 넘겨 도메인 맥락 정합성을 사수함
+            reader = self._get_or_create_reader(source_layer=source_layer)
+            dataframe_result: pd.DataFrame = reader.read_dataframe(source_path, **kwargs)
+
+            if dataframe_result.empty:
+                self._empty_count += 1
+                self._warning_logs.append(
+                    f"[{self._target_reader.upper()}] Bulk 데이터 공백 감지 (빈값) - Job ID: {job_id}"
+                )
+            else:
+                self._success_count += 1
+
+            return dataframe_result
+
+        except Exception as e:
+            self._fail_count += 1
+            self._warning_logs.append(
+                f"[{self._target_reader.upper()}] Bulk 데이터 로드 실패 - Job ID: {job_id} | 원인: {str(e)}"
+            )
             raise e
 
     @log_decorator()

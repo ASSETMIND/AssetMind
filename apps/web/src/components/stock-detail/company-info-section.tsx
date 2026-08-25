@@ -62,10 +62,124 @@ const MOCK_DONUT_SLICES: DonutSlice[] = [
 ];
 
 const MOCK_BUSINESSES: BusinessItem[] = [
-	{ id: '1', name: '주요 사업 1', marketCap: '000조 원' },
-	{ id: '2', name: '주요 사업 2', marketCap: '000조 원' },
-	{ id: '3', name: '주요 사업 3', marketCap: '000조 원' },
-	{ id: '4', name: '주요 사업 4', marketCap: '000조 원' },
+	{
+		id: '1',
+		name: 'TV·모니터·생활가전',
+		marketCap: '000조 원',
+		modalProps: {
+			categoryName: 'TV·모니터·생활가전',
+			categorySubtitle: '12개 회사 · 3개 ETF',
+			returnCards: [
+				{ label: '1일', value: '+1.23%', isRise: true },
+				{ label: '1주', value: '-0.45%', isRise: false },
+				{ label: '1개월', value: '+5.67%', isRise: true },
+				{ label: '1년', value: '+12.3%', isRise: true },
+			],
+			stockList: [
+				{
+					id: 's1', name: '삼성전자', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 70000 + i * 500 + Math.random() * 1000 })),
+					currentPrice: '74,000원', changeRate: '+1.23%',
+				},
+				{
+					id: 's2', name: 'LG전자', isRise: false,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 110000 - i * 300 + Math.random() * 800 })),
+					currentPrice: '108,500원', changeRate: '-0.92%',
+				},
+				{
+					id: 's3', name: '코웨이', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 55000 + i * 200 + Math.random() * 500 })),
+					currentPrice: '56,800원', changeRate: '+0.71%',
+				},
+			],
+		},
+	},
+	{
+		id: '2',
+		name: '스마트폰·OLED패널',
+		marketCap: '000조 원',
+		modalProps: {
+			categoryName: '스마트폰·OLED패널',
+			categorySubtitle: '8개 회사 · 2개 ETF',
+			returnCards: [
+				{ label: '1일', value: '+0.87%', isRise: true },
+				{ label: '1주', value: '+2.14%', isRise: true },
+				{ label: '1개월', value: '-1.32%', isRise: false },
+				{ label: '1년', value: '+8.9%', isRise: true },
+			],
+			stockList: [
+				{
+					id: 's4', name: '삼성SDI', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 380000 + i * 2000 + Math.random() * 3000 })),
+					currentPrice: '392,000원', changeRate: '+0.87%',
+				},
+				{
+					id: 's5', name: 'LG디스플레이', isRise: false,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 13000 - i * 100 + Math.random() * 200 })),
+					currentPrice: '12,350원', changeRate: '-1.20%',
+				},
+			],
+		},
+	},
+	{
+		id: '3',
+		name: '반도체·메모리',
+		marketCap: '000조 원',
+		modalProps: {
+			categoryName: '반도체·메모리',
+			categorySubtitle: '15개 회사 · 5개 ETF',
+			returnCards: [
+				{ label: '1일', value: '-0.34%', isRise: false },
+				{ label: '1주', value: '+3.21%', isRise: true },
+				{ label: '1개월', value: '+9.45%', isRise: true },
+				{ label: '1년', value: '+31.2%', isRise: true },
+			],
+			stockList: [
+				{
+					id: 's6', name: 'SK하이닉스', isRise: false,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 185000 - i * 300 + Math.random() * 1000 })),
+					currentPrice: '182,500원', changeRate: '-0.34%',
+				},
+				{
+					id: 's7', name: '삼성전자', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 70000 + i * 400 + Math.random() * 800 })),
+					currentPrice: '74,000원', changeRate: '+1.23%',
+				},
+			],
+		},
+	},
+	{
+		id: '4',
+		name: '2차전지·배터리',
+		marketCap: '000조 원',
+		modalProps: {
+			categoryName: '2차전지·배터리',
+			categorySubtitle: '10개 회사 · 4개 ETF',
+			returnCards: [
+				{ label: '1일', value: '+2.10%', isRise: true },
+				{ label: '1주', value: '+4.55%', isRise: true },
+				{ label: '1개월', value: '-3.20%', isRise: false },
+				{ label: '1년', value: '-5.8%', isRise: false },
+			],
+			stockList: [
+				{
+					id: 's8', name: 'LG에너지솔루션', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 420000 + i * 3000 + Math.random() * 4000 })),
+					currentPrice: '438,000원', changeRate: '+2.10%',
+				},
+				{
+					id: 's9', name: '삼성SDI', isRise: true,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 380000 + i * 1500 + Math.random() * 2000 })),
+					currentPrice: '392,000원', changeRate: '+0.87%',
+				},
+				{
+					id: 's10', name: '포스코퓨처엠', isRise: false,
+					chartData: Array.from({ length: 10 }, (_, i) => ({ value: 310000 - i * 1000 + Math.random() * 1500 })),
+					currentPrice: '298,500원', changeRate: '-1.48%',
+				},
+			],
+		},
+	},
 ];
 
 // ─── 색상 ─────────────────────────────────────────────────────

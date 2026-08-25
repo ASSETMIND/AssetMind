@@ -8,6 +8,10 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW_CONN_POSTGRES_CONN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    MLFLOW_TRACKING_URI: http://mlflow-server:5000
+    MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -18,45 +22,48 @@ x-airflow-common: &airflow-common
   depends_on:
     airflow-postgres:
       condition: service_healthy
-    localstack:
+    minio:
       condition: service_healthy
     postgres:
       condition: service_healthy
 
 services:
-  # 1. 메인 스토리지 컨테이너 (LocalStack)
-  localstack:
-    image: localstack/localstack:4.4.0
-    container_name: local_s3_mock
+  # 1. 메인 오브젝트 스토리지 (MinIO - S3 Lakehouse)
+  minio:
+    image: minio/minio:latest
+    container_name: local_s3_storage
+    restart: unless-stopped
     ports:
-      - "4566:4566"
+      - "9000:9000" # S3 API 엔드포인트
+      - "9001:9001" # Web UI 콘솔 포트
     environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-      - SERVICES=s3
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
-      - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
+      - ./minio_data:/data # 호스트 디스크에 실제 파일 영속화 (RAM 소모 0)
+    command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 3s
-      timeout: 5s
-      retries: 10
+      timeout: 3s
+      retries: 5
 
-  # 2. 버킷 자동 생성 전용 1회용 컨테이너 (Init Container)
-  aws-cli-init:
-    image: amazon/aws-cli:latest
-    container_name: local_s3_setup
+  minio-init:
+    image: minio/mc:latest
+    container_name: local_s3_init
     depends_on:
-      localstack:
+      minio:
         condition: service_healthy
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-    volumes:
-      - ./scripts/init_aws.sh:/tmp/init_aws.sh
-    entrypoint: ["/bin/sh", "/tmp/init_aws.sh"]
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
+      /usr/bin/mc mb myminio/data-pipeline-bronze --ignore-existing;
+      /usr/bin/mc mb myminio/data-pipeline-silver --ignore-existing;
+      /usr/bin/mc mb myminio/data-pipeline-gold --ignore-existing;
+      /usr/bin/mc mb myminio/${MLFLOW_BUCKET_NAME:-mlflow-artifacts} --ignore-existing;
+      echo 'S3 Bronze/Silver/Gold/MLflow Buckets Initialization Completed!';
+      exit 0;
+      "
 
   # 1. Metadata DB
   airflow-postgres:
@@ -96,7 +103,7 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
-      localstack:
+      minio:
         condition: service_healthy
       # Rationale: DB 초기화 스크립트가 완벽히 종료된 후에만 웹서버를 기동하여 Race Condition 원천 차단
       airflow-init:
@@ -110,7 +117,7 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
-      localstack:
+      minio:
         condition: service_healthy
       # Rationale: 동일하게 초기화 완료 후 스케줄러 기동
       airflow-init:
@@ -139,6 +146,31 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.11.3
+    container_name: assetmind_mlflow_server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - MLFLOW_S3_IGNORE_TLS=true
+    command:
+      - sh
+      - -c
+      - >
+        pip install --no-cache-dir psycopg2-binary boto3 &&
+        mlflow server --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB} --default-artifact-root s3://${MLFLOW_BUCKET_NAME:-mlflow-artifacts}/ --host 0.0.0.0 --port 5000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   # 3. 통합 데이터 저장소
   postgres:

@@ -1,0 +1,110 @@
+# ==============================================================================
+# 정상성 변환 및 파생 피처 생성 정책 (Feature Engineering Policy)
+#
+# 구조:
+# 머신러닝 및 통계 모델 학습을 위한 정상성(Stationarity) 변환,
+# 타겟 변수(target_feature) 격리, 파생 피처 사출 시퀀스를 정의합니다.
+# ConfigManager를 통해 FeatureService 및 FeatureFactory 객체 초기화 시 주입됩니다.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. 예측 타겟 피처 정의 (Target Feature Definition)
+# ------------------------------------------------------------------------------
+target_feature:
+  source_price: "kis_kospi_daily_close" # 타겟 변수 생성의 원시 가격 지표
+  target_name: "target_return_20d" # 최종 사출될 타겟 피처명
+  forecast_horizon_days: 20 # 예측 Horizon (20영업일 = 1달)
+  use_log_return: true # 로그 수익률 변환 여부
+
+# ------------------------------------------------------------------------------
+# 2. 피처 엔지니어링 태스크 시퀀스 (Feature Engineering Tasks)
+# ------------------------------------------------------------------------------
+feature_engineering:
+  # ----------------------------------------------------------------------------
+  # [Task 0] 예측 타겟 생성 태스크 (TargetFeature)
+  # ----------------------------------------------------------------------------
+  - task_name: "TargetFeature"
+    enabled: true
+    params:
+      source_price: "kis_kospi_daily_close"
+      target_name: "target_return_20d"
+      forecast_horizon_days: 20
+
+  # ----------------------------------------------------------------------------
+  # [Task 1] 중기 추세 및 모멘텀 태스크 (TrendMomentum)
+  # ----------------------------------------------------------------------------
+  - task_name: "TrendMomentum"
+    enabled: true
+    params:
+      source_price: "_close"
+      return_lookback_days: [5, 20, 60, 120]
+      moving_average_ratios:
+        - short_window_days: 5
+          long_window_days: 20
+        - short_window_days: 20
+          long_window_days: 60
+      risk_adjusted_window_days: 20
+
+  # ----------------------------------------------------------------------------
+  # [Task 2] 변동성 및 리스크 레짐 태스크 (VolatilityRisk)
+  # ----------------------------------------------------------------------------
+  - task_name: "VolatilityRisk"
+    enabled: true
+    params:
+      source_price: "_close"
+      volatility_lookback_days: [20, 60]
+      volatility_regime_windows:
+        short_window_days: 20
+        long_window_days: 60
+      higher_moments_window_days: 20
+      price_range_window_days: 20
+
+  # ----------------------------------------------------------------------------
+  # [Task 3] 매크로 및 교차 자산 태스크 (MacroCrossAsset)
+  # ----------------------------------------------------------------------------
+  - task_name: "MacroCrossAsset"
+    enabled: false
+    params:
+      us_treasury_spread:
+        ten_year_yield: "fred_us_10y_yield"
+        two_year_yield: "fred_us_2y_yield"
+        change_lookback_days: 20
+      us_kr_rate_difference:
+        korea_base_rate: "ecos_kr_base_rate"
+        us_base_rate: "fred_us_base_rate"
+        momentum_window_days: 20
+      us_kr_market_lag:
+        us_equity: "kis_nasdaq_daily_close"
+        korea_equity: "kis_kospi_daily_close"
+        time_lag_days: 1
+      coin_equity_correlation:
+        coin_price: "upbit_btc_close"
+        equity_price: "kis_nasdaq_daily_close"
+        correlation_window_days: 20
+
+  # ----------------------------------------------------------------------------
+  # [Task 4] 파생상품 및 거래량 태스크 (DerivativesVolume)
+  # ----------------------------------------------------------------------------
+  - task_name: "DerivativesVolume"
+    enabled: true
+    params:
+      futures_basis:
+        futures_price: "kis_kospi_daily_futures_prev_open"
+        spot_price: "kis_kospi_daily_close"
+      futures_intraday_range:
+        high_price: "kis_kospi_daily_futures_prev_high"
+        low_price: "kis_kospi_daily_futures_prev_low"
+        open_price: "kis_kospi_daily_futures_prev_open"
+      volume_and_value_anomaly:
+        equity_volume: "kis_kospi_daily_volume"
+        coin_value: "upbit_krw_btc_daily_trading_value"
+        anomaly_window_days: 20
+
+  # ----------------------------------------------------------------------------
+  # [Task 5] 계절성 및 달력 태스크 (CalendarSeasonality)
+  # ----------------------------------------------------------------------------
+  - task_name: "CalendarSeasonality"
+    enabled: true
+    params:
+      enable_cyclical_month_encoding: true
+      period_end_threshold_days: 3

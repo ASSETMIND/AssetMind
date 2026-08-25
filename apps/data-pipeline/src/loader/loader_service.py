@@ -23,7 +23,7 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from src.common.config import ConfigManager
 from src.common.dtos import ExtractedDTO, TransformedDTO
@@ -73,6 +73,8 @@ class LoaderService:
         self._fail_count: int = 0
         self._failed_jobs: List[str] = []
 
+        self._loaded_paths: List[str] = []
+
     def _get_or_create_loader(self) -> ILoader:
         """설정값에 지정된 타겟 시스템에 맞는 로더를 반환합니다 (지연 로딩 및 캐싱 적용).
 
@@ -104,7 +106,7 @@ class LoaderService:
                     prefix=loader_policy.prefix
                 )
                 
-            elif target_system == "s3_parquet":
+            elif target_system.startswith("s3_parquet") or target_system in ["s3_parquet", "s3_parquet_silver", "s3_parquet_gold"]:
                 from src.loader.providers.s3_parquet_loader import S3ParquetLoader
                 loader_instance = S3ParquetLoader(
                     bucket_name=loader_policy.bucket_name,
@@ -172,11 +174,24 @@ class LoaderService:
             
             if is_loaded:
                 self._success_count += 1
+
+                bucket = getattr(loader, "_bucket_name", "unknown-bucket")
+                prefix = getattr(loader, "_prefix", "unknown-prefix")
+                partitions = getattr(loader, "_partition_cols", [])
+                
+                # DTO 메타데이터의 서브 경로(bucket_name 또는 job_id)가 존재할 경우 로그 출력 경로에 반영
+                subpath = dto.meta.get("bucket_name") or dto.meta.get("job_id") if (dto.meta and isinstance(dto.meta, dict)) else None
+                if subpath and not prefix.endswith(str(subpath)):
+                    prefix = f"{prefix}/{subpath}"
+
+                physical_uri = f"s3://{bucket}/{prefix} (Partition Columns: {partitions})"
+                if physical_uri not in self._loaded_paths:
+                    self._loaded_paths.append(physical_uri)
             else:
                 self._fail_count += 1
                 self._failed_jobs.append(job_id)
 
-            return loader.load(dto)
+            return is_loaded
                 
         except Exception as e:
             self._fail_count += 1
@@ -192,6 +207,11 @@ class LoaderService:
             f"[Loader 요약 리포트] 총 {total_count}건 중 성공 {self._success_count}건, 실패 {self._fail_count}건"
         )
 
+        if self._loaded_paths:
+            self._logger.info("[물리적 S3 데이터 적재 완료 타겟 경로 목록]")
+            for path in self._loaded_paths:
+                self._logger.info(f"  - Target URI: {path}")
+
         # 2. 실패한 구체적 자산 목록 개별 경고 출력
         if self._failed_jobs:
             self._logger.warning(
@@ -202,3 +222,4 @@ class LoaderService:
         self._success_count = 0
         self._fail_count = 0
         self._failed_jobs.clear()
+        self._loaded_paths.clear()

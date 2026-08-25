@@ -28,6 +28,8 @@ Trade-off: 주요 구현에 대한 엔지니어링 관점의 근거(장점, 단�
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterator, Optional
 
+import pandas as pd
+
 from src.common.config import ConfigManager
 from src.common.log import LogManager
 from src.common.decorators.log_decorator import log_decorator
@@ -172,3 +174,60 @@ class AbstractReader(ABC):
             Iterator[Any]: List[Dict] 형태의 레코드 묶음 혹은 DataFrame 등.
         """
         pass
+
+    @log_decorator()
+    def read_dataframe(self, source_path: str, **kwargs: Any) -> pd.DataFrame:
+        """지정된 경로의 데이터를 파이썬 메모리 오버헤드 없이 고속 Bulk DataFrame으로 읽어옵니다.
+
+        기존 read_stream() 템플릿 메서드의 라이프사이클(사전 검증 -> 실행 -> 예외 규격화)을 동일하게 계승하되,
+        제너레이터(Yield)가 아닌 단일 In-Memory Pandas DataFrame 형태로 반환하여 오프라인 EDA 및 
+        ML 피처 선별 작업의 속도를 극대화합니다.
+
+        Args:
+            source_path (str): 읽기 대상 물리적 경로 또는 S3 파티션 Prefix.
+            **kwargs (Any): 하위 구체 리더로 전달될 가변 매개변수.
+
+        Returns:
+            pd.DataFrame: 고속 결합 연산이 완료된 시계열 데이터프레임.
+
+        Raises:
+            DataReadStreamError: S3 I/O, 바이너리 디코딩, 파티션 정렬 연산 실패 시 구조화되어 전파.
+        """
+        # 1. 런타임 상태 및 입력 경로 사전 검증
+        if self._client is None:
+            self._client = self._initialize_client()
+
+        self._validate_source(source_path)
+
+        try:
+            # 하위 구체 리더(S3ParquetReader)에 Boto3 ThreadPool 및 PyArrow Zero-Copy 연동 위임
+            return self._generate_dataframe(source_path, **kwargs)
+
+        except Exception as e:
+            error_msg = f"[{self.__class__.__name__}] Bulk Dataframe 읽기 실패 - Path: {source_path}"
+            self.logger.error(error_msg, exc_info=True)
+
+            if not isinstance(e, DataReadStreamError):
+                raise DataReadStreamError(
+                    message=error_msg,
+                    source_path=source_path,
+                    original_exception=e
+                ) from e
+            raise
+
+    def _generate_dataframe(self, source_path: str, **kwargs: Any) -> pd.DataFrame:
+        """실제 데이터를 물리 계층에서 병렬 수집하여 Dataframe 형태로 반환하는 핵심 훅(Hook).
+
+        Args:
+            source_path (str): 읽기 대상 S3 경로 또는 DB 타겟 정보.
+            **kwargs (Any): 하위 리더 구체 파라미터.
+
+        Returns:
+            pd.DataFrame: 병합 완료된 데이터프레임.
+
+        Raises:
+            NotImplementedError: 하위 구체 클래스에서 미구현 시 발생.
+        """
+        pass
+
+    

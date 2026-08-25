@@ -83,9 +83,29 @@ class S3ParquetLoader(AbstractLoader):
         """DataFrame을 PyArrow 엔진을 통해 S3에 분산 파티셔닝하여 적재합니다."""
         
         df: pd.DataFrame = dto.data
-        s3_path = f"s3://{self._bucket_name}/{self._prefix}"
+        file_identifier: str = (
+            getattr(dto, "job_id", None)
+            or dto.meta.get("job_id")
+            or dto.meta.get("task_key")
+            or dto.meta.get("task_name")
+            or "data"
+        )
+
+        # DTO 메타데이터의 bucket_name 또는 job_id를 하위 서브 디렉터리 경로로 동적 결합
+        prefix = self._prefix
+        if dto.meta and isinstance(dto.meta, dict):
+            bucket_subpath = (
+                dto.meta.get("bucket_name")
+                or dto.meta.get("job_id")
+                or dto.meta.get("task_name")
+            )
+            if bucket_subpath and not prefix.endswith(str(bucket_subpath)):
+                prefix = f"{prefix}/{bucket_subpath}"
         
-        # [핵심 수정] LocalStack 엔드포인트 분기 및 storage_options 조립
+        # 서브 디렉터리가 결합된 최종 prefix를 반영하여 s3_path 생성
+        s3_path = f"s3://{self._bucket_name}/{prefix}"
+
+        # LocalStack 엔드포인트 분기 및 storage_options 조립
         storage_options: Dict[str, Any] = {}
         local_endpoint = os.environ.get("LOCAL_S3_ENDPOINT")
         
@@ -93,8 +113,9 @@ class S3ParquetLoader(AbstractLoader):
             storage_options = {
                 "client_kwargs": {
                     "endpoint_url": local_endpoint,
-                    "aws_access_key_id": "test",
-                    "aws_secret_access_key": "test"
+                    "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+                    "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+                    "region_name": os.getenv("AWS_DEFAULT_REGION")
                 }
             }
             
@@ -107,7 +128,7 @@ class S3ParquetLoader(AbstractLoader):
                 partition_cols=self._partition_cols,
                 index=False,
                 storage_options=storage_options,
-                existing_data_behavior="delete_matching"
+                basename_template=f"{file_identifier}_{{i}}.parquet"
             )
             self._logger.info(f"S3ParquetLoader: S3에 Parquet 파일로 성공적으로 적재되었습니다. (Path: {s3_path})")
             return True

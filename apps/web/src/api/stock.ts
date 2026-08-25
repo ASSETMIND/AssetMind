@@ -53,7 +53,7 @@ export async function getStockCandles(
 	return data.data.candles;
 }
 
-// ─── 시계열 (history) ─────────────────────────────────────────
+// ─── 시계열 ─────────────────────────────────────────
 
 export interface StockHistoryDto {
 	stockCode:        string;
@@ -77,7 +77,7 @@ export async function getStockHistory(stockCode: string, limit = 20) {
 	return data.data;
 }
 
-// ─── 호가 (Orderbook) ─────────────────────────────────────────
+// ─── 호가 ─────────────────────────────────────────
 
 export interface OrderbookLevelDto {
 	level:    number;
@@ -93,6 +93,24 @@ export interface OrderbookDto {
 	totalAskSize: string;
 	totalBidSize: string;
 	levels:       OrderbookLevelDto[];
+}
+
+/** 초기 진입 시 REST 스냅샷 조회
+ *  - 정상: OrderbookDto 반환
+ *  - 데이터 미수집(장 시작 전 등): null 반환
+ *  - 잘못된 종목코드 등 오류: null 반환
+ */
+export async function getOrderbook(stockCode: string): Promise<OrderbookDto | null> {
+	try {
+		const { data } = await axiosInstance.get<{
+			success: boolean;
+			message: string | null;
+			data: OrderbookDto | null;
+		}>(`/stocks/${stockCode}/orderbook`);
+		return data.data ?? null;
+	} catch {
+		return null;
+	}
 }
 
 export const getOrderbookTopic = (stockCode: string) =>

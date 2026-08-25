@@ -36,7 +36,10 @@ from airflow.operators.bash import BashOperator
 # ==============================================================================
 # Task 실패 시 재시도 정책
 RETRIES: int = 3
-RETRY_DELAY_MINUTES: int = 5
+RETRY_DELAY_MINUTES: int = 10
+
+# Airflow DAG 동시 실행 제한
+MAX_ACTIVE_RUNS: int = 4
 
 # Airflow 컨테이너 내 파이프라인 소스코드 경로
 PROJECT_ROOT_DIR: str = "/opt/airflow"
@@ -61,9 +64,12 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
     # [설계 의도] 타임존이 명확히 적용된 start_date를 설정하여
     # 글로벌 환경에서도 논리적 실행 날짜 오작동이 발생하지 않도록 강제함.
     default_args = {
-        "owner": "data_engineering_team",
+        "owner": "AssetMind_DE",
+        "depends_on_past": True,
         "retries": RETRIES,
         "retry_delay": timedelta(minutes=RETRY_DELAY_MINUTES),
+        "retry_exponential_backoff": True,
+        "max_retry_delay": timedelta(minutes=30),
     }
 
     with DAG(
@@ -72,7 +78,7 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
         start_date=pendulum.datetime(start_year, start_month, start_day, tz=timezone),
         schedule=schedule,
         catchup=True,
-        max_active_runs=10,
+        max_active_runs=MAX_ACTIVE_RUNS,
         tags=["daily", task_key.split('_')[-1]],
     ) as dag:
         
@@ -103,9 +109,18 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
         )
 
         # 3. Gold Task : 피쳐 엔지니어링 및 파생변수 생성 후 PostgreSQL 적재
+        run_gold = BashOperator(
+            task_id=f"run_gold_{task_key}",
+            bash_command=f"cd {PROJECT_ROOT_DIR} && export PYTHONPATH={PROJECT_ROOT_DIR} && python -m src.main",
+            env={
+                "EXECUTION_DATE": "{{ data_interval_start.in_timezone(dag.timezone).strftime('%Y%m%d') }}",
+                "TARGET_TASK": f"gold_{task_key}"
+            },
+            append_env=True,
+        )
 
         # 4. Task 의존성 (흐름) 제어
-        run_bronze >> run_silver
+        run_bronze >> run_silver >> run_gold
 
     return dag
 
@@ -114,22 +129,22 @@ def create_dag(dag_id: str, schedule: str, timezone: str, task_key: str, start_y
 # ==========================================================
 # 1. Asia 파이프라인 (KST 00:00)
 daily_asia_dag = create_dag(
-    dag_id="daily_asia_test",
+    dag_id="daily_asia",
     schedule="0 0 * * *",
     timezone="Asia/Seoul",
     task_key="daily_asia",
-    start_year=2026,
-    start_month=5,
-    start_day=20
+    start_year=2022,
+    start_month=1,
+    start_day=2
 )
 
 # 2. Global 파이프라인 (EST 00:00)
 daily_global_dag = create_dag(
-    dag_id="daily_global_test",
+    dag_id="daily_global",
     schedule="0 0 * * *",
     timezone="America/New_York",
     task_key="daily_global",
-    start_year=2026,
-    start_month=5,
-    start_day=20
+    start_year=2022,
+    start_month=1,
+    start_day=2
 )

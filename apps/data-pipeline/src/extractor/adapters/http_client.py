@@ -46,7 +46,7 @@ from src.common.log import LogManager
 # Constants & Configuration
 # ==============================================================================
 # [설계 의도] 다중 API 동시 수집 시의 네트워크 병목을 해소하기 위한 명시적 자원 할당량
-MAX_CONNECTION_LIMIT = 100 # aiohttp 커넥션 풀의 최대 커넥션 수 (Thundering Herd 완화 목적) - 기존 10에서 상향 조정
+MAX_CONNECTION_LIMIT = 30 # aiohttp 커넥션 풀의 최대 커넥션 수 (Thundering Herd 완화 목적) - 기존 10에서 상향 조정
 DNS_CACHE_TTL = 300 # DNS 캐시의 TTL (초 단위)
 TOTAL_TIMEOUT_SECONDS = 30.0 # 전체 요청 타임아웃 (초 단위, 연결 + 응답 대기 시간 포함) - 기존 60에서 하향 조정하여 빠른 실패 유도
 CONNECT_TIMEOUT_SECONDS = 10.0 # 연결 타임아웃 (초 단위, TCP 핸드셰이크 최대 대기 시간) - 신규 추가하여 연결 지연 시 빠르게 실패하도록 유도

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
@@ -31,6 +32,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "kis.websocket.enabled", havingValue = "true")
 public class KisRealTimeStockDataAdapter implements RealTimeStockDataPort {
 
     private final KisProperties kisProperties;
