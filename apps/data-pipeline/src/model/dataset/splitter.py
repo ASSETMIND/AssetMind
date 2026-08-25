@@ -31,12 +31,10 @@ import pandas as pd
 
 from src.common.exceptions import DatasetSplitExecutionError
 
+VALID_MODES: List[str] = ["train_test", "train_val_test"]
 
 class DatasetSplitter:
     """금융 시계열 데이터 누수 방지 및 파티션 분할을 집행하는 엔진 클래스입니다."""
-
-    import math
-
     def __init__(
         self,
         split_ratios: Union[Tuple[float, ...], List[float]] = (0.8, 0.2),
