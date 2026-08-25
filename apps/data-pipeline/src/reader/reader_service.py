@@ -216,6 +216,7 @@ class ReaderService:
         elif layer_prefix == "silver":
             source_path = (
                 f"silver/market_data/"
+                f"{clean_job_id}/"
                 f"year={year}/"
                 f"month={month}/"
                 f"day={day}/"

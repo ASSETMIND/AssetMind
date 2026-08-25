@@ -191,11 +191,13 @@ class SilverPipeline(AbstractPipeline):
             final_df["month"] = trade_date_dt.dt.strftime("%m")
             final_df["day"] = trade_date_dt.dt.strftime("%d")
 
-            # 4. Loader: 최종 결합된 데이터셋을 TransformedDTO에 캡슐화하여 S3ParquetLoader로 분산 파티셔닝 적재 위임.
+            # 5. Loader: 최종 결합된 데이터셋을 TransformedDTO에 캡슐화하여 S3ParquetLoader로 분산 파티셔닝 적재 위임.
             transformed_dto = TransformedDTO(
                 data=final_df,
                 meta={
                     "task_name": self._task_name,
+                    "job_id": self._task_name,
+                    "bucket_name": self._task_name,
                     "execution_date": execution_date,
                     "layer": "silver"
                 }
