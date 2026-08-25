@@ -8,6 +8,10 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW_CONN_POSTGRES_CONN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    MLFLOW_TRACKING_URI: http://mlflow-server:5000
+    MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -52,11 +56,12 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 ${AWS_ACCESS_KEY_ID:-minioadmin} ${AWS_SECRET_ACCESS_KEY:-minioadmin};
+      /usr/bin/mc alias set myminio http://minio:9000 ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
       /usr/bin/mc mb myminio/data-pipeline-bronze --ignore-existing;
       /usr/bin/mc mb myminio/data-pipeline-silver --ignore-existing;
       /usr/bin/mc mb myminio/data-pipeline-gold --ignore-existing;
-      echo 'S3 Bronze/Silver/Gold Buckets Initialization Completed!';
+      /usr/bin/mc mb myminio/${MLFLOW_BUCKET_NAME:-mlflow-artifacts} --ignore-existing;
+      echo 'S3 Bronze/Silver/Gold/MLflow Buckets Initialization Completed!';
       exit 0;
       "
 
@@ -141,6 +146,31 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.11.3
+    container_name: assetmind_mlflow_server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - MLFLOW_S3_IGNORE_TLS=true
+    command:
+      - sh
+      - -c
+      - >
+        pip install --no-cache-dir psycopg2-binary boto3 &&
+        mlflow server --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB} --default-artifact-root s3://${MLFLOW_BUCKET_NAME:-mlflow-artifacts}/ --host 0.0.0.0 --port 5000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   # 3. 통합 데이터 저장소
   postgres:
