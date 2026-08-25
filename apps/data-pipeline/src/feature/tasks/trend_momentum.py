@@ -69,61 +69,78 @@ class TrendMomentum(AbstractFeature):
         self.risk_adjusted_window_days: int = risk_adjusted_window_days
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """입력 데이터프레임의 원시 가격 컬럼을 기반으로 추세 및 모멘텀 파생 피처들을 산출합니다.
+        """입력 데이터프레임의 모든 종가 컬럼을 기반으로 추세 및 모멘텀 파생 피처들을 일괄 산출합니다.
 
         Args:
             df (pd.DataFrame): 정제가 완료된 입력 시계열 데이터프레임.
 
         Returns:
-            pd.DataFrame: 추세 및 모멘텀 파생 피처들이 추가된 데이터프레임.
+            pd.DataFrame: 원본 컬럼 보존 및 추세/모멘텀 파생 피처들이 추가된 데이터프레임.
 
         Raises:
-            RequiredColumnNotFoundError: source_price 컬럼이 데이터프레임에 존재하지 않을 때 발생.
-            FeatureCalculationExecutionError: 수수료/로그 연산 중 0 이하 가격 발견, 수리적 발산 발생 시 전파.
+            RequiredColumnNotFoundError: 매칭되는 가격 컬럼이 데이터프레임에 존재하지 않을 때 발생.
+            FeatureCalculationExecutionError: 로그 연산 중 0 이하 가격 발견, 수리적 발산 발생 시 전파.
         """
-        # [설계 의도] 1단계: 필수 입력 컬럼 스키마 존재 여부 사전 방어 검증
-        self._validate_required_columns(df=df, required_columns=[self.source_price])
+        # [설계 의도] 1단계: 패턴 매칭(_close) 또는 단일 컬럼 기반 대상 종가 컬럼 목록 동적 추출
+        if self.source_price.startswith("_"):
+            target_price_columns: List[str] = [
+                col for col in df.columns if col.endswith(self.source_price)
+            ]
+        else:
+            target_price_columns = [self.source_price]
+
+        # 스키마 무결성 방어 검증 (매칭되는 가격 컬럼이 1개도 없으면 예외 사출)
+        self._validate_required_columns(df=df, required_columns=target_price_columns)
 
         try:
             processed_dataframe: pd.DataFrame = df.copy()
-            price_series: pd.Series = processed_dataframe[self.source_price]
 
-            # [설계 의도] 2단계: 로그 변환 전 0 이하 비정상 가격 유입 검증
-            if (price_series <= 0).any():
-                raise FeatureCalculationExecutionError(
-                    message=f"[{self.task_name}] 원시 가격 컬럼({self.source_price}) 내에 0 이하 수치가 존재하여 로그 수익률을 계산할 수 없습니다.",
-                    feature_name="trend_momentum_all",
-                    task_name=self.task_name
-                )
+            # [설계 의도] 2단계: 탐색된 모든 종가 컬럼에 대해 순차적 모멘텀 피처 일괄 사출
+            for price_col in target_price_columns:
+                raw_price_series: pd.Series = processed_dataframe[price_col]
 
-            log_price_series: pd.Series = np.log(price_series)
+                # 0 이하 결측/마스킹 수치를 결측치로 치환 후 시계열 직전 유효 가격 보간(ffill -> bfill)
+                price_series: pd.Series = raw_price_series.mask(raw_price_series <= 0).ffill().bfill()
 
-            # [설계 의도] 3단계: 다기간 로그 수익률 산출 (return_lag_5d, return_lag_20d 등)
-            for lookback_days in self.return_lookback_days:
-                feature_name: str = f"return_lag_{lookback_days}d"
-                processed_dataframe[feature_name] = log_price_series - log_price_series.shift(lookback_days)
+                # 시계열 전체가 0 이하이거나 유효 가격이 전혀 존재하지 않는 완전 결손 컬럼은 안전하게 스킵
+                if price_series.isna().all() or (price_series <= 0).any():
+                    continue
 
-            # [설계 의도] 4단계: 이동평균선 이격 비율 산출 (ma_ratio_5_20 등)
-            for ma_pair in self.moving_average_ratios:
-                short_days: int = ma_pair["short_window_days"]
-                long_days: int = ma_pair["long_window_days"]
+                # [설계 의도] 자산 식별 Prefix 생성 (기준 타겟 자산인 kis_kospi_daily_close는 하위 호환성을 위해 Prefix 생략)
+                if price_col == "kis_kospi_daily_close":
+                    prefix: str = ""
+                else:
+                    asset_key: str = price_col.replace("_daily_close", "").replace("_close", "")
+                    prefix = f"{asset_key}_"
 
-                short_ma_series: pd.Series = price_series.rolling(window=short_days).mean()
-                long_ma_series: pd.Series = price_series.rolling(window=long_days).mean()
+                log_price_series: pd.Series = np.log(price_series)
 
-                ma_feature_name: str = f"ma_ratio_{short_days}_{long_days}"
-                processed_dataframe[ma_feature_name] = (short_ma_series / long_ma_series) - 1.0
+                # [설계 의도] 3단계: 다기간 로그 수익률 산출 (예: return_lag_5d, kis_nasdaq_return_lag_5d)
+                for lookback_days in self.return_lookback_days:
+                    feature_name: str = f"{prefix}return_lag_{lookback_days}d"
+                    processed_dataframe[feature_name] = log_price_series - log_price_series.shift(lookback_days)
 
-            # [설계 의도] 5단계: 위험 조정 모멘텀 산출 (risk_adjusted_return_20d)
-            daily_log_return_series: pd.Series = log_price_series - log_price_series.shift(1)
-            rolling_volatility_series: pd.Series = daily_log_return_series.rolling(
-                window=self.risk_adjusted_window_days
-            ).std()
+                # [설계 의도] 4단계: 이동평균선 이격 비율 산출 (예: ma_ratio_5_20, kis_nasdaq_ma_ratio_5_20)
+                for ma_pair in self.moving_average_ratios:
+                    short_days: int = ma_pair["short_window_days"]
+                    long_days: int = ma_pair["long_window_days"]
 
-            period_log_return_series: pd.Series = log_price_series - log_price_series.shift(self.risk_adjusted_window_days)
+                    short_ma_series: pd.Series = price_series.rolling(window=short_days).mean()
+                    long_ma_series: pd.Series = price_series.rolling(window=long_days).mean()
 
-            risk_adj_feature_name: str = f"risk_adjusted_return_{self.risk_adjusted_window_days}d"
-            processed_dataframe[risk_adj_feature_name] = period_log_return_series / rolling_volatility_series.replace(0, np.nan)
+                    ma_feature_name: str = f"{prefix}ma_ratio_{short_days}_{long_days}"
+                    processed_dataframe[ma_feature_name] = (short_ma_series / long_ma_series) - 1.0
+
+                # [설계 의도] 5단계: 위험 조정 모멘텀 산출 (예: risk_adjusted_return_20d, kis_nasdaq_risk_adjusted_return_20d)
+                daily_log_return_series: pd.Series = log_price_series - log_price_series.shift(1)
+                rolling_volatility_series: pd.Series = daily_log_return_series.rolling(
+                    window=self.risk_adjusted_window_days
+                ).std()
+
+                period_log_return_series: pd.Series = log_price_series - log_price_series.shift(self.risk_adjusted_window_days)
+
+                risk_adj_feature_name: str = f"{prefix}risk_adjusted_return_{self.risk_adjusted_window_days}d"
+                processed_dataframe[risk_adj_feature_name] = period_log_return_series / rolling_volatility_series.replace(0, np.nan)
 
             return processed_dataframe
 

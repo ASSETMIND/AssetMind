@@ -92,9 +92,17 @@ def elasticnet_importance(
         selection="random"
     )
 
-    # 결측치 방어 및 인덱스 정렬
-    aligned_features: pd.DataFrame = scaled_feature_matrix.fillna(0.0)
-    aligned_target: pd.Series = target_series.loc[scaled_feature_matrix.index].fillna(0.0)
+    # 무한대(inf) 및 결측치 방어, 인덱스 정렬
+    aligned_features: pd.DataFrame = (
+        scaled_feature_matrix
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+    aligned_target: pd.Series = (
+        target_series.loc[scaled_feature_matrix.index]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
 
     elastic_net_model.fit(aligned_features, aligned_target)
 
@@ -139,8 +147,18 @@ def lightgbm_importance(
         verbose=-1
     )
 
-    aligned_target: pd.Series = target_series.loc[feature_matrix.index]
-    lightgbm_model.fit(feature_matrix, aligned_target)
+    # 무한대(inf) 및 결측치 방어, 인덱스 정렬
+    clean_features: pd.DataFrame = (
+        feature_matrix
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+    aligned_target: pd.Series = (
+        target_series.loc[feature_matrix.index]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
+    lightgbm_model.fit(clean_features, aligned_target)
 
     gain_importances: np.ndarray = lightgbm_model.booster_.feature_importance(importance_type="gain")
     return pd.Series(gain_importances, index=feature_matrix.columns)

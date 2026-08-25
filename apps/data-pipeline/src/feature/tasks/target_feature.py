@@ -79,21 +79,23 @@ class TargetFeature(AbstractFeature):
 
         try:
             processed_df: pd.DataFrame = df.copy()
-            price_series: pd.Series = processed_df[self.source_price]
+            raw_price_series: pd.Series = processed_df[self.source_price]
 
-            # [설계 의도] 2단계: 로그 변환 전 0 이하 부정 정수 유입 여부 검증 (자연로그 정의역 방어)
-            if (price_series <= 0).any():
+            # [설계 의도] 2단계: 0 이하 마스킹/결측 수치를 유효 직전 가격으로 시계열 보간 (ffill -> bfill)
+            price_series: pd.Series = raw_price_series.mask(raw_price_series <= 0).ffill().bfill()
+
+            # 시계열 전체가 0 이하이거나 유효 가격이 전혀 존재하지 않는 완전 결손 시에만 가드레일 발동
+            if price_series.isna().all() or (price_series <= 0).any():
                 raise TargetGenerationError(
-                    message=f"[{self.task_name}] 원시 가격 컬럼({self.source_price}) 내에 0 이하의 비정상 수치가 존재하여 로그 타겟을 생성할 수 없습니다.",
+                    message=f"[{self.task_name}] 원시 가격 컬럼({self.source_price}) 내에 유효 가격이 존재하지 않아 로그 타겟을 생성할 수 없습니다.",
                     target_horizon=self.forecast_horizon_days
                 )
 
             # [설계 의도] 3단계: Shift(-forecast_horizon_days)를 통한 미래 T+20 시점 가격 산출 및 로그 수익률 계산
             future_price_series: pd.Series = price_series.shift(-self.forecast_horizon_days)
-            
+
             # Y_t = ln(P_{t+20}) - ln(P_t)
             target_series: pd.Series = np.log(future_price_series) - np.log(price_series)
-
             processed_df[self.target_name] = target_series
             return processed_df
 

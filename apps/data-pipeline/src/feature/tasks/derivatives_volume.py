@@ -84,8 +84,7 @@ class DerivativesVolume(AbstractFeature):
             self.futures_intraday_range["high_price"],
             self.futures_intraday_range["low_price"],
             self.futures_intraday_range["open_price"],
-            self.volume_and_value_anomaly["equity_volume"],
-            self.volume_and_value_anomaly["coin_value"]
+            self.volume_and_value_anomaly["equity_volume"]
         ]
         self._validate_required_columns(df=df, required_columns=required_cols)
 
@@ -93,32 +92,45 @@ class DerivativesVolume(AbstractFeature):
             processed_dataframe: pd.DataFrame = df.copy()
 
             # [설계 의도] 2단계: 선물-현물 괴리율(proxy_basis_rate) 산출
-            futs_price: pd.Series = processed_dataframe[self.futures_basis["futures_price"]]
-            spot_price: pd.Series = processed_dataframe[self.futures_basis["spot_price"]]
-
+            raw_futs_price: pd.Series = processed_dataframe[self.futures_basis["futures_price"]]
+            raw_spot_price: pd.Series = processed_dataframe[self.futures_basis["spot_price"]]
+            
+            futs_price: pd.Series = raw_futs_price.mask(raw_futs_price <= 0).ffill().bfill()
+            spot_price: pd.Series = raw_spot_price.mask(raw_spot_price <= 0).ffill().bfill()
+            
             processed_dataframe["proxy_basis_rate"] = (
                 futs_price / spot_price.replace(0, np.nan)
             ) - 1.0
 
             # [설계 의도] 3단계: 선물 장중 변동 폭 비율(futures_intraday_range) 산출
-            futs_high: pd.Series = processed_dataframe[self.futures_intraday_range["high_price"]]
-            futs_low: pd.Series = processed_dataframe[self.futures_intraday_range["low_price"]]
-            futs_open: pd.Series = processed_dataframe[self.futures_intraday_range["open_price"]]
-
+            raw_futs_high: pd.Series = processed_dataframe[self.futures_intraday_range["high_price"]]
+            raw_futs_low: pd.Series = processed_dataframe[self.futures_intraday_range["low_price"]]
+            raw_futs_open: pd.Series = processed_dataframe[self.futures_intraday_range["open_price"]]
+            
+            futs_high: pd.Series = raw_futs_high.mask(raw_futs_high <= 0).ffill().bfill()
+            futs_low: pd.Series = raw_futs_low.mask(raw_futs_low <= 0).ffill().bfill()
+            futs_open: pd.Series = raw_futs_open.mask(raw_futs_open <= 0).ffill().bfill()
+            
             processed_dataframe["futures_intraday_range"] = (
                 (futs_high - futs_low) / futs_open.replace(0, np.nan)
             )
 
             # [설계 의도] 4단계: 주식 거래량 및 코인 거래대금 이상치 비율(volume_anomaly_20d, value_anomaly_20d) 산출
-            eq_vol: pd.Series = processed_dataframe[self.volume_and_value_anomaly["equity_volume"]]
-            coin_val: pd.Series = processed_dataframe[self.volume_and_value_anomaly["coin_value"]]
+            eq_vol_col: str = self.volume_and_value_anomaly["equity_volume"]
+            raw_eq_vol: pd.Series = processed_dataframe[eq_vol_col]
+            eq_vol: pd.Series = raw_eq_vol.mask(raw_eq_vol <= 0).ffill().bfill()
+            
             anomaly_win: int = self.volume_and_value_anomaly["anomaly_window_days"]
-
             eq_vol_ma: pd.Series = eq_vol.rolling(window=anomaly_win).mean()
-            coin_val_ma: pd.Series = coin_val.rolling(window=anomaly_win).mean()
-
             processed_dataframe[f"volume_anomaly_{anomaly_win}d"] = eq_vol / eq_vol_ma.replace(0, np.nan)
-            processed_dataframe[f"value_anomaly_{anomaly_win}d"] = coin_val / coin_val_ma.replace(0, np.nan)
+
+            # 가상자산 거래대금 컬럼이 데이터셋에 존재하는 경우에만 동적으로 연산 수행
+            coin_val_col: str = self.volume_and_value_anomaly.get("coin_value", "")
+            if coin_val_col and coin_val_col in processed_dataframe.columns:
+                raw_coin_val: pd.Series = processed_dataframe[coin_val_col]
+                coin_val: pd.Series = raw_coin_val.mask(raw_coin_val <= 0).ffill().bfill()
+                coin_val_ma: pd.Series = coin_val.rolling(window=anomaly_win).mean()
+                processed_dataframe[f"value_anomaly_{anomaly_win}d"] = coin_val / coin_val_ma.replace(0, np.nan)
 
             return processed_dataframe
 
