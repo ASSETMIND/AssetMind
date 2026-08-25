@@ -36,7 +36,7 @@ feature_engineering:
   - task_name: "TrendMomentum"
     enabled: true
     params:
-      source_price: "kis_kospi_daily_close"
+      source_price: "_close"
       return_lookback_days: [5, 20, 60, 120]
       moving_average_ratios:
         - short_window_days: 5
@@ -51,7 +51,7 @@ feature_engineering:
   - task_name: "VolatilityRisk"
     enabled: true
     params:
-      source_price: "kis_kospi_daily_close"
+      source_price: "_close"
       volatility_lookback_days: [20, 60]
       volatility_regime_windows:
         short_window_days: 20

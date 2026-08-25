@@ -75,76 +75,93 @@ class VolatilityRisk(AbstractFeature):
         self.price_range_window_days: int = price_range_window_days
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """입력 데이터프레임의 원시 가격 시계열을 바탕으로 변동성 및 위험 레짐 관련 파생 피처들을 산출합니다.
+        """입력 데이터프레임의 모든 종가 시계열을 바탕으로 변동성 및 위험 레짐 관련 파생 피처들을 일괄 산출합니다.
 
         Args:
             df (pd.DataFrame): 정제가 완료된 입력 시계열 데이터프레임.
 
         Returns:
-            pd.DataFrame: 변동성 및 위험 레짐 파생 피처들이 추가된 데이터프레임.
+            pd.DataFrame: 원본 컬럼 보존 및 변동성/위험 레짐 파생 피처들이 추가된 데이터프레임.
 
         Raises:
-            RequiredColumnNotFoundError: source_price 컬럼이 데이터프레임에 존재하지 않을 때 발생.
+            RequiredColumnNotFoundError: 매칭되는 가격 컬럼이 데이터프레임에 존재하지 않을 때 발생.
             FeatureCalculationExecutionError: 수수료/로그 연산 중 0 이하 가격 발견, 수리적 발산 발생 시 전파.
         """
-        # [설계 의도] 1단계: 필수 입력 컬럼 존재 여부 사전 방어 검증
-        self._validate_required_columns(df=df, required_columns=[self.source_price])
+        # [설계 의도] 1단계: 패턴 매칭(_close) 또는 단일 컬럼 기반 대상 종가 컬럼 목록 동적 추출
+        if self.source_price.startswith("_"):
+            target_price_columns: List[str] = [
+                col for col in df.columns if col.endswith(self.source_price)
+            ]
+        else:
+            target_price_columns = [self.source_price]
+
+        # 스키마 무결성 방어 검증 (매칭되는 가격 컬럼이 1개도 없으면 예외 사출)
+        self._validate_required_columns(df=df, required_columns=target_price_columns)
 
         try:
             processed_dataframe: pd.DataFrame = df.copy()
-            price_series: pd.Series = processed_dataframe[self.source_price]
 
-            # [설계 의도] 2단계: 로그 변환 전 0 이하 비정상 가격 유입 검증
-            if (price_series <= 0).any():
-                raise FeatureCalculationExecutionError(
-                    message=f"[{self.task_name}] 원시 가격 컬럼({self.source_price}) 내에 0 이하 수치가 존재하여 변동성을 연산할 수 없습니다.",
-                    feature_name="volatility_risk_all",
-                    task_name=self.task_name
-                )
+            # [설계 의도] 2단계: 탐색된 모든 종가 컬럼에 대해 순차적 변동성 및 리스크 피처 일괄 사출
+            for price_col in target_price_columns:
+                raw_price_series: pd.Series = processed_dataframe[price_col]
 
-            daily_log_return_series: pd.Series = np.log(price_series) - np.log(price_series.shift(1))
+                # 0 이하 결측/마스킹 수치를 결측치로 치환 후 시계열 직전 유효 가격 보간(ffill -> bfill)
+                price_series: pd.Series = raw_price_series.mask(raw_price_series <= 0).ffill().bfill()
 
-            # [설계 의도] 3단계: 롤링 역사적 변동성 산출 (volatility_20d, volatility_60d)
-            for window_days in self.volatility_lookback_days:
-                vol_feature_name: str = f"volatility_{window_days}d"
-                processed_dataframe[vol_feature_name] = daily_log_return_series.rolling(
-                    window=window_days
-                ).std()
+                # 시계열 전체가 0 이하이거나 유효 가격이 전혀 존재하지 않는 완전 결손 컬럼은 안전하게 스킵
+                if price_series.isna().all() or (price_series <= 0).any():
+                    continue
 
-            # [설계 의도] 4단계: 변동성 레짐 비율 산출 (vol_regime_ratio = short_vol / long_vol)
-            short_win: int = self.volatility_regime_windows["short_window_days"]
-            long_win: int = self.volatility_regime_windows["long_window_days"]
+                # [설계 의도] 자산 식별 Prefix 생성 (기준 타겟 자산인 kis_kospi_daily_close는 하위 호환성을 위해 Prefix 생략)
+                if price_col == "kis_kospi_daily_close":
+                    prefix: str = ""
+                else:
+                    asset_key: str = price_col.replace("_daily_close", "").replace("_close", "")
+                    prefix = f"{asset_key}_"
 
-            short_vol_series: pd.Series = daily_log_return_series.rolling(window=short_win).std()
-            long_vol_series: pd.Series = daily_log_return_series.rolling(window=long_win).std()
+                daily_log_return_series: pd.Series = np.log(price_series) - np.log(price_series.shift(1))
 
-            processed_dataframe["vol_regime_ratio"] = short_vol_series / long_vol_series.replace(0, np.nan)
+                # [설계 의도] 3단계: 롤링 역사적 변동성 산출 (예: volatility_20d, kis_nasdaq_volatility_20d)
+                for window_days in self.volatility_lookback_days:
+                    vol_feature_name: str = f"{prefix}volatility_{window_days}d"
+                    processed_dataframe[vol_feature_name] = daily_log_return_series.rolling(
+                        window=window_days
+                    ).std()
 
-            # [설계 의도] 5단계: 고차 모멘트 산출 (rolling_skew_20d, rolling_kurt_20d)
-            moments_win: int = self.higher_moments_window_days
-            processed_dataframe[f"rolling_skew_{moments_win}d"] = daily_log_return_series.rolling(
-                window=moments_win
-            ).skew()
-            processed_dataframe[f"rolling_kurt_{moments_win}d"] = daily_log_return_series.rolling(
-                window=moments_win
-            ).kurt()
+                # [설계 의도] 4단계: 변동성 레짐 비율 산출 (vol_regime_ratio = short_vol / long_vol)
+                short_win: int = self.volatility_regime_windows["short_window_days"]
+                long_win: int = self.volatility_regime_windows["long_window_days"]
 
-            # [설계 의도] 6단계: 정규화된 가격 위치 및 변동 폭 산출 (price_position_20d, norm_atr_20d)
-            range_win: int = self.price_range_window_days
-            rolling_max_series: pd.Series = price_series.rolling(window=range_win).max()
-            rolling_min_series: pd.Series = price_series.rolling(window=range_win).min()
+                short_vol_series: pd.Series = daily_log_return_series.rolling(window=short_win).std()
+                long_vol_series: pd.Series = daily_log_return_series.rolling(window=long_win).std()
 
-            price_range_series: pd.Series = rolling_max_series - rolling_min_series
+                processed_dataframe[f"{prefix}vol_regime_ratio"] = short_vol_series / long_vol_series.replace(0, np.nan)
 
-            # Position in range: (P_t - Min) / (Max - Min)
-            processed_dataframe[f"price_position_{range_win}d"] = (
-                price_series - rolling_min_series
-            ) / price_range_series.replace(0, np.nan)
+                # [설계 의도] 5단계: 고차 모멘트 산출 (rolling_skew_20d, rolling_kurt_20d)
+                moments_win: int = self.higher_moments_window_days
+                processed_dataframe[f"{prefix}rolling_skew_{moments_win}d"] = daily_log_return_series.rolling(
+                    window=moments_win
+                ).skew()
+                processed_dataframe[f"{prefix}rolling_kurt_{moments_win}d"] = daily_log_return_series.rolling(
+                    window=moments_win
+                ).kurt()
 
-            # Normalized ATR proxy: RollingMean(Price_Range) / Price_t
-            processed_dataframe[f"norm_atr_{range_win}d"] = (
-                price_range_series.rolling(window=range_win).mean()
-            ) / price_series.replace(0, np.nan)
+                # [설계 의도] 6단계: 정규화된 가격 위치 및 변동 폭 산출 (price_position_20d, norm_atr_20d)
+                range_win: int = self.price_range_window_days
+                rolling_max_series: pd.Series = price_series.rolling(window=range_win).max()
+                rolling_min_series: pd.Series = price_series.rolling(window=range_win).min()
+
+                price_range_series: pd.Series = rolling_max_series - rolling_min_series
+
+                # Position in range: (P_t - Min) / (Max - Min)
+                processed_dataframe[f"{prefix}price_position_{range_win}d"] = (
+                    price_series - rolling_min_series
+                ) / price_range_series.replace(0, np.nan)
+
+                # Normalized ATR proxy: RollingMean(Price_Range) / Price_t
+                processed_dataframe[f"{prefix}norm_atr_{range_win}d"] = (
+                    price_range_series.rolling(window=range_win).mean()
+                ) / price_series.replace(0, np.nan)
 
             return processed_dataframe
 
