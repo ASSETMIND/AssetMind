@@ -109,8 +109,9 @@ class S3ParquetLoader(AbstractLoader):
             storage_options = {
                 "client_kwargs": {
                     "endpoint_url": local_endpoint,
-                    "aws_access_key_id": "test",
-                    "aws_secret_access_key": "test"
+                    "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+                    "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+                    "region_name": os.getenv("AWS_DEFAULT_REGION")
                 }
             }
             

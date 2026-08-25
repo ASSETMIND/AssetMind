@@ -121,8 +121,8 @@ class S3ZstdStreamingReader(AbstractReader):
             if local_endpoint:
                 client_kwargs.update({
                     "endpoint_url": local_endpoint,
-                    "aws_access_key_id": "test",
-                    "aws_secret_access_key": "test"
+                    "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+                    "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
                 })
                 self.logger.info(f"[{self.provider_name}] LocalStack S3 Endpoint로 클라이언트 초기화 ({local_endpoint})")
 
