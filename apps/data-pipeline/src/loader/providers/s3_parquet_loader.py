@@ -87,7 +87,11 @@ class S3ParquetLoader(AbstractLoader):
         # DTO 메타데이터의 bucket_name 또는 job_id를 하위 서브 디렉터리 경로로 동적 결합
         prefix = self._prefix
         if dto.meta and isinstance(dto.meta, dict):
-            bucket_subpath = dto.meta.get("bucket_name") or dto.meta.get("job_id")
+            bucket_subpath = (
+                dto.meta.get("bucket_name")
+                or dto.meta.get("job_id")
+                or dto.meta.get("task_name")
+            )
             if bucket_subpath and not prefix.endswith(str(bucket_subpath)):
                 prefix = f"{prefix}/{bucket_subpath}"
         
