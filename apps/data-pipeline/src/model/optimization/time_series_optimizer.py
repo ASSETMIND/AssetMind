@@ -1,26 +1,3 @@
-"""
-[모듈 목적 및 상세 설명]
-금융 시계열 회귀 모델을 위한 확장 윈도우(Expanding Window) Purged Walk-Forward 교차검증 기반의
-하이퍼파라미터 최적화(TimeSeriesOptimizer) 범용 엔진 모듈입니다.
-Optuna TPE 베이지안 최적화, 과적합 방지 조기 종료(Early Stopping), 타겟 표준편차 기반 무차원 복합 손실 함수,
-그리고 외부 주입 Search Space에 대한 순수 수치 경계 진단 감사 시스템을 제공합니다.
-
-[전체 데이터 흐름 설명 (Input -> Output)]
-1. Input: 회귀 추정기 클래스, 기본 파라미터 세트, 외부 탐색 공간(search_space), 80% 학습 피처 행렬(X), 타겟 시리즈(y)
-2. Walk-Forward CV: DatasetSplitter의 K-Fold 제너레이터를 순회하며 각 Fold별 학습(fit) 및 검증(evaluate)
-3. Normalized Composite Loss: 방향성(MDA) 극대화 및 표준화 수치 오차(RMSE / y_train_std)를 동시 억제하는 손실 점수 산출
-4. Early Stopping: 최근 N회(Patience 20회) 동안 최고 점수 미갱신 시 탐색 자동 조기 종료
-5. Search Space Boundary Audit: 최적 파라미터와 외부 주입 Search Space의 경계선 단순 수치 비교 및 감사표 생성
-6. Full Refit & Output: 확정된 최적 하이퍼파라미터로 80% 전체 데이터셋 재학습 후 OptimizationResult DTO(study 포함) 사출
-
-주요 기능:
-- [Expanding Walk-Forward CV] 시간 순서 및 Purged Gap을 보존하는 K-Fold 검증
-- [Normalized Composite Objective] MDA - 0.1 * (RMSE / y_train_std) 기반 오차 외삽 방어
-- [Patience Early Stopping] 20회 연속 최고점 미갱신 시 불필요한 연산 자원 낭비 조기 차단
-- [Pure Numeric Boundary Audit] 모델/파라미터 종속성 없는 순수 수치 경계 도달 선별
-- [Stateless & Visual-Ready DTO] 완전한 무상태성 구조 및 Optuna Study 객체 반환을 통한 시각화 연계 지원
-"""
-
 from dataclasses import dataclass
 import math
 import time
@@ -30,7 +7,9 @@ import numpy as np
 import optuna
 import pandas as pd
 
-from src.model.dataset.splitter import DatasetSplitter
+from src.model.dataset.walk_forward_splitter import WalkForwardSplitter
+from src.model.evaluation import metrics
+from src.model.evaluation.composite_score import Weights, get_trial_score
 
 # Optuna 내부 로그 레벨 조정 (WARNING 이상만 출력)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -72,21 +51,27 @@ class OptimizationResult:
         return {
             "알고리즘 (Algorithm)": self.algorithm_name,
             "탐색 횟수 (Trials)": f"{self.trials_executed} 회",
-            "CV 평균 MDA": f"{self.tuned_cross_validation_metrics['mean_mda'] * 100:.2f}%",
-            "CV 평균 RMSE": f"{self.tuned_cross_validation_metrics['mean_rmse']:.6f}",
-            "CV 평균 MAE": f"{self.tuned_cross_validation_metrics['mean_mae']:.6f}",
+            "CV 평균 MDA": f"{self.tuned_cross_validation_metrics.get('mean_mda', 0.0) * 100.0:.2f}%",
+            "CV 평균 Rank IC": f"{self.tuned_cross_validation_metrics.get('mean_rank_ic', 0.0):.4f}",
+            "CV 평균 ICIR": f"{self.tuned_cross_validation_metrics.get('mean_icir', 0.0):.2f}",
+            "CV 평균 Sharpe": f"{self.tuned_cross_validation_metrics.get('mean_sharpe', 0.0):.2f}",
+            "CV 평균 Sortino": f"{self.tuned_cross_validation_metrics.get('mean_sortino', 0.0):.2f}",
+            "CV 평균 MDD": f"{self.tuned_cross_validation_metrics.get('mean_mdd', 0.0) * 100.0:.2f}%",
+            "CV 평균 t-stat": f"{self.tuned_cross_validation_metrics.get('mean_tstat', 0.0):.2f}",
+            "CV 평균 RMSE": f"{self.tuned_cross_validation_metrics.get('mean_rmse', 0.0):.6f}",
+            "CV 평균 MAE": f"{self.tuned_cross_validation_metrics.get('mean_mae', 0.0):.6f}",
             "복합 점수 (Composite)": f"{self.composite_optimization_score:.4f}",
             "최적 파라미터 (Best Parameters)": formatted_parameters,
             "소요 시간 (Search Time)": f"{self.total_search_time_seconds:.2f}s"
         }
-
 
 class TimeSeriesOptimizer:
     """시계열 Walk-Forward 교차검증 기반 하이퍼파라미터 최적화 및 진단 클래스."""
 
     def __init__(
         self,
-        splitter: DatasetSplitter,
+        splitter: WalkForwardSplitter,
+        weights: Optional[Weights] = None,
         patience: int = 20,
         min_trials: int = 15,
         max_trials: int = 80,
@@ -95,13 +80,15 @@ class TimeSeriesOptimizer:
         """TimeSeriesOptimizer 인스턴스를 초기화합니다.
 
         Args:
-            splitter (DatasetSplitter): 시계열 Walk-Forward CV 분할기 인스턴스.
+            splitter (WalkForwardSplitter): 시계열 Walk-Forward CV 분할기 인스턴스.
+            weights (Optional[Weights], optional): 4대 계층 가중치 설정. 기본값 None (기본 가중치 적용).
             patience (int, optional): 최고 점수 미갱신 시 조기 종료할 연속 Trial 수. 기본값 20.
             min_trials (int, optional): 조기 종료가 작동하기 전 보장할 최소 Trial 수. 기본값 15.
             max_trials (int, optional): 단일 최적화 세션당 최대 Trial 상한선. 기본값 80.
             random_seed (int, optional): 난수 재현성을 위한 시드 번호. 기본값 42.
         """
-        self.splitter: DatasetSplitter = splitter
+        self.splitter: WalkForwardSplitter = splitter
+        self.weights: Weights = weights if weights is not None else Weights()
         self.patience: int = patience
         self.min_trials: int = min_trials
         self.max_trials: int = max_trials
@@ -165,16 +152,21 @@ class TimeSeriesOptimizer:
             search_space=search_space
         )
 
-        # 4. 최적 Trial 메트릭 추출
-        best_trial_mean_mda = float(study.best_trial.user_attrs.get("mean_mda", 0.0))
-        best_trial_mean_rmse = float(study.best_trial.user_attrs.get("mean_rmse", 0.0))
-        best_trial_mean_mae = float(study.best_trial.user_attrs.get("mean_mae", 0.0))
+        # 4. 최적 Trial 다차원 메트릭 추출
+        best_attrs = study.best_trial.user_attrs
         best_composite_score = float(study.best_value)
 
         tuned_cross_validation_metrics = {
-            "mean_mda": best_trial_mean_mda,
-            "mean_rmse": best_trial_mean_rmse,
-            "mean_mae": best_trial_mean_mae,
+            "mean_mda": float(best_attrs.get("mean_mda", 0.0)),
+            "mean_rank_ic": float(best_attrs.get("mean_rank_ic", 0.0)),
+            "mean_icir": float(best_attrs.get("mean_icir", 0.0)),
+            "mean_sharpe": float(best_attrs.get("mean_sharpe", 0.0)),
+            "mean_sortino": float(best_attrs.get("mean_sortino", 0.0)),
+            "mean_mdd": float(best_attrs.get("mean_mdd", 0.0)),
+            "mean_tstat": float(best_attrs.get("mean_tstat", 0.0)),
+            "mean_pval": float(best_attrs.get("mean_pval", 1.0)),
+            "mean_rmse": float(best_attrs.get("mean_rmse", 0.0)),
+            "mean_mae": float(best_attrs.get("mean_mae", 0.0)),
             "composite_score": best_composite_score
         }
 
@@ -224,12 +216,17 @@ class TimeSeriesOptimizer:
                 feature_matrix=feature_matrix,
                 target_series=target_series
             )
-            trial.set_user_attr("mean_mda", cv_metrics["mean_mda"])
-            trial.set_user_attr("mean_rmse", cv_metrics["mean_rmse"])
-            trial.set_user_attr("mean_mae", cv_metrics["mean_mae"])
+            # [설계 의도] Trial 감사 추적을 위해 10대 Fold 평균 메트릭 전수 기록
+            for metric_key, metric_val in cv_metrics.items():
+                trial.set_user_attr(metric_key, metric_val)
 
-            composite_loss = cv_metrics["mean_mda"] - 0.1 * (cv_metrics["mean_rmse"] / target_standard_deviation)
-            return composite_loss
+            # [설계 의도] composite_score.get_trial_score 단일 진실 공급원을 통한 목적함수 스칼라 산출
+            trial_score = get_trial_score(
+                metrics=cv_metrics,
+                weights=self.weights,
+                target_std=target_standard_deviation
+            )
+            return trial_score
 
         early_stopping_callback = self._create_early_stopping_callback(
             patience=self.patience,
@@ -252,10 +249,17 @@ class TimeSeriesOptimizer:
         feature_matrix: pd.DataFrame,
         target_series: pd.Series
     ) -> Dict[str, float]:
-        """확장 윈도우 Purged Walk-Forward CV를 순회하며 평균 성능 지표를 산출합니다."""
-        fold_mda_scores: List[float] = []
-        fold_rmse_scores: List[float] = []
-        fold_mae_scores: List[float] = []
+        """확장 윈도우 Purged Walk-Forward CV를 순회하며 metrics.py 기반 다차원 평균 성능 지표를 산출합니다."""
+        fold_mda: List[float] = []
+        fold_rmse: List[float] = []
+        fold_mae: List[float] = []
+        fold_rank_ic: List[float] = []
+        fold_icir: List[float] = []
+        fold_sharpe: List[float] = []
+        fold_sortino: List[float] = []
+        fold_mdd: List[float] = []
+        fold_tstat: List[float] = []
+        fold_pval: List[float] = []
 
         for X_train_fold, y_train_fold, X_val_fold, y_val_fold in self.splitter.split_walk_forward(
             X=feature_matrix,
@@ -263,16 +267,35 @@ class TimeSeriesOptimizer:
         ):
             model_instance = model_class(**hyperparameters)
             model_instance.fit(X_train=X_train_fold, y_train=y_train_fold)
-            evaluation_metrics = model_instance.evaluate(X_test=X_val_fold, y_test=y_val_fold)
 
-            fold_mda_scores.append(evaluation_metrics["MDA"])
-            fold_rmse_scores.append(evaluation_metrics["RMSE"])
-            fold_mae_scores.append(evaluation_metrics["MAE"])
+            preds = model_instance.predict(X_test=X_val_fold)
+            y_val_arr = y_val_fold.to_numpy(dtype=np.float64).flatten()
+            y_pred_arr = np.array(preds, dtype=np.float64).flatten()
+
+            nw_t, nw_p = metrics.newey_west_tstat(y_val_arr, y_pred_arr)
+
+            fold_mda.append(metrics.mda(y_val_arr, y_pred_arr))
+            fold_rmse.append(metrics.rmse(y_val_arr, y_pred_arr))
+            fold_mae.append(metrics.mae(y_val_arr, y_pred_arr))
+            fold_rank_ic.append(metrics.rank_ic(y_val_arr, y_pred_arr))
+            fold_icir.append(metrics.icir(y_val_arr, y_pred_arr, window_size=20))
+            fold_sharpe.append(metrics.signal_sharpe(y_val_arr, y_pred_arr))
+            fold_sortino.append(metrics.sortino_ratio(y_val_arr, y_pred_arr))
+            fold_mdd.append(metrics.mdd(y_val_arr, y_pred_arr))
+            fold_tstat.append(nw_t)
+            fold_pval.append(nw_p)
 
         return {
-            "mean_mda": float(np.mean(fold_mda_scores)),
-            "mean_rmse": float(np.mean(fold_rmse_scores)),
-            "mean_mae": float(np.mean(fold_mae_scores))
+            "mean_mda": float(np.mean(fold_mda)),
+            "mean_rank_ic": float(np.mean(fold_rank_ic)),
+            "mean_icir": float(np.mean(fold_icir)),
+            "mean_sharpe": float(np.mean(fold_sharpe)),
+            "mean_sortino": float(np.mean(fold_sortino)),
+            "mean_mdd": float(np.mean(fold_mdd)),
+            "mean_tstat": float(np.mean(fold_tstat)),
+            "mean_pval": float(np.mean(fold_pval)),
+            "mean_rmse": float(np.mean(fold_rmse)),
+            "mean_mae": float(np.mean(fold_mae))
         }
 
     def _create_early_stopping_callback(
