@@ -131,19 +131,32 @@ class SingleModelDeployer:
         else:
             formatted_hyperparameters = "Default Specification"
 
+        # [설계 의도] 6대 평가 계층 기반 10대 다차원 지표 전수 정산 레코드 구축
         records: List[Dict[str, Any]] = [
+            # 1. 모델 기본 메타데이터
             {"항목 (Field)": "챔피언 모델 알고리즘 (Algorithm)", "세부 내용 (Value)": champion_dto.name},
             {"항목 (Field)": "모델 아티팩트 경로 (Artifact Path)", "세부 내용 (Value)": verification_result.artifact_path},
             {"항목 (Field)": "아티팩트 파일 크기 (File Size)", "세부 내용 (Value)": f"{verification_result.file_size_kb:.2f} KB"},
             {"항목 (Field)": "최종 투입 피처 수 (Feature Dimension)", "세부 내용 (Value)": f"{verification_result.feature_count} Features"},
             {"항목 (Field)": "최적 하이퍼파라미터 (Best Parameters)", "세부 내용 (Value)": formatted_hyperparameters},
+            
+            # 2. HPO Walk-Forward CV 기초 성과
             {"항목 (Field)": "Walk-Forward CV 평균 적중률 (CV MDA)", "세부 내용 (Value)": f"{champion_dto.cv_mda * 100.0:.2f}%"},
             {"항목 (Field)": "Walk-Forward CV 평균 제곱근 오차 (CV RMSE)", "세부 내용 (Value)": f"{champion_dto.cv_rmse:.6f}"},
-            {"항목 (Field)": "Walk-Forward CV 복합 최적화 점수 (Composite)", "세부 내용 (Value)": f"{champion_dto.composite_score:.4f}"},
-            {"항목 (Field)": "테스트 세트 방향성 정확도 (Test MDA)", "세부 내용 (Value)": f"{verification_result.final_test_metrics['MDA'] * 100.0:.2f}%"},
-            {"항목 (Field)": "테스트 세트 평균 제곱근 오차 (Test RMSE)", "세부 내용 (Value)": f"{verification_result.final_test_metrics['RMSE']:.6f}"},
-            {"항목 (Field)": "테스트 세트 평균 절대 오차 (Test MAE)", "세부 내용 (Value)": f"{verification_result.final_test_metrics['MAE']:.6f}"},
-            {"항목 (Field)": "단일 데이터 추론 지연 시간 (Per-Sample Latency)", "세부 내용 (Value)": f"{verification_result.single_sample_latency_ms:.4f} ms"},
-            {"항목 (Field)": "서빙 가능 상태 (Production Readiness)", "세부 내용 (Value)": "✅ VERIFIED & READY TO SERVE"}
+            
+            # 3. Out-of-Sample Test 6대 평가 계층 10대 지표 전수
+            {"항목 (Field)": "[L1] 테스트 방향성 적중률 (Test MDA)", "세부 내용 (Value)": f"{champion_dto.test_mda * 100.0:.2f}%"},
+            {"항목 (Field)": "[L1] 테스트 평균 제곱근 오차 (Test RMSE)", "세부 내용 (Value)": f"{champion_dto.test_rmse:.6f}"},
+            {"항목 (Field)": "[L1] 테스트 평균 절대 오차 (Test MAE)", "세부 내용 (Value)": f"{champion_dto.test_mae:.6f}"},
+            {"항목 (Field)": "[L2] 테스트 순위 정보 계수 (Test Rank IC)", "세부 내용 (Value)": f"{champion_dto.test_rank_ic:.4f}"},
+            {"항목 (Field)": "[L2] 테스트 팩터 정보 비율 (Test ICIR)", "세부 내용 (Value)": f"{champion_dto.test_icir:.2f}"},{"항목 (Field)": "[L3] 테스트 신호 샤프 지수 (Test Signal Sharpe)", "세부 내용 (Value)": f"{champion_dto.test_sharpe:.2f}"},
+            {"항목 (Field)": "[L3] 테스트 소르티노 지수 (Test Sortino Ratio)", "세부 내용 (Value)": f"{champion_dto.test_sortino:.2f}"},
+            {"항목 (Field)": "[L3] 테스트 최대 낙폭 (Test Max Drawdown)", "세부 내용 (Value)": f"{champion_dto.test_mdd * 100.0:.2f}%"},
+            {"항목 (Field)": "[L4] 테스트 Newey-West 알파 통계량 (Factor t-stat)", "세부 내용 (Value)": f"{champion_dto.test_tstat:.2f} (p={champion_dto.test_pvalue:.4f})"},
+            {"항목 (Field)": "[종합] 4대 계층 가중 복합 스코어 (Composite Score)", "세부 내용 (Value)": f"{champion_dto.composite_score:.4f}"},
+            
+            # 4. 프로덕션 서빙 SLA 및 배포 가드레일
+            {"항목 (Field)": "[L6] 단일 추론 지연 시간 (Per-Sample Latency)", "세부 내용 (Value)": f"{verification_result.single_sample_latency_ms:.4f} ms"},
+            {"항목 (Field)": "서빙 배포 적격 상태 (Production Readiness)", "세부 내용 (Value)": "VERIFIED & READY TO SERVE"}
         ]
         return pd.DataFrame(records).set_index("항목 (Field)")

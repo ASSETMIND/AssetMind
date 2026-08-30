@@ -2,14 +2,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 import pandas as pd
 
-from src.model.dataset.splitter import DatasetSplitter
+from src.model.dataset.walk_forward_splitter import WalkForwardSplitter
+from src.model.evaluation.composite_score import Weights
 from src.model.optimization.time_series_optimizer import TimeSeriesOptimizer
 from src.model.optimization.search_space import get_search_spaces
 from src.model.core.abstract_regressor import AbstractRegressor
 from src.model.core.elasticnet_regressor import ElasticNetRegressor
 from src.model.core.xgboost_regressor import XGBoostRegressor
 from src.model.core.random_forest_regressor import RandomForestRegressor
-
 
 @dataclass
 class OptimizationRegistry:
@@ -35,7 +35,8 @@ class SingleModelOptimizer:
 
     def __init__(
         self,
-        splitter: DatasetSplitter,
+        splitter: WalkForwardSplitter,
+        weights: Optional[Weights] = None,
         tracker: Optional[Any] = None,
         patience: int = 20,
         min_trials: int = 15,
@@ -47,6 +48,7 @@ class SingleModelOptimizer:
 
         Args:
             splitter: 시계열 Walk-Forward 분할기 인스턴스
+            weights: 4대 계층 복합 스코어링 가중치 설정 (Optional)
             tracker: MLflowTracker 인스턴스 (Optional)
             patience: 조기 종료 대기 Trial 수
             min_trials: 최소 탐색 Trial 수
@@ -54,8 +56,10 @@ class SingleModelOptimizer:
             random_seed: 난수 시드
         """
         self.tracker = tracker
+        self.weights: Weights = weights if weights is not None else Weights()
         self.time_series_optimizer = TimeSeriesOptimizer(
             splitter=splitter,
+            weights=self.weights,
             patience=patience,
             min_trials=min_trials,
             max_trials=max_trials,
@@ -100,8 +104,9 @@ class SingleModelOptimizer:
         print("=" * 122)
 
         for model_name, model_class, default_params in self.default_model_specifications:
-            print(f"[{model_name}] Walk-Forward CV HPO Running ... ", end="", flush=True)
-
+            model_tag = f"[{model_name}]"
+            print(f"{model_tag:>14} Walk-Forward CV HPO Running ... ", end="", flush=True)
+            
             result_dto = self.time_series_optimizer.fit(
                 algorithm_name=model_name,
                 model_class=model_class,
@@ -126,8 +131,7 @@ class SingleModelOptimizer:
             print(
                 f"Done ({result_dto.total_search_time_seconds:.2f}s | "
                 f"Trials: {result_dto.trials_executed} | "
-                f"Best CV MDA: {result_dto.tuned_cross_validation_metrics['mean_mda'] * 100:.2f}% | "
-                f"CV RMSE: {result_dto.tuned_cross_validation_metrics['mean_rmse']:.4f})",
+                f"Score: {result_dto.composite_optimization_score:.4f})",
                 flush=True
             )
 
