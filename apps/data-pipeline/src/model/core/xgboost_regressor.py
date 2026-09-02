@@ -51,7 +51,6 @@ class XGBoostRegressor(AbstractRegressor):
         # 기본 파라미터 템플릿에 외부 주입 파라미터를 병합하여 완전한 설정 딕셔너리 구성
         _hyperparameters: Dict[str, Any] = DEFAULT_XGBOOST_PARAMS.copy()
         _hyperparameters.update(hyperparameters)
-        _hyperparameters["random_state"] = random_state
 
         # XGBoost 전용 디바이스 파라미터 안전 바인딩
         target_device = _hyperparameters.get("device", "auto")
@@ -100,7 +99,10 @@ class XGBoostRegressor(AbstractRegressor):
 
         try:
             # 전체 하이퍼파라미터 딕셔너리를 동적으로 언패킹하여 네이티브 모델 생성
-            self._model = xgb.XGBRegressor(**self.hyperparameters)
+            self._model = xgb.XGBRegressor(
+                random_state=self.random_state,
+                **self.hyperparameters,
+            )   
 
             fit_options: Dict[str, Any] = kwargs.copy()
 

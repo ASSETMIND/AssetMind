@@ -45,7 +45,6 @@ class ElasticNetRegressor(AbstractRegressor):
         """
         _hyperparameters: Dict[str, Any] = DEFAULT_ELASTICNET_PARAMS.copy()
         _hyperparameters.update(hyperparameters)
-        _hyperparameters["random_state"] = random_state
 
         super().__init__(
             model_name=model_name,
@@ -86,7 +85,10 @@ class ElasticNetRegressor(AbstractRegressor):
 
         try:
             # 하이퍼파라미터 바인딩 및 네이티브 에스티메이터 생성
-            self._model = ElasticNet(**self.hyperparameters)
+            self._model = ElasticNet(
+                random_state=self.random_state,
+                **self.hyperparameters,
+            )
 
             # 네이티브 fit 연산 실행
             self._model.fit(X_train, y_train, **kwargs)

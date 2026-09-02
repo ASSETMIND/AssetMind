@@ -48,7 +48,6 @@ class RandomForestRegressor(AbstractRegressor):
         # 기본 파라미터 템플릿에 외부 주입 파라미터를 병합하여 완전한 설정 딕셔너리 구성
         _hyperparameters: Dict[str, Any] = DEFAULT_RANDOM_FOREST_PARAMS.copy()
         _hyperparameters.update(hyperparameters)
-        _hyperparameters["random_state"] = random_state
 
         # 부모 추상 클래스 생성자에 바인딩하여 상태 및 파라미터 단일 관리
         super().__init__(
@@ -90,7 +89,10 @@ class RandomForestRegressor(AbstractRegressor):
 
         try:
             # 전체 하이퍼파라미터 딕셔너리를 동적으로 언패킹하여 네이티브 모델 생성
-            self._model = SklearnRandomForestRegressor(**self.hyperparameters)
+            self._model = SklearnRandomForestRegressor(
+                random_state=self.random_state,
+                **self.hyperparameters,
+            )
 
             # 네이티브 fit 연산 실행
             self._model.fit(X_train, y_train, **kwargs)
