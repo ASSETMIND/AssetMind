@@ -2,7 +2,7 @@ import time
 from typing import Any, Dict, List, Union
 import pandas as pd
 
-from src.model.dataset.splitter import DatasetSplitter
+from src.dataset.splitter import DatasetSplitter
 
 
 def batch_split_datasets(
