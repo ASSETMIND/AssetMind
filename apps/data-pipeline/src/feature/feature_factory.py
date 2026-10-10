@@ -86,7 +86,10 @@ class FeatureFactory:
                             task_name=task_name,
                             source_price=params["source_price"],
                             target_name=params["target_name"],
-                            forecast_horizon_days=params["forecast_horizon_days"]
+                            forecast_horizon_days=params["forecast_horizon_days"],
+                            use_adaptive_standardization=params.get("use_adaptive_standardization", True),
+                            regime_window_days=params.get("regime_window_days", 60),
+                            clamp_sigma=params.get("clamp_sigma", 3.0)
                         )
                     )
 
