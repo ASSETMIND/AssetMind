@@ -11,10 +11,13 @@
 # 1. 예측 타겟 피처 정의 (Target Feature Definition)
 # ------------------------------------------------------------------------------
 target_feature:
-  source_price: "kis_kospi_daily_close" # 타겟 변수 생성의 원시 가격 지표
-  target_name: "target_return_20d" # 최종 사출될 타겟 피처명
-  forecast_horizon_days: 20 # 예측 Horizon (20영업일 = 1달)
-  use_log_return: true # 로그 수익률 변환 여부
+  source_price: "kis_kospi_daily_close"
+  target_name: "target_return_20d"
+  forecast_horizon_days: 20
+  use_log_return: true
+  use_adaptive_standardization: true
+  regime_window_days: 60
+  clamp_sigma: 3.0
 
 # ------------------------------------------------------------------------------
 # 2. 피처 엔지니어링 태스크 시퀀스 (Feature Engineering Tasks)
@@ -29,6 +32,9 @@ feature_engineering:
       source_price: "kis_kospi_daily_close"
       target_name: "target_return_20d"
       forecast_horizon_days: 20
+      use_adaptive_standardization: true
+      regime_window_days: 60
+      clamp_sigma: 3.0
 
   # ----------------------------------------------------------------------------
   # [Task 1] 중기 추세 및 모멘텀 태스크 (TrendMomentum)
@@ -37,12 +43,10 @@ feature_engineering:
     enabled: true
     params:
       source_price: "_close"
-      return_lookback_days: [5, 20, 60, 120]
+      return_lookback_days: [5, 20, 60]
       moving_average_ratios:
         - short_window_days: 5
           long_window_days: 20
-        - short_window_days: 20
-          long_window_days: 60
       risk_adjusted_window_days: 20
 
   # ----------------------------------------------------------------------------
