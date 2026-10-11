@@ -77,6 +77,7 @@ class XGBoostRegressor(AbstractRegressor):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
+        sample_weight: Optional[pd.Series] = None,
         **kwargs: Any,
     ) -> "XGBoostRegressor":
         """입력 데이터를 기반으로 XGBoost 회귀 모델 학습을 수행합니다.
@@ -86,6 +87,7 @@ class XGBoostRegressor(AbstractRegressor):
             y_train (pd.Series): 학습용 정답 타겟 시계열 (N,).
             X_val (Optional[pd.DataFrame]): 조기 종료용 검증 피처 데이터프레임. 기본값은 None.
             y_val (Optional[pd.Series]): 조기 종료용 검증 정답 시계열. 기본값은 None.
+            sample_weight (Optional[pd.Series]): 관측치별 가중치 시리즈. 기본값은 None.
             **kwargs (Any): early_stopping_rounds, verbose 등 런타임 제어 옵션.
 
         Returns:
@@ -105,6 +107,10 @@ class XGBoostRegressor(AbstractRegressor):
             )   
 
             fit_options: Dict[str, Any] = kwargs.copy()
+
+            # 시간 감쇠 가중치 주입
+            if sample_weight is not None:
+                fit_options["sample_weight"] = np.asarray(sample_weight, dtype=np.float64)
 
             # 검증 데이터가 주어졌을 경우 eval_set 구성 및 무음 모드(verbose=False) 기본 적용
             if X_val is not None and y_val is not None:

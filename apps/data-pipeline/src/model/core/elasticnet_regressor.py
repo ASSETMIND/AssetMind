@@ -63,6 +63,7 @@ class ElasticNetRegressor(AbstractRegressor):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
+        sample_weight: Optional[pd.Series] = None,
         **kwargs: Any,
     ) -> "ElasticNetRegressor":
         """입력 데이터를 기반으로 ElasticNet 모델 학습을 수행합니다.
@@ -72,6 +73,7 @@ class ElasticNetRegressor(AbstractRegressor):
             y_train (pd.Series): 학습용 정답 타겟 시계열 (N,).
             X_val (Optional[pd.DataFrame]): 인터페이스 다형성 준수용 인자 (선형 모델 미사용).
             y_val (Optional[pd.Series]): 인터페이스 다형성 준수용 인자 (선형 모델 미사용).
+            sample_weight (Optional[pd.Series]): 관측치별 시간 감쇠 또는 중요도 가중치. 기본값은 None.
             **kwargs (Any): 기타 사이킷런 fit 런타임 제어 옵션.
 
         Returns:
@@ -90,8 +92,13 @@ class ElasticNetRegressor(AbstractRegressor):
                 **self.hyperparameters,
             )
 
+            # 시간 감쇠 가중치 주입
+            fit_kwargs: Dict[str, Any] = kwargs.copy()
+            if sample_weight is not None:
+                fit_kwargs["sample_weight"] = np.asarray(sample_weight, dtype=np.float64)
+
             # 네이티브 fit 연산 실행
-            self._model.fit(X_train, y_train, **kwargs)
+            self._model.fit(X_train, y_train, **fit_kwargs)
 
             # 피처 메타데이터 보존 및 학습 완료 플래그 갱신
             self.feature_names = list(X_train.columns)

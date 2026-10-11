@@ -46,6 +46,7 @@ class AbstractRegressor(ABC):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
+        sample_weight: Optional[pd.Series] = None,
         **kwargs: Any,
     ) -> "AbstractRegressor":
         """입력 데이터를 기반으로 모델 학습을 집행합니다.
@@ -55,6 +56,7 @@ class AbstractRegressor(ABC):
             y_train (pd.Series): 훈련용 1D 타겟 시계열.
             X_val (Optional[pd.DataFrame]): 조기 종료용 검증 피처 행렬.
             y_val (Optional[pd.Series]): 조기 종료용 검증 타겟 시리즈.
+            sample_weight (Optional[pd.Series]): 관측치별 시간 감쇠 또는 중요도 가중치. 기본값은 None.
             **kwargs (Any): 기타 알고리즘별 동적 런타임 제어 인자.
         """
         pass
