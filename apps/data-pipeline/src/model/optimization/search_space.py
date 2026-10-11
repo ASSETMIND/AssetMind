@@ -10,7 +10,7 @@ import pandas as pd
 # 3대 회귀 모델 및 가중 블렌딩 앙상블 실무 표준 탐색 공간 기본 템플릿
 DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "ElasticNet": {
-        "alpha": {"type": "float", "low": 1e-5, "high": 1.0, "log": True},
+        "alpha": {"type": "float", "low": 1e-3, "high": 2.0, "log": True},
         "l1_ratio": {"type": "float", "low": 0.01, "high": 0.99, "step": 0.01},
     },
     "XGBoost": {
@@ -19,9 +19,9 @@ DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
             "choices": ["reg:squarederror", "reg:pseudohubererror", "reg:absoluteerror"],
         },
         "n_estimators": {"type": "int", "low": 50, "high": 500, "step": 25},
-        "max_depth": {"type": "int", "low": 2, "high": 6, "step": 1},
+        "max_depth": {"type": "int", "low": 2, "high": 4, "step": 1},
         "learning_rate": {"type": "float", "low": 0.005, "high": 0.20, "log": True},
-        "min_child_weight": {"type": "int", "low": 1, "high": 30, "step": 1},
+        "min_child_weight": {"type": "int", "low": 10, "high": 30, "step": 1},
         "gamma": {"type": "float", "low": 1e-4, "high": 5.0, "log": True},
         "subsample": {"type": "float", "low": 0.50, "high": 1.00, "step": 0.05},
         "colsample_bytree": {"type": "float", "low": 0.40, "high": 1.00, "step": 0.05},
@@ -30,9 +30,9 @@ DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
     },
     "RandomForest": {
         "n_estimators": {"type": "int", "low": 100, "high": 500, "step": 50},
-        "max_depth": {"type": "int", "low": 2, "high": 8, "step": 1},
-        "min_samples_split": {"type": "int", "low": 2, "high": 40, "step": 2},
-        "min_samples_leaf": {"type": "int", "low": 1, "high": 20, "step": 1},
+        "max_depth": {"type": "int", "low": 2, "high": 5, "step": 1},
+        "min_samples_split": {"type": "int", "low": 20, "high": 60, "step": 2},
+        "min_samples_leaf": {"type": "int", "low": 10, "high": 30, "step": 1},
         "max_features": {"type": "float", "low": 0.30, "high": 1.00, "step": 0.05},
     },
 }
