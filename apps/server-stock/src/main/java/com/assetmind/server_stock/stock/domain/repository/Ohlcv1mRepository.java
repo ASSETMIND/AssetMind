@@ -33,4 +33,13 @@ public interface Ohlcv1mRepository {
      * @return N분봉 OHLCV DTO 리스트
      */
     List<OhlcvDto> findDynamicMinuteCandles(String stockCode, String intervalString, LocalDateTime endTime, int limit);
+
+    /**
+     * DB에서 endTime 부터 이전까지의 Limit개의 1분봉 데이터를 조회
+     * @param stockCode 종목 코드
+     * @param endTime 조회의 마지막 시점 시간
+     * @param limit 조회 요청에 필요한 1분봉 개수
+     * @return 1분봉 OHLCV DTO 리스트
+     */
+    List<OhlcvDto> findOneMinuteCandles(String stockCode, LocalDateTime endTime, int limit);
 }

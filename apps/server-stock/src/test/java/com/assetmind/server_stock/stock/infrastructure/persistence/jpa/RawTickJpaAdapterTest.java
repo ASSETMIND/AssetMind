@@ -1,12 +1,12 @@
 package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assertions.*;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.adapter.RawTickJpaAdapter;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.entity.RawTickJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.tick.repository.RawTickJpaRepository;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +15,6 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;

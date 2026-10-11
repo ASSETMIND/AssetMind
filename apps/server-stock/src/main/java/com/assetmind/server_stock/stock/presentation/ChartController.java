@@ -37,7 +37,7 @@ public class ChartController {
         log.info("[ChartController] 캔들 조회 요청 - 종목: {}, 타임프레임: {}, Limit: {}, 기준시간: {}",
                 stockCode, dto.timeframe(), dto.limit(), dto.endTime());
 
-        ChartResponseDto response = chartService.getCandles(stockCode, dto.timeframe(), dto.endTime(), dto.limit());
+        ChartResponseDto response = chartService.getNCandles(stockCode, dto.timeframe(), dto.endTime(), dto.limit());
 
         return ApiResponse.success(response);
     }

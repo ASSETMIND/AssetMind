@@ -1,10 +1,11 @@
 import RankLayout from '../components/stock-main/rank-layout';
+import AdBanner from '../components/common/ad-banner';
 
 export default function MainPage() {
 	return (
 		<div className='py-10'>
-			{/* 추후 광고 진행 공간 */}
-			<div className='py-24' />
+			<div className='py-5' />
+			<AdBanner />
 			<RankLayout />
 		</div>
 	);

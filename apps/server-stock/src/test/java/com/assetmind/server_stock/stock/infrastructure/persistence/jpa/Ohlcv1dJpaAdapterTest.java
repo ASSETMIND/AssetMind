@@ -3,7 +3,9 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.assetmind.server_stock.stock.domain.dtos.OhlcvDto;
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.Ohlcv1dJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.adapter.Ohlcv1dJpaAdapter;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.entity.Ohlcv1dJpaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.ohlcv.repository.Ohlcv1dJpaRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;

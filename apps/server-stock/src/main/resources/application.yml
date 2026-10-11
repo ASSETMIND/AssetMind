@@ -75,9 +75,11 @@ management:
 kis:
   token-expiration: 86400
   base-url: "https://openapivts.koreainvestment.com:29443"
-  websocket-url: "ws://ops.koreainvestment.com:31000"
+  websocket-url: "ws://ops.koreainvestment.com:21000"
   accounts:
     - app-key: ${KIS_APP_KEY_1}
       app-secret: ${KIS_APP_SECRET_KEY_1}
     - app-key: ${KIS_APP_KEY_2}
       app-secret: ${KIS_APP_SECRET_KEY_2}
+    - app-key: ${KIS_APP_KEY_3}
+      app-secret: ${KIS_APP_SECRET_KEY_3}

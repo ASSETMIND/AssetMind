@@ -16,7 +16,7 @@ export const options = {
   },
 };
 
-const STOCK_SERVER_BASE_URL = 'http://127.0.0.1:9090'; // Stock 서버 주소
+const STOCK_SERVER_BASE_URL = 'http://localhost'; // Stock 서버 주소
 
 const TARGET_STOCKS = ['005930', '000660', '035420', '035720', '005380', '000270'];
 
