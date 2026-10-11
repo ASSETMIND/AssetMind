@@ -3,11 +3,15 @@ import numpy as np
 import pandas as pd
 
 from src.model.evaluation.criteria import (
-    HardGate,
-    SoftGate,
+    FactorQualityGate,
+    FinanceGate,
+    MLValidityGate,
+    StatisticalGate,
     Weights,
-    check_hard_gate,
-    check_soft_gate,
+    check_factor_quality_gate,
+    check_finance_gate,
+    check_ml_validity_gate,
+    check_statistical_gate,
 )
 from src.model.evaluation.schema import (
     EvaluationLayer,
@@ -22,48 +26,61 @@ from src.model.evaluation.schema import (
 
 def get_score(
     candidates_metrics: Union[Dict[str, Dict[Any, float]], pd.DataFrame],
-    hard_gate: Optional[HardGate] = None,
-    soft_gate: Optional[SoftGate] = None,
+    ml_gate: Optional[MLValidityGate] = None,
+    factor_gate: Optional[FactorQualityGate] = None,
+    finance_gate: Optional[FinanceGate] = None,
+    stat_gate: Optional[StatisticalGate] = None,
     weights: Optional[Weights] = None,
     target_std: float = 1.0,
 ) -> pd.DataFrame:
-    """하드 및 소프트 게이트를 통과한 적격 후보 모델들에 대해 4대 계층 가중 복합 스코어 리더보드를 산출합니다.
+    """도메인 게이트를 통과한 적격 후보 모델들에 대해 비대칭 감점이 반영된 신호 복합 스코어 리더보드를 산출합니다.
 
     Args:
         candidates_metrics: 전체 후보 모델들의 원시 지표 맵 또는 판다스 DataFrame.
-        hard_gate: 하드 게이트 임계치 설정 DTO (None일 경우 기본값 적용).
-        soft_gate: 소프트 게이트 임계치 설정 DTO (None일 경우 기본값 적용).
-        weights: 4대 평가 계층 가중치 설정 DTO (None일 경우 기본값 적용).
-        target_std: 타겟 시계열 표준편차 (RMSE/MAE 정규화 기준 분모, 기본값: 1.0).
+        ml_gate: ML 유효성 게이트 설정 DTO (None일 경우 기본값 적용).
+        factor_gate: 팩터 품질 게이트 설정 DTO (None일 경우 기본값 적용).
+        finance_gate: 금융 성과 게이트 설정 DTO (선택 사항).
+        stat_gate: 통계적 유의성 게이트 설정 DTO (선택 사항).
+        weights: 2대 핵심 계층(ML, Factor) 가중치 설정 DTO (None일 경우 기본값 적용).
+        target_std: 타겟 시계열 표준편차 (기본값: 1.0).
 
     Returns:
-        pd.DataFrame: 적격 모델들의 원시 지표, 4대 계층별 부분 점수(score_l1~l4),
+        pd.DataFrame: 적격 모델들의 원시 지표, 계층별 부분 점수(score_l1_ml, score_l2_factor),
             최종 복합 스코어(composite_score) 및 랭킹(rank)이 정렬된 리더보드.
-            (적격 모델이 없을 경우 빈 DataFrame 반환)
     """
-    effective_hard_gate: HardGate = hard_gate or HardGate()
-    effective_soft_gate: SoftGate = soft_gate or SoftGate()
+    effective_ml_gate: MLValidityGate = ml_gate or MLValidityGate()
+    effective_factor_gate: FactorQualityGate = factor_gate or FactorQualityGate()
     effective_weights: Weights = weights or Weights()
 
-    # [설계 의도] 입력 데이터를 표준 Enum 맵으로 변환 후 2단계 게이트 필터링 집행
     standardized_candidates = _standardize_candidates(candidates_metrics)
     qualified_dict: Dict[str, Dict[str, float]] = {}
 
     for model_name, metric_map in standardized_candidates.items():
-        hard_pass, _ = check_hard_gate(metric_map, effective_hard_gate)
-        if not hard_pass:
+        # [설계 의도] 1단계: 기초 수렴 실패 및 부호 붕괴 모델 사전 차단
+        ml_pass, _ = check_ml_validity_gate(metric_map, effective_ml_gate, target_std=target_std)
+        if not ml_pass:
             continue
 
-        soft_pass, _, _, _ = check_soft_gate(metric_map, effective_soft_gate)
-        if not soft_pass:
+        # [설계 의도] 2단계: 순위 상관력 역전 모델 차단
+        factor_pass, _ = check_factor_quality_gate(metric_map, effective_factor_gate)
+        if not factor_pass:
             continue
 
-        # 직렬화 및 DataFrame 생성을 위해 키를 표준 문자열(Enum.value)로 평탄화
+        # [설계 의도] 3단계: 선택적 금융 리스크 및 통계적 유의성 검증
+        if finance_gate is not None:
+            fin_pass, _ = check_finance_gate(metric_map, finance_gate)
+            if not fin_pass:
+                continue
+
+        if stat_gate is not None:
+            stat_pass, _ = check_statistical_gate(metric_map, stat_gate)
+            if not stat_pass:
+                continue
+
         qualified_dict[model_name] = {
             metric.value: score for metric, score in metric_map.items()
         }
 
-    # 적격 모델이 전무한 경우 Fail-Safe 방어
     if not qualified_dict:
         return pd.DataFrame(columns=["composite_score", "rank"])
 
@@ -83,79 +100,46 @@ def get_trial_score(
     weights: Optional[Weights] = None,
     target_std: float = 1.0,
 ) -> float:
-    """단일 Optuna HPO Trial의 Fold 평균 검증 지표를 수신하여 [0.0, 1.0] 연속 복합 목적함수 스코어를 산출합니다.
-
-    Args:
-        metrics: 단일 시도에서 산출된 Fold 평균 평가 지표 딕셔너리.
-        weights: 4대 계층 가중치 설정 DTO (None일 경우 기본값 적용).
-        target_std: 훈련 타겟 시계열의 표준편차 (RMSE/MAE 스케일 역방향 정규화 기준값).
-
-    Returns:
-        float: [0.0, 1.0] 범위로 수렴하는 단일 목적함수 스칼라 점수 (최대화 대상).
-    """
+    """단일 Optuna HPO Trial의 Fold 평균 검증 지표를 수신하여 [-1.0, 1.0] 연속 복합 목적함수 스코어를 산출합니다."""
     effective_weights: Weights = weights or Weights()
-    clean_metrics: Dict[EvaluationMetric, float] = _standardize_metrics_map(metrics)
-    safe_std: float = target_std if (target_std > 0.0 and np.isfinite(target_std)) else 1.0
+    scores = compute_layer_scores(metrics=metrics, target_std=target_std)
 
-    # --------------------------------------------------------------------------
-    # Layer 1. 기계학습 기본 예측 오차 (MDA: 정방향, RMSE/MAE: 타겟 분산 대비 역방향)
-    # --------------------------------------------------------------------------
-    val_mda = clean_metrics.get(EvaluationMetric.MDA, 0.5)
-    val_rmse = clean_metrics.get(EvaluationMetric.RMSE, safe_std)
-    val_mae = clean_metrics.get(EvaluationMetric.MAE, safe_std)
-
-    norm_mda = float(np.clip(val_mda, 0.0, 1.0))
-    norm_rmse = float(np.clip(1.0 - (val_rmse / safe_std), 0.0, 1.0))
-    norm_mae = float(np.clip(1.0 - (val_mae / safe_std), 0.0, 1.0))
-    score_l1 = float(np.mean([norm_mda, norm_rmse, norm_mae]))
-
-    # --------------------------------------------------------------------------
-    # Layer 2. 퀀트 팩터 신호 품질 (Rank IC: [-1, 1] -> [0, 1], ICIR: [0, 2.0] -> [0, 1])
-    # --------------------------------------------------------------------------
-    val_rank_ic = clean_metrics.get(EvaluationMetric.RANK_IC, 0.0)
-    val_icir = clean_metrics.get(EvaluationMetric.ICIR, 0.0)
-
-    norm_rank_ic = float(np.clip((val_rank_ic + 1.0) / 2.0, 0.0, 1.0))
-    norm_icir = float(np.clip(val_icir / 2.0, 0.0, 1.0))
-    score_l2 = float(np.mean([norm_rank_ic, norm_icir]))
-
-    # --------------------------------------------------------------------------
-    # Layer 3. 금융 시뮬레이션 성과 (Sharpe: [0, 3.0], Sortino: [0, 4.0], MDD: 역방향)
-    # --------------------------------------------------------------------------
-    val_sharpe = clean_metrics.get(EvaluationMetric.SIGNAL_SHARPE, 0.0)
-    val_sortino = clean_metrics.get(EvaluationMetric.SORTINO_RATIO, 0.0)
-    val_mdd = clean_metrics.get(EvaluationMetric.MDD, 1.0)
-
-    norm_sharpe = float(np.clip(val_sharpe / 3.0, 0.0, 1.0))
-    norm_sortino = float(np.clip(val_sortino / 4.0, 0.0, 1.0))
-    norm_mdd = float(np.clip(1.0 - val_mdd, 0.0, 1.0))
-    score_l3 = float(np.mean([norm_sharpe, norm_sortino, norm_mdd]))
-
-    # --------------------------------------------------------------------------
-    # Layer 4. 단일 신호 통계적 유의성 (Factor t-stat: [0, 3.0] -> [0, 1])
-    # --------------------------------------------------------------------------
-    val_tstat = clean_metrics.get(EvaluationMetric.FACTOR_T_STAT, 0.0)
-    score_l4 = float(np.clip(val_tstat / 3.0, 0.0, 1.0))
-
-    # --------------------------------------------------------------------------
-    # 4대 계층 가중 선형 결합 (Weighted Linear Combination)
-    # --------------------------------------------------------------------------
-    total_weight = (
-        effective_weights.layer_1_ml +
-        effective_weights.layer_2_factor +
-        effective_weights.layer_3_finance +
-        effective_weights.layer_4_stat
-    )
+    # [설계 의도] 백테스트 과적합을 방지하기 위해 L3(Finance), L4(Stat)을 목적함수에서 배제하고 L1, L2만 선형 결합
+    total_weight = effective_weights.layer_1_ml + effective_weights.layer_2_factor
     divisor: float = total_weight if total_weight > 0.0 else 1.0
 
     trial_score: float = (
-        effective_weights.layer_1_ml * score_l1 +
-        effective_weights.layer_2_factor * score_l2 +
-        effective_weights.layer_3_finance * score_l3 +
-        effective_weights.layer_4_stat * score_l4
+        effective_weights.layer_1_ml * scores["score_l1_ml"] +
+        effective_weights.layer_2_factor * scores["score_l2_factor"]
     ) / divisor
 
     return float(trial_score)
+
+
+def compute_layer_scores(
+    metrics: Union[Dict[EvaluationMetric, float], Dict[str, float]],
+    target_std: float = 1.0,
+) -> Dict[str, float]:
+    """10대 원천 지표로부터 비대칭 감점 페널티가 적용된 신호 품질 부분 점수를 산출하는 단일 진실 공급원(SSOT) 함수."""
+    clean_metrics: Dict[EvaluationMetric, float] = _standardize_metrics_map(metrics)
+
+    # [설계 의도] Layer 1. 기계학습 기본 방향성 (50% 미달 시 역방향 베팅 위험에 비례하여 [-1.0, 0.0) 연속 감점 부과)
+    val_mda = clean_metrics.get(EvaluationMetric.MDA, 0.50)
+    score_l1 = float(np.clip((val_mda - 0.50) / 0.15, -1.0, 1.5))
+
+    # [설계 의도] Layer 2. 퀀트 팩터 신호 품질 (천장 효과 완화를 위해 Rank IC 상한을 1.5로 확장)
+    val_rank_ic = clean_metrics.get(EvaluationMetric.RANK_IC, 0.0)
+    val_icir = clean_metrics.get(EvaluationMetric.ICIR, 0.0)
+
+    norm_rank_ic = float(np.clip(val_rank_ic / 0.15, -1.0, 1.5))
+    norm_icir = float(np.clip(val_icir / 1.50, 0.0, 1.0))
+    # Rank IC 순위 단조성에 70%, ICIR 시계열 안정성에 30% 배분
+    score_l2 = float(0.70 * norm_rank_ic + 0.30 * norm_icir)
+
+    return {
+        "score_l1_ml": score_l1,
+        "score_l2_factor": score_l2,
+    }
 
 
 # ==============================================================================
@@ -167,7 +151,7 @@ def _calculate_score(
     weights: Weights,
     target_std: float = 1.0,
 ) -> pd.DataFrame:
-    """적격 모델 데이터프레임에 대해 get_trial_score와 동일한 도메인 절대 기준선 스케일링을 적용합니다[cite: 6].
+    """적격 모델 데이터프레임에 대해 get_trial_score와 동일한 도메인 절대 기준선 스케일링을 적용합니다.
 
     Args:
         qualified_metrics_df: 게이트를 통과한 모델들의 원시 지표 DataFrame.
@@ -180,40 +164,22 @@ def _calculate_score(
     df = qualified_metrics_df.copy()
     safe_std: float = target_std if (target_std > 0.0 and np.isfinite(target_std)) else 1.0
 
-    # [설계 의도] Layer 1. 기계학습 기본 예측 오차 (절대 도메인 기준선 벡터 연산)
-    norm_mda = np.clip(df.get(EvaluationMetric.MDA.value, 0.5), 0.0, 1.0)
-    norm_rmse = np.clip(1.0 - (df.get(EvaluationMetric.RMSE.value, safe_std) / safe_std), 0.0, 1.0)
-    norm_mae = np.clip(1.0 - (df.get(EvaluationMetric.MAE.value, safe_std) / safe_std), 0.0, 1.0)
-    df["score_l1_ml"] = (norm_mda + norm_rmse + norm_mae) / 3.0
+    # [설계 의도] Layer 1. 기계학습 기본 방향성 (50% 미달 시 [-1.0, 0.0) 연속 감점 부과 벡터 연산)
+    norm_mda = np.clip((df.get(EvaluationMetric.MDA.value, 0.50) - 0.50) / 0.15, -1.0, 1.5)
+    df["score_l1_ml"] = norm_mda
 
-    # [설계 의도] Layer 2. 퀀트 팩터 신호 품질 (절대 도메인 기준선 벡터 연산)
-    norm_rank_ic = np.clip((df.get(EvaluationMetric.RANK_IC.value, 0.0) + 1.0) / 2.0, 0.0, 1.0)
-    norm_icir = np.clip(df.get(EvaluationMetric.ICIR.value, 0.0) / 2.0, 0.0, 1.0)
-    df["score_l2_factor"] = (norm_rank_ic + norm_icir) / 2.0
+    # [설계 의도] Layer 2. 퀀트 팩터 신호 품질 (천장 효과 완화를 위해 Rank IC 상한을 1.5로 확장)
+    norm_rank_ic = np.clip(df.get(EvaluationMetric.RANK_IC.value, 0.0) / 0.15, -1.0, 1.5)
+    norm_icir = np.clip(df.get(EvaluationMetric.ICIR.value, 0.0) / 1.50, 0.0, 1.0)
+    df["score_l2_factor"] = (0.70 * norm_rank_ic) + (0.30 * norm_icir)
 
-    # [설계 의도] Layer 3. 금융 시뮬레이션 성과 (절대 도메인 기준선 벡터 연산)
-    norm_sharpe = np.clip(df.get(EvaluationMetric.SIGNAL_SHARPE.value, 0.0) / 3.0, 0.0, 1.0)
-    norm_sortino = np.clip(df.get(EvaluationMetric.SORTINO_RATIO.value, 0.0) / 4.0, 0.0, 1.0)
-    norm_mdd = np.clip(1.0 - df.get(EvaluationMetric.MDD.value, 1.0), 0.0, 1.0)
-    df["score_l3_finance"] = (norm_sharpe + norm_sortino + norm_mdd) / 3.0
-
-    # [설계 의도] Layer 4. 단일 신호 통계적 유의성 (절대 도메인 기준선 벡터 연산)
-    df["score_l4_stat"] = np.clip(df.get(EvaluationMetric.FACTOR_T_STAT.value, 0.0) / 3.0, 0.0, 1.0)
-
-    # [설계 의도] 4대 계층 가중 선형 결합 (Optimization 목적함수와 100% 동일 수식 적용)
-    total_weight: float = (
-        weights.layer_1_ml +
-        weights.layer_2_factor +
-        weights.layer_3_finance +
-        weights.layer_4_stat
-    )
+    # [설계 의도] 순수 신호 품질 2계층 가중 선형 결합 (get_trial_score와 완벽히 일치)
+    total_weight: float = weights.layer_1_ml + weights.layer_2_factor
     weight_divisor: float = total_weight if total_weight > 0.0 else 1.0
 
     df["composite_score"] = (
         weights.layer_1_ml * df["score_l1_ml"] +
-        weights.layer_2_factor * df["score_l2_factor"] +
-        weights.layer_3_finance * df["score_l3_finance"] +
-        weights.layer_4_stat * df["score_l4_stat"]
+        weights.layer_2_factor * df["score_l2_factor"]
     ) / weight_divisor
 
     df = df.sort_values(by="composite_score", ascending=False)

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict
+from typing import Dict, List
 import pandas as pd
 
 
@@ -39,6 +39,28 @@ class EvaluationMetric(str, Enum):
     # Layer 4: 단일 신호 통계적 유의성 (Single-Model Signal Significance)
     FACTOR_T_STAT = "factor_t_stat"
     FACTOR_P_VAL = "factor_p_val"
+    DSR = "deflated_sharpe_ratio"
+
+@dataclass(frozen=True)
+class OverfittingAuditResult:
+    """모델의 검증(CV) 대비 테스트(Test) 일반화 열화 및 다중 시도 편향 감사 불변 DTO.
+
+    Attributes:
+        model_name (str): 평가 대상 모델 식별 명칭.
+        gdr_score (float): 복합 스코어 일반화 열화율 (%).
+        gdr_mdd (float): 최대 낙폭(MDD) 일반화 열화율 (%).
+        rir (float): 잔차 팽창 비율 (RMSE_test / RMSE_cv).
+        dsr (float): HPO 시도 횟수 보정 샤프 신뢰확률 ([0.0, 1.0]).
+        is_passed (bool): 과적합 통제 게이트 전수 통과 여부.
+        violations (List[str]): 과적합 임계치 위반 사유 리스트.
+    """
+    model_name: str
+    gdr_score: float
+    gdr_mdd: float
+    rir: float
+    dsr: float
+    is_passed: bool
+    violations: List[str]
 
 
 # ==============================================================================
@@ -136,6 +158,13 @@ METRIC_REGISTRY: Dict[EvaluationMetric, MetricMetadata] = {
         display_name="Factor p-val",
         description="단일 알파 유의성 p-값 (양측 검정)",
     ),
+    EvaluationMetric.DSR: MetricMetadata(
+        metric=EvaluationMetric.DSR,
+        layer=EvaluationLayer.LAYER_4_STATISTICAL_SIGNIFICANCE,
+        is_greater_better=True,
+        display_name="DSR",
+        description="다중 시도 편향 보정 샤프 비율 (Deflated Sharpe Ratio)",
+    )
 }
 
 
