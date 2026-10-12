@@ -4,7 +4,8 @@ __pycache__/
 .localstack/
 
 # Jupyter Notebooks
-
 notebooks/test/*
+notebooks/artifacts/*
+notebooks/*.pkl
 
 minio_data/*
