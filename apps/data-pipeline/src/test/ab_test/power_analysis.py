@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union, Any
 import numpy as np
 import pandas as pd
 
@@ -14,19 +14,17 @@ from src.statistics.error_control.power_analysis import (
 DEFAULT_ALPHA: float = 0.05  # 기본 제1종 오류 유의수준 (Type I Error Rate)
 DEFAULT_TARGET_POWER: float = 0.80  # 기본 목표 통계적 검정력 (1 - Beta)
 DEFAULT_MIN_COHEN_D: float = 0.25  # 사전 확정 최소 탐지 가능 효과 크기 (MDE)
-DEFAULT_SHARPE_DIFF: float = 0.15  # 금융 실무 샤프 지수 차이 기준 최소 탐지 임계치
-DEFAULT_HOLDING_PERIOD: int = 20  # 비중첩 위상 환산 보폭 및 보유 호라이즌 (거래일)
-EVALUATION_HORIZON_CV: int = 203  # CV 윈도우 동결 기준 관측 기간 (거래일)
-EVALUATION_HORIZON_TEST: int = 509  # 백테스트 전체 평가 관측 기간 (거래일)
 
 
 # ==============================================================================
 # Public API Functions
 # ==============================================================================
 def run_ex_ante_power_analysis(
-    total_trading_days: int = EVALUATION_HORIZON_TEST,
-    cv_trading_days: int = EVALUATION_HORIZON_CV,
-    holding_period: int = DEFAULT_HOLDING_PERIOD,
+    loaded_artifacts: Optional[Any] = None,
+    simulation_ledgers: Optional[pd.DataFrame] = None,
+    holding_period: Optional[int] = None,
+    total_trading_days: Optional[int] = None,
+    cv_trading_days: Optional[int] = None,
     alpha: float = DEFAULT_ALPHA,
     target_power: float = DEFAULT_TARGET_POWER,
     target_cohen_d: float = DEFAULT_MIN_COHEN_D,
@@ -34,14 +32,16 @@ def run_ex_ante_power_analysis(
 ) -> pd.DataFrame:
     """Phase 0 사전 실험계획에 따른 유효 표본 크기 및 통계적 검정력 감사 판정표를 산출합니다.
 
-    20영업일 보유 호라이즌으로 인한 자기상관 왜곡을 방어하기 위해 비중첩 유효 표본 크기(N_eff)를
-    환산하고, Test 전체 구간(509일) 및 CV 관측창(203일)에 대한 통계적 검정력(1 - Beta) 충족 여부를
-    순수 통계 계층(src/statistics/error_control/power_analysis.py)을 호출하여 정밀 검정합니다.
+    입력된 백테스트 아티팩트 또는 시뮬레이션 원장으로부터 전체 관측 거래일 수, CV 관측창, 보유 호라이즌을
+    동적으로 추출하고, 보유 호라이즌으로 인한 자기상관 왜곡을 방어하기 위해 비중첩 유효 표본 크기(N_eff)를
+    환산한 뒤 Test 및 CV 관측창의 통계적 검정력(1 - Beta) 충족 여부를 정밀 검정합니다.
 
     Args:
-        total_trading_days (int): 백테스트 전체 평가 거래일 수 (기본값: 509).
-        cv_trading_days (int): CV 벤치마크 관측창 거래일 수 (기본값: 203).
-        holding_period (int): 보유 호라이즌 및 비중첩 보폭 (기본값: 20).
+        loaded_artifacts (Optional[Any]): 사전 로드된 백테스트 아티팩트 컨테이너 (기본값: None).
+        simulation_ledgers (Optional[pd.DataFrame]): 일별 시뮬레이션 장부 데이터프레임 (기본값: None).
+        holding_period (Optional[int]): 보유 호라이즌 및 비중첩 보폭 (기본값: None, 메타데이터 자동 추출).
+        total_trading_days (Optional[int]): 명시적 전체 평가 거래일 수 (기본값: None, 데이터 기반 동적 추출).
+        cv_trading_days (Optional[int]): 명시적 CV 관측창 거래일 수 (기본값: None, 메타데이터 자동 추출).
         alpha (float): 유의수준 (기본값: 0.05).
         target_power (float): 목표 사전 검정력 기준 (기본값: 0.80).
         target_cohen_d (float): 최소 탐지 가능 효과 크기 MDE (기본값: 0.25).
@@ -51,14 +51,28 @@ def run_ex_ante_power_analysis(
         pd.DataFrame: 관측 구간별 유효 표본 수, 달성 검정력, 필요 표본 수, 판정 결과 감사표.
 
     Raises:
-        ValueError: 입력 거래일 수, 보유 호라이즌, 유의수준 또는 검정력이 유효하지 않은 경우.
+        ValueError: 거래일 수나 보유 호라이즌을 특정할 수 없거나 입력 인자가 유효 범위를 벗어난 경우.
     """
-    _validate_power_analysis_inputs(
-        total_trading_days, cv_trading_days, holding_period, alpha, target_power, target_cohen_d
+    resolved_holding_period = _resolve_holding_period(
+        loaded_artifacts=loaded_artifacts,
+        explicit_period=holding_period,
+    )
+    resolved_total_days = _resolve_total_trading_days(
+        loaded_artifacts=loaded_artifacts,
+        simulation_ledgers=simulation_ledgers,
+        explicit_days=total_trading_days,
+    )
+    resolved_cv_days = _resolve_cv_trading_days(
+        loaded_artifacts=loaded_artifacts,
+        explicit_days=cv_trading_days,
     )
 
-    n_eff_test = _compute_effective_sample_size(total_trading_days, holding_period)
-    n_eff_cv = _compute_effective_sample_size(cv_trading_days, holding_period)
+    _validate_power_analysis_inputs(
+        resolved_total_days, resolved_cv_days, resolved_holding_period, alpha, target_power, target_cohen_d
+    )
+
+    n_eff_test = _compute_effective_sample_size(resolved_total_days, resolved_holding_period)
+    n_eff_cv = _compute_effective_sample_size(resolved_cv_days, resolved_holding_period)
 
     power_test = calculate_power(n_eff_test, target_cohen_d, alpha, one_sided)
     power_cv = calculate_power(n_eff_cv, target_cohen_d, alpha, one_sided)
@@ -68,9 +82,9 @@ def run_ex_ante_power_analysis(
     mde_cv = calculate_mde(n_eff_cv, target_power, alpha, one_sided)
 
     return _create_power_audit_table(
-        total_trading_days,
-        cv_trading_days,
-        holding_period,
+        resolved_total_days,
+        resolved_cv_days,
+        resolved_holding_period,
         n_eff_test,
         n_eff_cv,
         power_test,
@@ -156,3 +170,84 @@ def _create_power_audit_table(
         },
     ]
     return pd.DataFrame(rows)
+
+
+def _resolve_holding_period(
+    loaded_artifacts: Optional[Any],
+    explicit_period: Optional[int],
+) -> int:
+    """명시적 인자 또는 아티팩트 메타데이터로부터 보유 호라이즌을 동적으로 추출합니다."""
+    if explicit_period is not None:
+        return explicit_period
+    if loaded_artifacts is not None:
+        manifest = getattr(loaded_artifacts, "manifest", None)
+        if manifest is None and isinstance(loaded_artifacts, dict):
+            manifest = loaded_artifacts.get("manifest")
+        if isinstance(manifest, dict) and "holding_period" in manifest:
+            return int(manifest["holding_period"])
+
+        governance_config = getattr(loaded_artifacts, "governance_config", None)
+        if governance_config is None and isinstance(loaded_artifacts, dict):
+            governance_config = loaded_artifacts.get("governance_config")
+        if isinstance(governance_config, dict) and "holding_period" in governance_config:
+            return int(governance_config["holding_period"])
+
+    raise ValueError(
+        "보유 호라이즌(holding_period)을 특정할 수 없습니다. "
+        "명시적 인자(holding_period=...)를 전달하거나 아티팩트 메타데이터에 등록해야 합니다."
+    )
+
+
+def _resolve_total_trading_days(
+    loaded_artifacts: Optional[Any],
+    simulation_ledgers: Optional[pd.DataFrame],
+    explicit_days: Optional[int],
+) -> int:
+    """입력 아티팩트 또는 명시적 인자로부터 전체 관측 거래일 수를 동적으로 추출합니다."""
+    if explicit_days is not None:
+        return explicit_days
+    if simulation_ledgers is not None and not simulation_ledgers.empty:
+        return len(simulation_ledgers)
+    if loaded_artifacts is not None:
+        ledgers = getattr(loaded_artifacts, "simulation_ledgers", None)
+        if ledgers is None and isinstance(loaded_artifacts, dict):
+            ledgers = loaded_artifacts.get("simulation_ledgers")
+        if isinstance(ledgers, pd.DataFrame) and not ledgers.empty:
+            return len(ledgers)
+
+        manifest = getattr(loaded_artifacts, "manifest", None)
+        if manifest is None and isinstance(loaded_artifacts, dict):
+            manifest = loaded_artifacts.get("manifest")
+        if isinstance(manifest, dict):
+            trading_days = manifest.get("evaluation_period", {}).get("trading_days")
+            if trading_days:
+                return int(trading_days)
+
+    raise ValueError(
+        "전체 평가 거래일 수(total_trading_days)를 특정할 수 없습니다. "
+        "명시적 인자 또는 데이터(simulation_ledgers / loaded_artifacts)를 주입해야 합니다."
+    )
+
+
+def _resolve_cv_trading_days(
+    loaded_artifacts: Optional[Any],
+    explicit_days: Optional[int],
+) -> int:
+    """아티팩트 메타데이터 또는 명시적 인자로부터 CV 관측창 거래일 수를 동적으로 추출합니다."""
+    if explicit_days is not None:
+        return explicit_days
+    if loaded_artifacts is not None:
+        manifest = getattr(loaded_artifacts, "manifest", None)
+        if manifest is None and isinstance(loaded_artifacts, dict):
+            manifest = loaded_artifacts.get("manifest")
+        if isinstance(manifest, dict):
+            if "cv_window_days" in manifest:
+                return int(manifest["cv_window_days"])
+            cv_days = manifest.get("evaluation_period", {}).get("cv_trading_days")
+            if cv_days:
+                return int(cv_days)
+
+    raise ValueError(
+        "CV 관측창 거래일 수(cv_trading_days)를 특정할 수 없습니다. "
+        "명시적 인자(cv_trading_days=...)를 전달하거나 아티팩트 메타데이터에 등록해야 합니다."
+    )
