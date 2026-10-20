@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.KisWebSocketHandler;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper.KisEventMapper;
+import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisOrderBookParser;
 import com.assetmind.server_stock.market_access.infrastructure.kis.websocket.parser.KisRealTimeDataParser;
 import com.assetmind.server_stock.stock.application.StockService;
 import com.assetmind.server_stock.stock.application.listener.StockTradeEventListener;
@@ -51,6 +52,9 @@ public class RealTimeStockEventLightTest {
     private KisRealTimeDataParser parser;
 
     @MockitoBean
+    private KisOrderBookParser orderBookParser;
+
+    @MockitoBean
     private StockService stockService;
 
     @BeforeEach
@@ -62,6 +66,7 @@ public class RealTimeStockEventLightTest {
                 List.of(),
                 null, // objectMapper (이 테스트에선 안 쓰임)
                 parser, // Mock 객체
+                orderBookParser, // Mock 객체
                 eventMapper, // 실제 빈
                 eventPublisher, // 실제 빈 (핵심!)
                 null // taskScheduler (이 테스트에선 안 쓰임)
@@ -87,7 +92,7 @@ public class RealTimeStockEventLightTest {
         given(parser.parse(anyString())).willReturn(List.of(mockData));
 
         // when: Kis에서 실시간 주가 데이터 수신 상황 구성
-        webSocketHandler.handleMessage(null, new TextMessage("Payload From KIS"));
+        webSocketHandler.handleMessage(null, new TextMessage("0|H0STCNT0|001|DummyData..."));
 
         // then: 리스너 수신 확인
         ArgumentCaptor<RealTimeStockTradeEvent> captor = ArgumentCaptor.forClass(RealTimeStockTradeEvent.class);

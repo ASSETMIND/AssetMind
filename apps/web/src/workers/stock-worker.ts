@@ -1,13 +1,13 @@
 /**
- * 주식 데이터 연산 처리를 위한 Web Worker
- * - 메인 스레드 부하를 줄이기 위해 정렬 및 필터링 연산을 수행합니다.
+ * 주가 데이터 정렬 처리를 위한 Web Worker
  */
-
 self.onmessage = (e: MessageEvent) => {
-	const { updates, stockMap, type, limit } = e.data;
+	const { updates, stockMapEntries, type, limit } = e.data;
 
-	// 새로운 업데이트를 맵에 반영 (복사본 생성)
-	const newMap = new Map(stockMap);
+	console.log('[Worker] received message, updates:', updates?.length, 'type:', type);
+
+	// 배열로 받은 entries를 Map으로 복원
+	const newMap = new Map(stockMapEntries);
 	updates.forEach((s: any) => newMap.set(s.stockCode, s));
 
 	// 정렬 수행
@@ -23,9 +23,11 @@ self.onmessage = (e: MessageEvent) => {
 
 	const sortedCodes = sortedList.map((s: any) => s.stockCode);
 
-	// 결과 반환
+	console.log('[Worker] posting result, sortedCodes:', sortedCodes.length);
+
+	// Map을 배열로 직렬화해서 반환
 	self.postMessage({
-		newMap,
+		newMapEntries: Array.from(newMap.entries()),
 		sortedCodes,
 	});
 };

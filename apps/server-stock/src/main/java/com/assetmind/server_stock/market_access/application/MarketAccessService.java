@@ -7,6 +7,7 @@ import com.assetmind.server_stock.market_access.domain.exception.MarketAccessFai
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "kis.websocket.enabled", havingValue = "true")
 public class MarketAccessService {
     private final MarketTokenProvider marketTokenProvider;
 

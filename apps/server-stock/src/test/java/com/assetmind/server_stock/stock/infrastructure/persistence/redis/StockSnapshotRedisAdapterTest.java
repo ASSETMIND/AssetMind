@@ -2,7 +2,9 @@ package com.assetmind.server_stock.stock.infrastructure.persistence.redis;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.adapter.StockSnapshotRedisAdapter;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity.StockPriceRedisEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.repository.StockPriceRedisRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
