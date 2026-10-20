@@ -1,63 +1,76 @@
 import os
 import time
-import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import joblib
+import numpy as np
 import pandas as pd
 
 from src.model.core.elasticnet_regressor import ElasticNetRegressor
 from src.model.core.xgboost_regressor import XGBoostRegressor
 from src.model.core.random_forest_regressor import RandomForestRegressor
+from src.model.dataset.walk_forward_splitter import WalkForwardSplitter
 
 
-def screen_champion_dataset(
+def screen_single_dataset_cv(
     dataset_partitions: Dict[str, pd.DataFrame],
-    eval_partition: str = "X_test"
+    splitter: Optional[WalkForwardSplitter] = None
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """단일 데이터셋 파티션에 대해 3대 베이스라인 모델을 독립 학습하고 검증 지표를 산출합니다.
+    """단일 데이터셋의 X_train, y_train에 대해 Walk-Forward CV를 실행하고 3대 모델의 평균 성능을 산출합니다.
 
     Args:
-        dataset_partitions (Dict[str, pd.DataFrame]): X_train, y_train, X_test, y_test 등을 포함하는 데이터 딕셔너리.
-        eval_partition (str): 평가 대상 피처 파티션 키 (기본값: "X_test").
+        dataset_partitions (Dict[str, pd.DataFrame]): X_train, y_train 등을 포함하는 파티션 딕셔너리.
+        splitter (Optional[WalkForwardSplitter]): 시계열 교차검증 분할기 (기본값: None 시 5-Fold 생성).
 
     Returns:
         Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-            - summary_record: 데이터셋 평균 및 최고 모델 성능 요약 레코드.
-            - detailed_metrics: 3개 개별 모델의 세부 평가 결과 리스트.
+            - summary_record: 데이터셋 5-Fold 평균 및 최고 모델 성능 요약 레코드.
+            - model_cv_summaries: 3개 모델별 Fold 평균 세부 평가 결과 리스트.
     """
     X_train: pd.DataFrame = dataset_partitions["X_train"]
     y_train: pd.Series = dataset_partitions["y_train"]
-    
-    # 평가 대상 타겟 파티션 키 결정
-    target_eval_key: str = "y_val" if eval_partition == "X_val" and "y_val" in dataset_partitions else "y_test"
-    target_feature_key: str = eval_partition if eval_partition in dataset_partitions else "X_test"
-    
-    X_eval: pd.DataFrame = dataset_partitions[target_feature_key]
-    y_eval: pd.Series = dataset_partitions[target_eval_key]
 
-    # 상태 격리된 3대 베이스라인 모델 인스턴스화
-    candidate_models = [
-        ElasticNetRegressor(alpha=1.0, l1_ratio=0.5, random_state=42),
-        XGBoostRegressor(n_estimators=100, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, random_state=42),
-        RandomForestRegressor(n_estimators=100, max_depth=3, min_samples_split=4, random_state=42)
+    if splitter is None:
+        splitter = WalkForwardSplitter(n_splits=5, forecast_horizon=20, min_train_ratio=0.5)
+
+    # 3대 베이스라인 모델 규격 정의
+    model_factories = [
+        ("ElasticNet", lambda: ElasticNetRegressor(alpha=1.0, l1_ratio=0.5, random_state=42)),
+        ("XGBoostRegressor", lambda: XGBoostRegressor(
+            n_estimators=100, max_depth=3, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8, random_state=42
+        )),
+        ("RandomForestRegressor", lambda: RandomForestRegressor(
+            n_estimators=100, max_depth=3, min_samples_split=4, random_state=42
+        ))
     ]
 
-    detailed_metrics: List[Dict[str, Any]] = []
+    model_cv_summaries: List[Dict[str, Any]] = []
 
-    for model_instance in candidate_models:
-        model_instance.fit(X_train=X_train, y_train=y_train)
-        metrics = model_instance.evaluate(X_test=X_eval, y_test=y_eval)
-        detailed_metrics.append({
-            "model_name": model_instance.model_name,
-            "RMSE": metrics["RMSE"],
-            "MAE": metrics["MAE"],
-            "MDA": metrics["MDA"]
+    for model_name, factory in model_factories:
+        fold_rmses: List[float] = []
+        fold_maes: List[float] = []
+        fold_mdas: List[float] = []
+
+        # 5-Fold Expanding Window 순회 (Fold마다 격리된 모델 새로 학습)
+        for X_tr_fold, y_tr_fold, X_val_fold, y_val_fold in splitter.split_walk_forward(X=X_train, y=y_train):
+            model_instance = factory()
+            model_instance.fit(X_train=X_tr_fold, y_train=y_tr_fold)
+            metrics = model_instance.evaluate(X_test=X_val_fold, y_test=y_val_fold)
+
+            fold_rmses.append(metrics["RMSE"])
+            fold_maes.append(metrics["MAE"])
+            fold_mdas.append(metrics["MDA"])
+
+        model_cv_summaries.append({
+            "model_name": model_name,
+            "RMSE": float(np.mean(fold_rmses)),
+            "MAE": float(np.mean(fold_maes)),
+            "MDA": float(np.mean(fold_mdas))
         })
 
-    average_mda: float = sum(m["MDA"] for m in detailed_metrics) / len(detailed_metrics)
-    average_rmse: float = sum(m["RMSE"] for m in detailed_metrics) / len(detailed_metrics)
-    average_mae: float = sum(m["MAE"] for m in detailed_metrics) / len(detailed_metrics)
-    best_model_metric = max(detailed_metrics, key=lambda x: x["MDA"])
+    average_mda: float = float(np.mean([m["MDA"] for m in model_cv_summaries]))
+    average_rmse: float = float(np.mean([m["RMSE"] for m in model_cv_summaries]))
+    average_mae: float = float(np.mean([m["MAE"] for m in model_cv_summaries]))
+    best_model_metric = max(model_cv_summaries, key=lambda x: x["MDA"])
 
     summary_record = {
         "Selected Features": X_train.shape[1],
@@ -69,30 +82,44 @@ def screen_champion_dataset(
         "Best Model RMSE": best_model_metric["RMSE"]
     }
 
-    return summary_record, detailed_metrics
+    return summary_record, model_cv_summaries
 
 
-def run_batch_screening(
-    model_ready_repository: Dict[str, Dict[str, pd.DataFrame]]
+def run_batch_cv_screening(
+    model_ready_repository: Dict[str, Dict[str, pd.DataFrame]],
+    n_splits: int = 5,
+    forecast_horizon: int = 20,
+    min_train_ratio: float = 0.5
 ) -> Tuple[pd.DataFrame, str, Dict[str, Any], pd.DataFrame]:
-    """18종 데이터셋 전체에 대해 3대 모델 일괄 스크리닝을 수행하고 종합 랭킹을 도출합니다.
+    """18종 데이터셋 전체에 대해 Walk-Forward CV 기반 3대 모델 일괄 스크리닝을 수행하고 종합 랭킹을 도출합니다.
 
     Args:
         model_ready_repository (Dict[str, Dict[str, pd.DataFrame]]): 모델 투입 준비 완료 데이터셋 저장소.
+        n_splits (int): Walk-Forward CV 폴드 수 (기본값: 5).
+        forecast_horizon (int): Purged Embargo Gap 일수 (기본값: 20).
+        min_train_ratio (float): 최소 초기 학습 비율 (기본값: 0.5).
 
     Returns:
         Tuple[pd.DataFrame, str, Dict[str, Any], pd.DataFrame]:
-            - raw_ranking_df: 수치형 정렬 완료 랭킹 데이터프레임.
-            - champion_id: 1위 챔피언 데이터셋 버킷 ID.
-            - champion_meta: 1위 챔피언 주요 성능 메타데이터 딕셔너리.
+            - raw_ranking_df: 정렬 완료 수치형 랭킹 데이터프레임.
+            - champion_id: 최종 1위 챔피언 데이터셋 버킷 ID.
+            - champion_meta: 1위 챔피언 성능 메타데이터.
             - display_ranking_df: 보고서 출력용 포맷팅 데이터프레임.
     """
     from tqdm.auto import tqdm
 
+    splitter = WalkForwardSplitter(
+        n_splits=n_splits,
+        forecast_horizon=forecast_horizon,
+        min_train_ratio=min_train_ratio
+    )
+
     total_count: int = len(model_ready_repository)
-    print("=" * 115)
-    print(f" 🚀 [Batch Dataset Screening Launch] Target Datasets: {total_count} Sets × 3 Models (54 Evaluations)")
-    print("=" * 115)
+    total_evals: int = total_count * n_splits * 3
+
+    print("=" * 122)
+    print(f" 🚀 [Batch Walk-Forward CV Screening Launch] Target: {total_count} Sets × {n_splits} Folds × 3 Models ({total_evals} Evaluations)")
+    print("=" * 122)
 
     batch_records: List[Dict[str, Any]] = []
     start_time: float = time.time()
@@ -100,13 +127,16 @@ def run_batch_screening(
     progress_bar = tqdm(
         model_ready_repository.items(),
         total=total_count,
-        desc="🔍 [Dataset Screening]",
+        desc="🔍 [5-Fold CV Screening]",
         unit="set"
     )
 
     for bucket_job_id, dataset_partitions in progress_bar:
         step_start = time.time()
-        summary_record, _ = screen_champion_dataset(dataset_partitions=dataset_partitions)
+        summary_record, _ = screen_single_dataset_cv(
+            dataset_partitions=dataset_partitions,
+            splitter=splitter
+        )
         elapsed: float = time.time() - step_start
 
         summary_record["Dataset Bucket ID"] = bucket_job_id
