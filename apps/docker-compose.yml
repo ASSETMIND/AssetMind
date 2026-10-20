@@ -2,16 +2,54 @@
 version: '3.8'
 
 services:
+  # Nginx 컨테이너
+  nginx:
+    image: nginx:latest
+    container_name: assetmind-nginx
+    ports:
+      - "80:80" # 외부 k6 테스트 진입점
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - prometheus
+      - app-stock-server-1
+      - app-stock-server-2
+    restart: always
+
+  # Stock 서버 1 (수집, 서빙)
+  app-stock-server-1:
+    build: ./server-stock
+    container_name: assetmind-stock-server-1
+    env_file:
+      - ./server-stock/.env
+    environment:
+      - SERVER_PORT=9090
+      - SPRING_PROFILES_ACTIVE=local
+      - KIS_WEBSOCKET_ENABLED=true
+    restart: always
+
+  # Stock 서버 2 (서빙)
+  app-stock-server-2:
+    build: ./server-stock
+    container_name: assetmind-stock-server-2
+    env_file:
+      - ./server-stock/.env
+    environment:
+      - SERVER_PORT=9090
+      - SPRING_PROFILES_ACTIVE=local
+      - KIS_WEBSOCKET_ENABLED=false
+    restart: always
+    
   # PostgreSQL 컨테이너
   postgres:
     image: postgres:16-alpine
     container_name: assetmind-postgres
+    env_file:
+      - ./server-stock/.env
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      - POSTGRES_DB=assetmind
     volumes:
       - ./db/postgres_data:/var/lib/postgresql/data
     restart: always
@@ -29,7 +67,7 @@ services:
     image: prom/prometheus:latest
     container_name: assetmind-prometheus
     ports:
-      - "9092:9090"
+      - "9093:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command:

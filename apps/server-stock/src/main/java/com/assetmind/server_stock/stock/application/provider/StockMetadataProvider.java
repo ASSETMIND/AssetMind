@@ -1,6 +1,6 @@
 package com.assetmind.server_stock.stock.application.provider;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.jpa.StockMetaRepository;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.repository.StockMetaRepository;
 import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.List;

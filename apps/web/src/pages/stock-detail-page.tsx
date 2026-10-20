@@ -1,86 +1,196 @@
 import { useState } from 'react';
-import { twMerge } from 'tailwind-merge';
+import { useParams } from 'react-router-dom';
 import ChartSection from '../components/stock-detail/chart-section';
 import OrderbookSection from '../components/stock-detail/orderbook-section';
 import AIPredictionSection from '../components/stock-detail/ai-prediction-section';
 import CombinedTradeInfoSection from '../components/stock-detail/combine-trade-info-section';
-import CompanyNavSection from '../components/stock-detail/company-nav-section';
 import CompanyInfoSection from '../components/stock-detail/company-info-section';
 import StockHeaderCard from '../components/stock-detail/stock-header-card';
+import ErrorBoundary from '../components/common/error-boundary';
+import { useViewport } from '../hooks/common/use-viewport';
+import MobileTabSwitcher from '../components/common/mobile-tab-switcher';
+import {
+	ChartIcon,
+	StockInfoIcon,
+	TradeStatusIcon,
+	AIPredictionIcon,
+} from '../components/common/mobile-tab-icons';
 
-type TabType = '차트호가' | '종목정보' | '거래현황';
+// ─── 탭 정의 ──────────────────────────────────────────────────
+
+type TabType = 'chart' | 'info' | 'trade' | 'ai';
+
+// 데스크톱/태블릿: 3탭
+const TABS_DESKTOP: { value: TabType; label: string }[] = [
+	{ value: 'chart', label: '차트·호가' },
+	{ value: 'info',  label: '종목정보' },
+	{ value: 'trade', label: '거래현황' },
+];
+
+// 모바일: MobileTabSwitcher용 4탭
+const TABS_MOBILE = [
+	{ label: '차트·호가', value: 'chart', icon: <ChartIcon color='currentColor' /> },
+	{ label: '종목정보',  value: 'info',  icon: <StockInfoIcon color='currentColor' /> },
+	{ label: '거래현황',  value: 'trade', icon: <TradeStatusIcon color='currentColor' /> },
+	{ label: 'AI 예측',   value: 'ai',    icon: <AIPredictionIcon color='currentColor' /> },
+];
+
+// ─── StockDetailPage ───────────────────────────────────────────
 
 export default function StockDetailPage() {
-	const [activeTab, setActiveTab] = useState<TabType>('차트호가');
-	const tabs: TabType[] = ['차트호가', '종목정보', '거래현황'];
+	const { id: stockCode } = useParams<{ id: string }>();
+	const [activeTab, setActiveTab] = useState<TabType>('chart');
+	const viewport = useViewport();
+	const isMobile = viewport === 'mobile';
+	const isTablet = viewport === 'tablet';
 
 	return (
 		<div className='w-full min-h-screen text-gray-200'>
-			<div className='max-w-6xl mx-auto'>
-				<div className='items-center pt-10'>
-					<div>
-						{/* 종목 카드 */}
-						<StockHeaderCard />
-						{/* 탭 네비게이션 */}
-						<div className='pt-4'>
-							{tabs.map((tab) => (
+			<div style={{
+				maxWidth: isMobile || isTablet ? '100%' : '1400px',
+				margin: '0 auto',
+				padding: isMobile ? '0 12px' : '0 16px',
+				// 모바일에서 하단 탭 바(64px) 가려지지 않도록 패딩 확보
+				paddingBottom: isMobile ? '80px' : '0',
+			}}>
+				<div style={{ paddingTop: isMobile ? '16px' : '40px' }}>
+					{/* 종목 헤더 */}
+					<StockHeaderCard />
+
+					{/* 데스크톱/태블릿 상단 탭 */}
+					{!isMobile && (
+						<div style={{
+							display: 'flex',
+							gap: '32px',
+							paddingTop: '16px',
+							paddingBottom: '8px',
+							borderBottom: '1px solid #2F3037',
+						}}>
+							{TABS_DESKTOP.map((tab) => (
 								<button
-									key={tab}
-									onClick={() => setActiveTab(tab)}
-									className={twMerge(
-										'pr-8 font-medium transition-colors',
-										activeTab === tab
-											? 'text-white'
-											: 'text-gray-500 hover:text-gray-300',
-									)}
+									key={tab.value}
+									onClick={() => setActiveTab(tab.value)}
+									style={{
+										background: 'none',
+										border: 'none',
+										cursor: 'pointer',
+										paddingBottom: '8px',
+										fontSize: '16px',
+										fontWeight: activeTab === tab.value ? 700 : 400,
+										color: activeTab === tab.value ? '#FFFFFF' : '#9194A1',
+										borderBottom: activeTab === tab.value
+											? '2px solid #FFFFFF'
+											: '2px solid transparent',
+										transition: 'color 0.15s, border-color 0.15s',
+										whiteSpace: 'nowrap',
+									}}
 								>
-									{tab}
+									{tab.label}
 								</button>
 							))}
 						</div>
-					</div>
+					)}
 				</div>
 
-				{/* 탭 컨텐츠 영역 */}
-				<div className='w-full mt-4'>
-					{activeTab === '차트호가' && (
-						<div className='grid grid-cols-12 gap-4'>
-							<div className='col-span-12 xl:col-span-6 flex flex-col gap-4'>
-								<ChartSection />
-							</div>
-							<div className='col-span-12 md:col-span-6 xl:col-span-3'>
-								<OrderbookSection />
-							</div>
-							<div className='col-span-12 md:col-span-6 xl:col-span-3'>
-								<AIPredictionSection />
-							</div>
-						</div>
+				{/* 탭 콘텐츠 */}
+				<div style={{ width: '100%', marginTop: '16px' }}>
+
+					{/* ── 차트·호가 탭 ── */}
+					{activeTab === 'chart' && (
+						<>
+							{/* 데스크톱 */}
+							{!isMobile && !isTablet && (
+								<div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+									<div style={{ flex: 1, minWidth: 0 }}>
+										<ErrorBoundary><ChartSection /></ErrorBoundary>
+									</div>
+									<div style={{ flexShrink: 0 }}>
+										<ErrorBoundary><OrderbookSection /></ErrorBoundary>
+									</div>
+									<div style={{ flexShrink: 0, width: '340px' }}>
+										<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
+									</div>
+								</div>
+							)}
+							{/* 태블릿 */}
+							{isTablet && (
+								<div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+									<div style={{ flex: 1, minWidth: 0 }}>
+										<ErrorBoundary><ChartSection /></ErrorBoundary>
+									</div>
+									<div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+										<ErrorBoundary><OrderbookSection /></ErrorBoundary>
+										<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
+									</div>
+								</div>
+							)}
+							{/* 모바일 */}
+							{isMobile && (
+								<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+									<ErrorBoundary><ChartSection /></ErrorBoundary>
+									<ErrorBoundary><OrderbookSection /></ErrorBoundary>
+								</div>
+							)}
+						</>
 					)}
-					{activeTab === '종목정보' && (
-						<div className='grid grid-cols-12 gap-4'>
-							<div className='col-span-12 md:col-span-3 xl:col-span-2'>
-								<CompanyNavSection />
-							</div>
-							<div className='col-span-12 md:col-span-9 xl:col-span-7 flex flex-col gap-4'>
-								<CompanyInfoSection />
-							</div>
-							<div className='col-span-12 xl:col-span-3'>
-								<AIPredictionSection />
-							</div>
-						</div>
+
+					{/* ── 종목정보 탭 ── */}
+					{activeTab === 'info' && (
+						<>
+							{!isMobile ? (
+								<div className='grid grid-cols-12 gap-4'>
+									<div className={isTablet ? 'col-span-12' : 'col-span-9'}>
+										<ErrorBoundary><CompanyInfoSection /></ErrorBoundary>
+									</div>
+									{!isTablet && (
+										<div className='col-span-3'>
+											<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
+										</div>
+									)}
+								</div>
+							) : (
+								<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+									<ErrorBoundary><CompanyInfoSection /></ErrorBoundary>
+								</div>
+							)}
+						</>
 					)}
-					{activeTab === '거래현황' && (
-						<div className='grid grid-cols-12 gap-4'>
-							<div className='col-span-12 xl:col-span-9 flex flex-col gap-4'>
-								<CombinedTradeInfoSection />
-							</div>
-							<div className='col-span-12 xl:col-span-3'>
-								<AIPredictionSection />
-							</div>
-						</div>
+
+					{/* ── 거래현황 탭 ── */}
+					{activeTab === 'trade' && (
+						<>
+							{!isMobile ? (
+								<div className='grid grid-cols-12 gap-4'>
+									<div className={isTablet ? 'col-span-12' : 'col-span-9'}>
+										<ErrorBoundary><CombinedTradeInfoSection /></ErrorBoundary>
+									</div>
+									{!isTablet && (
+										<div className='col-span-3'>
+											<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
+										</div>
+									)}
+								</div>
+							) : (
+								<ErrorBoundary><CombinedTradeInfoSection /></ErrorBoundary>
+							)}
+						</>
+					)}
+
+					{/* ── AI 예측 탭 (모바일 전용) ── */}
+					{activeTab === 'ai' && isMobile && (
+						<ErrorBoundary><AIPredictionSection /></ErrorBoundary>
 					)}
 				</div>
 			</div>
+
+			{/* 모바일 하단 고정 탭 바 */}
+			{isMobile && (
+				<MobileTabSwitcher
+					items={TABS_MOBILE}
+					value={activeTab}
+					onChange={(val) => setActiveTab(val as TabType)}
+				/>
+			)}
 		</div>
 	);
 }

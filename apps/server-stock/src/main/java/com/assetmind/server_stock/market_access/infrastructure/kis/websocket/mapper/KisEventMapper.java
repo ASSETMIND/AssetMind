@@ -1,5 +1,7 @@
 package com.assetmind.server_stock.market_access.infrastructure.kis.websocket.mapper;
 
+import com.assetmind.server_stock.market_access.domain.OrderBook;
+import com.assetmind.server_stock.market_access.domain.event.OrderBookReceivedEvent;
 import com.assetmind.server_stock.market_access.infrastructure.kis.dto.KisRealTimeData;
 import com.assetmind.server_stock.stock.application.listener.dto.RealTimeStockTradeEvent;
 import java.time.LocalDateTime;
@@ -8,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class KisEventMapper {
 
-    public RealTimeStockTradeEvent toEvent(KisRealTimeData data) {
+    public RealTimeStockTradeEvent toStockTradeEvent(KisRealTimeData data) {
         return RealTimeStockTradeEvent.builder()
                 .stockCode(data.stockCode())
                 .time(data.executionTime())
@@ -30,4 +32,10 @@ public class KisEventMapper {
                 .eventTimeStamp(LocalDateTime.now())
                 .build();
     }
+
+    public OrderBookReceivedEvent toOrderBookEvent(OrderBook data) {
+        return new OrderBookReceivedEvent(data);
+    }
+
+
 }

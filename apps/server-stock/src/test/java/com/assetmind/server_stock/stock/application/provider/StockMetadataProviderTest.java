@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
-import com.assetmind.server_stock.stock.infrastructure.persistence.entity.StockMetaEntity;
-import com.assetmind.server_stock.stock.infrastructure.persistence.jpa.StockMetaRepository;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.entity.StockMetaEntity;
+import com.assetmind.server_stock.stock.infrastructure.persistence.stock.repository.StockMetaRepository;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
