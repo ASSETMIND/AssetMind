@@ -77,7 +77,7 @@ def report_domain_groups(
 
     group_specifications: Dict[str, List[str]] = {
         "Target Feature": ["target_return_20d"],
-        "Trend & Momentum (Multi-Asset)": ["return_lag_5d", "return_lag_20d", "return_lag_60d", "return_lag_120d", "ma_ratio_5_20", "ma_ratio_20_60", "risk_adjusted_return_20d"],
+        "Trend & Momentum (Multi-Asset)": ["return_lag_5d", "return_lag_20d", "return_lag_60d", "ma_ratio_5_20", "risk_adjusted_return_20d"],
         "Volatility & Risk (Multi-Asset)": ["volatility_20d", "volatility_60d", "vol_regime_ratio", "rolling_skew_20d", "rolling_kurt_20d", "price_position_20d", "norm_atr_20d"],
         "Macro & Cross-Asset": ["us_yield_spread_20d", "korea_us_rate_diff_momentum", "us_kr_market_lag_return", "btc_equity_corr_20d"],
         "Derivatives & Volume": ["proxy_basis_rate", "futures_intraday_range", "volume_anomaly_20d", "value_anomaly_20d"],

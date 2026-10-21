@@ -31,72 +31,70 @@ from src.feature.tasks.abstract_feature import AbstractFeature
 from src.common.exceptions import TargetGenerationError
 
 class TargetFeature(AbstractFeature):
-    """1개월 Horizon 회귀 예측용 로그 수익률 타겟 피처를 생성하는 세부 피처 모듈.
-
-    Attributes:
-        task_name (str): 모듈 식별 명칭.
-        source_price (str): 타겟 변수 산출의 기준이 되는 원시 종가 컬럼명.
-        target_name (str): 최종 사출될 타겟 피처 컬럼명.
-        forecast_horizon_days (int): 미래 예측 Horizon 거래일 수 (예: 20영업일).
-    """
-
     def __init__(
         self,
         task_name: str,
         source_price: str,
         target_name: str,
-        forecast_horizon_days: int
+        forecast_horizon_days: int,
+        use_adaptive_standardization: bool = True,
+        regime_window_days: int = 60,
+        clamp_sigma: float = 3.0
     ) -> None:
-        """TargetFeature 인스턴스를 초기화하고 명시적 인자를 멤버 변수에 바인딩합니다.
-
-        Args:
-            task_name (str): 모듈 식별 명칭 (예: "TargetFeature").
-            source_price (str): 기준 원시 가격 컬럼명 (예: "kis_kospi_daily_close").
-            target_name (str): 사출될 타겟 피처 컬럼명 (예: "target_return_20d").
-            forecast_horizon_days (int): 예측 기간 거래일 수 (예: 20).
-        """
         super().__init__(task_name=task_name)
-        # [설계 의도] 명시적 생성자 인자를 바인딩하여 무상태성과 런타임 검증 정합성을 확보
         self.source_price: str = source_price
         self.target_name: str = target_name
         self.forecast_horizon_days: int = forecast_horizon_days
+        self.use_adaptive_standardization: bool = use_adaptive_standardization
+        self.regime_window_days: int = regime_window_days
+        self.clamp_sigma: float = clamp_sigma
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """입력 데이터프레임의 원시 가격 시계열을 바탕으로 미래 로그 수익률 타겟 피처를 산출합니다.
-
-        Args:
-            df (pd.DataFrame): 정제가 완료된 입력 시계열 데이터프레임.
-
-        Returns:
-            pd.DataFrame: target_name 컬럼이 추가된 데이터프레임.
-
-        Raises:
-            RequiredColumnNotFoundError: source_price 컬럼이 데이터프레임에 존재하지 않을 때 발생.
-            TargetGenerationError: 가격 데이터가 0 이하이거나 로그/shift 연산 중 크래시 발생 시 전파.
-        """
-        # [설계 의도] 1단계: 연산 전 필수 원시 가격 컬럼 존재 여부 사전 검증
         self._validate_required_columns(df=df, required_columns=[self.source_price])
 
         try:
             processed_df: pd.DataFrame = df.copy()
             raw_price_series: pd.Series = processed_df[self.source_price]
 
-            # [설계 의도] 2단계: 0 이하 마스킹/결측 수치를 유효 직전 가격으로 시계열 보간 (ffill -> bfill)
             price_series: pd.Series = raw_price_series.mask(raw_price_series <= 0).ffill().bfill()
 
-            # 시계열 전체가 0 이하이거나 유효 가격이 전혀 존재하지 않는 완전 결손 시에만 가드레일 발동
             if price_series.isna().all() or (price_series <= 0).any():
                 raise TargetGenerationError(
                     message=f"[{self.task_name}] 원시 가격 컬럼({self.source_price}) 내에 유효 가격이 존재하지 않아 로그 타겟을 생성할 수 없습니다.",
                     target_horizon=self.forecast_horizon_days
                 )
 
-            # [설계 의도] 3단계: Shift(-forecast_horizon_days)를 통한 미래 T+20 시점 가격 산출 및 로그 수익률 계산
+            # 1. 미래 T+Horizon 가격 및 원시 누적 로그 수익률 산출
             future_price_series: pd.Series = price_series.shift(-self.forecast_horizon_days)
+            raw_target_series: pd.Series = np.log(future_price_series) - np.log(price_series)
 
-            # Y_t = ln(P_{t+20}) - ln(P_t)
-            target_series: pd.Series = np.log(future_price_series) - np.log(price_series)
-            processed_df[self.target_name] = target_series
+            if not self.use_adaptive_standardization:
+                processed_df[self.target_name] = raw_target_series
+                return processed_df
+
+            # 2. 직전 t 시점까지의 일별 로그 수익률 산출 (과거 데이터만 참조, 미래 누수 0%)
+            daily_return_series: pd.Series = np.log(price_series / price_series.shift(1))
+
+            # 3. 과거 W영업일 일별 평균 및 표준편차 롤링 추정
+            rolling_daily_mean: pd.Series = daily_return_series.rolling(
+                window=self.regime_window_days, min_periods=20
+            ).mean()
+            rolling_daily_std: pd.Series = daily_return_series.rolling(
+                window=self.regime_window_days, min_periods=20
+            ).std()
+
+            # 4. 예측 Horizon 단위 스케일링
+            expected_drift_horizon: pd.Series = rolling_daily_mean * float(self.forecast_horizon_days)
+            expected_vol_horizon: pd.Series = rolling_daily_std * np.sqrt(float(self.forecast_horizon_days))
+            expected_vol_horizon = expected_vol_horizon.replace(0, np.nan).bfill()
+
+            # 5. 국면 적응형 Z-Score 표준화 및 극단치 유계화 (±clamp_sigma)
+            standardized_target: pd.Series = (raw_target_series - expected_drift_horizon) / expected_vol_horizon
+            clamped_target: pd.Series = standardized_target.clip(
+                lower=-self.clamp_sigma, upper=self.clamp_sigma
+            )
+
+            processed_df[self.target_name] = clamped_target
             return processed_df
 
         except TargetGenerationError as target_err:

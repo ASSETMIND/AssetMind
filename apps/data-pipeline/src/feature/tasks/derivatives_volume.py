@@ -91,16 +91,27 @@ class DerivativesVolume(AbstractFeature):
         try:
             processed_dataframe: pd.DataFrame = df.copy()
 
-            # [설계 의도] 2단계: 선물-현물 괴리율(proxy_basis_rate) 산출
+            # [설계 의도] 2단계: 롤링 Z-Score 국소 표준화 선물-현물 괴리율(proxy_basis_rate) 산출
             raw_futs_price: pd.Series = processed_dataframe[self.futures_basis["futures_price"]]
             raw_spot_price: pd.Series = processed_dataframe[self.futures_basis["spot_price"]]
             
             futs_price: pd.Series = raw_futs_price.mask(raw_futs_price <= 0).ffill().bfill()
             spot_price: pd.Series = raw_spot_price.mask(raw_spot_price <= 0).ffill().bfill()
             
+            raw_basis_rate: pd.Series = (futs_price / spot_price.replace(0, np.nan)) - 1.0
+            
+            # [수리적 보정] 장기 금리 레벨 시프트(PSI 왜곡)를 제거하고 최근 수급 충격을 측정하기 위한 20일 롤링 Z-score 변환
+            basis_window: int = self.volume_and_value_anomaly.get("anomaly_window_days", 20)
+            rolling_basis_mean: pd.Series = raw_basis_rate.rolling(window=basis_window).mean()
+            rolling_basis_std: pd.Series = raw_basis_rate.rolling(window=basis_window).std()
+            
+            safe_basis_std: pd.Series = rolling_basis_std.replace(0, np.nan).fillna(1e-4).clip(lower=1e-4)
+            standardized_basis: pd.Series = (raw_basis_rate - rolling_basis_mean) / safe_basis_std
+            
+            # 극단적 팻테일 스파이크 방어를 위한 [-4.0, +4.0] 윈저라이징 및 초기 윈도우 보간
             processed_dataframe["proxy_basis_rate"] = (
-                futs_price / spot_price.replace(0, np.nan)
-            ) - 1.0
+                standardized_basis.clip(-4.0, 4.0).ffill().bfill().fillna(0.0)
+            )
 
             # [설계 의도] 3단계: 선물 장중 변동 폭 비율(futures_intraday_range) 산출
             raw_futs_high: pd.Series = processed_dataframe[self.futures_intraday_range["high_price"]]

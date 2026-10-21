@@ -95,6 +95,16 @@ class TrendMomentum(AbstractFeature):
         try:
             processed_dataframe: pd.DataFrame = df.copy()
 
+            # [설계 의도] KOSPI 벤치마크 시계열 사전 캐싱 (상대 초과 모멘텀 직교화용)
+            kospi_col: str = "kis_kospi_daily_close"
+            kospi_price_series: Optional[pd.Series] = None
+            kospi_log_series: Optional[pd.Series] = None
+            if kospi_col in processed_dataframe.columns:
+                kospi_clean = processed_dataframe[kospi_col].mask(processed_dataframe[kospi_col] <= 0).ffill().bfill()
+                if not kospi_clean.isna().all() and (kospi_clean > 0).all():
+                    kospi_price_series = kospi_clean
+                    kospi_log_series = np.log(kospi_clean)
+
             # [설계 의도] 2단계: 탐색된 모든 종가 컬럼에 대해 순차적 모멘텀 피처 일괄 사출
             for price_col in target_price_columns:
                 raw_price_series: pd.Series = processed_dataframe[price_col]
@@ -115,21 +125,46 @@ class TrendMomentum(AbstractFeature):
 
                 log_price_series: pd.Series = np.log(price_series)
 
-                # [설계 의도] 3단계: 다기간 로그 수익률 산출 (예: return_lag_5d, kis_nasdaq_return_lag_5d)
+                # [설계 의도] 3단계: 변동성 표준화 시장 초과 모멘텀(Vol-Standardized Excess Momentum) 산출
+                asset_daily_ret = log_price_series - log_price_series.shift(1)
+                kospi_daily_ret = (kospi_log_series - kospi_log_series.shift(1)) if kospi_log_series is not None else None
+
                 for lookback_days in self.return_lookback_days:
                     feature_name: str = f"{prefix}return_lag_{lookback_days}d"
-                    processed_dataframe[feature_name] = log_price_series - log_price_series.shift(lookback_days)
+                    asset_ret = log_price_series - log_price_series.shift(lookback_days)
 
-                # [설계 의도] 4단계: 이동평균선 이격 비율 산출 (예: ma_ratio_5_20, kis_nasdaq_ma_ratio_5_20)
+                    if kospi_log_series is not None and prefix != "":
+                        kospi_ret = kospi_log_series - kospi_log_series.shift(lookback_days)
+                        excess_period_ret = asset_ret - kospi_ret
+                        excess_daily_ret = asset_daily_ret - kospi_daily_ret
+                        # 초과 수익률의 동기간 롤링 변동성 산출 (최소 1e-4 방어)
+                        rolling_excess_vol = excess_daily_ret.rolling(window=lookback_days).std() * np.sqrt(lookback_days)
+                        safe_vol = rolling_excess_vol.replace(0, np.nan).fillna(1e-4).clip(lower=1e-4)
+                        scaled_feature = excess_period_ret / safe_vol
+                    else:
+                        # 벤치마크 자산(KOSPI) 자체 롤링 샤프 모멘텀 표준화
+                        rolling_asset_vol = asset_daily_ret.rolling(window=lookback_days).std() * np.sqrt(lookback_days)
+                        safe_vol = rolling_asset_vol.replace(0, np.nan).fillna(1e-4).clip(lower=1e-4)
+                        scaled_feature = asset_ret / safe_vol
+
+                    # 극단치 윈저라이징 ([-4.0, +4.0]) 적용 후 결측치 보간
+                    processed_dataframe[feature_name] = scaled_feature.clip(-4.0, 4.0).ffill().bfill().fillna(0.0)
+
+                # [설계 의도] 4단계: 시장 초과 상대 이동평균 이격 비율(Excess MA Ratio) 산출
                 for ma_pair in self.moving_average_ratios:
                     short_days: int = ma_pair["short_window_days"]
                     long_days: int = ma_pair["long_window_days"]
 
                     short_ma_series: pd.Series = price_series.rolling(window=short_days).mean()
                     long_ma_series: pd.Series = price_series.rolling(window=long_days).mean()
+                    asset_ma_ratio = (short_ma_series / long_ma_series) - 1.0
 
                     ma_feature_name: str = f"{prefix}ma_ratio_{short_days}_{long_days}"
-                    processed_dataframe[ma_feature_name] = (short_ma_series / long_ma_series) - 1.0
+                    if kospi_price_series is not None and prefix != "":
+                        kospi_ma = (kospi_price_series.rolling(window=short_days).mean() / kospi_price_series.rolling(window=long_days).mean()) - 1.0
+                        processed_dataframe[ma_feature_name] = asset_ma_ratio - kospi_ma
+                    else:
+                        processed_dataframe[ma_feature_name] = asset_ma_ratio
 
                 # [설계 의도] 5단계: 위험 조정 모멘텀 산출 (예: risk_adjusted_return_20d, kis_nasdaq_risk_adjusted_return_20d)
                 daily_log_return_series: pd.Series = log_price_series - log_price_series.shift(1)
