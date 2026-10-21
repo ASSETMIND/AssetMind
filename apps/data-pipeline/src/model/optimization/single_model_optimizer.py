@@ -17,10 +17,10 @@ from src.model.core.abstract_regressor import AbstractRegressor
 from src.model.core.elasticnet_regressor import ElasticNetRegressor
 from src.model.core.random_forest_regressor import RandomForestRegressor
 from src.model.core.xgboost_regressor import XGBoostRegressor
-from src.model.dataset.walk_forward_splitter import WalkForwardSplitter
+from src.dataset.walk_forward_splitter import WalkForwardSplitter
 from src.model.evaluation.criteria import Weights
 from src.model.evaluation.schema import EvaluationMetric
-from src.model.evaluation.single_model_evaluator import SingleModelEvaluator
+from src.model.evaluation.model_evaluator import ModelEvaluator
 from src.model.optimization.search_space import (
     audit_search_space_boundaries,
     get_search_spaces,
@@ -74,7 +74,7 @@ class SingleModelOptimizer:
         search_spaces: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
         splitter: Optional[WalkForwardSplitter] = None,
         weights: Optional[Weights] = None,
-        evaluator: Optional[SingleModelEvaluator] = None,
+        evaluator: Optional[ModelEvaluator] = None,
         n_trials: int = 50,
         patience: int = 20,
         random_state: int = 42,
@@ -86,8 +86,8 @@ class SingleModelOptimizer:
         Args:
             search_spaces (Optional[Dict[str, Dict[str, Dict[str, Any]]]]): 모델별 탐색 공간 맵 (None 시 기본 템플릿 사용).
             splitter (Optional[WalkForwardSplitter]): 시계열 교차검증 분할기 (None 시 기본 5-Fold 분할기 생성).
-            weights (Optional[Weights]): 4대 계층 복합 스코어 가중치 DTO.
-            evaluator (Optional[SingleModelEvaluator]): 10대 지표 전담 산출 평가 엔진.
+            weights (Optional[Weights]): 2대 핵심 계층(ML, Factor) 복합 스코어 가중치 DTO.
+            evaluator (Optional[ModelEvaluator]): 10대 지표 전담 산출 평가 엔진.
             n_trials (int): 각 모델별 Optuna 시도 횟수 (기본값: 50).
             patience (int): Optuna 조기 종료 기준 연속 Trial 수 (기본값: 20).
             random_state (int): 재현성 확보용 난수 시드값 (기본값: 42).
@@ -101,7 +101,7 @@ class SingleModelOptimizer:
             n_splits=5, forecast_horizon=20, min_train_ratio=0.5
         )
         self.weights: Weights = weights or Weights()
-        self.evaluator: SingleModelEvaluator = evaluator or SingleModelEvaluator(weights=self.weights)
+        self.evaluator: ModelEvaluator = evaluator or ModelEvaluator(weights=self.weights)
         self.n_trials: int = n_trials
         self.patience: int = patience
         self.random_state: int = random_state
@@ -269,6 +269,7 @@ class SingleModelOptimizer:
                 "Factor p-val": self._format_metric_comparison(
                     val_def=def_m.get(EvaluationMetric.FACTOR_P_VAL, 0.0),
                     val_tuned=tun_m.get(EvaluationMetric.FACTOR_P_VAL, 0.0),
+                    is_p_value=True,
                 ),
                 "Best Parameters": param_str,
                 "Elapsed Time": f"{res.elapsed_seconds:.2f}s",
@@ -291,25 +292,20 @@ class SingleModelOptimizer:
         val_def: float,
         val_tuned: float,
         is_percent: bool = False,
+        is_p_value: bool = False,
     ) -> str:
-        """가독성 극대화를 위해 'Tuned (Δ% / %p)' 단일 축약 표기 규격을 적용합니다.
-
-        Args:
-            val_def (float): Default 베이스라인 지표 수치.
-            val_tuned (float): HPO Tuned 최적 지표 수치.
-            is_percent (bool): 퍼센트 기반 지표(MDA, MDD) 여부 (기본값: False).
-
-        Returns:
-            str: 가로 폭 낭비를 제거한 간결한 지표 포맷팅 문자열.
-        """
+        """수치 왜곡 없는 안전한 비교 포맷팅을 집행합니다."""
         delta: float = val_tuned - val_def
 
-        if is_percent:
-            # 비율 지표는 상대 비율 왜곡을 방지하기 위해 퍼센트포인트(%p)로 단일 표기
+        if is_p_value:
+            # p-value는 유의수준 임계치와의 비교가 핵심이므로 백분율 상대비교를 배제하고 절대값 이동 표기
+            return f"{val_tuned:.4f} (from {val_def:.4f})"
+        elif is_percent:
             delta_pp: float = delta * 100.0
             return f"{val_tuned * 100.0:.2f}% ({delta_pp:+.2f}%p)"
         else:
-            # 연속형 수치 지표는 기준값 대비 상대 개선율(%)로 표기
-            denom: float = abs(val_def) if abs(val_def) > 1e-8 else 1e-8
-            delta_pct: float = (delta / denom) * 100.0
+            # 분모가 0.01 미만으로 극소일 경우 상대비율(%) 왜곡 방지를 위해 단순 차분(Δ)으로 대체
+            if abs(val_def) < 1e-3:
+                return f"{val_tuned:.4f} (Δ {delta:+.4f})"
+            delta_pct: float = (delta / abs(val_def)) * 100.0
             return f"{val_tuned:.4f} ({delta_pct:+.2f}%)"

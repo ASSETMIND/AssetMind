@@ -67,6 +67,7 @@ class RandomForestRegressor(AbstractRegressor):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
+        sample_weight: Optional[pd.Series] = None,
         **kwargs: Any,
     ) -> "RandomForestRegressor":
         """입력 데이터를 기반으로 Random Forest 회귀 모델 학습을 수행합니다.
@@ -76,6 +77,7 @@ class RandomForestRegressor(AbstractRegressor):
             y_train (pd.Series): 학습용 정답 타겟 시계열 (N,).
             X_val (Optional[pd.DataFrame]): 인터페이스 다형성 준수용 검증 피처 데이터프레임 (배깅 모델 미사용).
             y_val (Optional[pd.Series]): 인터페이스 다형성 준수용 검증 정답 시계열 (배깅 모델 미사용).
+            sample_weight (Optional[pd.Series]): 관측치별 시간 감쇠 또는 중요도 가중치. 기본값은 None.
             **kwargs (Any): 기타 사이킷런 fit 런타임 제어 옵션.
 
         Returns:
@@ -94,8 +96,13 @@ class RandomForestRegressor(AbstractRegressor):
                 **self.hyperparameters,
             )
 
+            # 시간 감쇠 가중치 주입
+            fit_kwargs: Dict[str, Any] = kwargs.copy()
+            if sample_weight is not None:
+                fit_kwargs["sample_weight"] = np.asarray(sample_weight, dtype=np.float64)
+
             # 네이티브 fit 연산 실행
-            self._model.fit(X_train, y_train, **kwargs)
+            self._model.fit(X_train, y_train, **fit_kwargs)
 
             # 사후 인덱스 추적 및 피처 중요도 매핑을 위해 컬럼명 보존 및 상태 갱신
             self.feature_names = list(X_train.columns)
