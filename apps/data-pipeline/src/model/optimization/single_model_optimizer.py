@@ -13,10 +13,10 @@ import time
 from typing import Any, Dict, List, Optional, Type
 import pandas as pd
 
-from src.model.core.abstract_regressor import AbstractRegressor
-from src.model.core.elasticnet_regressor import ElasticNetRegressor
-from src.model.core.random_forest_regressor import RandomForestRegressor
-from src.model.core.xgboost_regressor import XGBoostRegressor
+from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
+from src.model.core.ml.elasticnet_regressor import ElasticNetRegressor
+from src.model.core.ml.random_forest_regressor import RandomForestRegressor
+from src.model.core.ml.xgboost_regressor import XGBoostRegressor
 from src.dataset.walk_forward_splitter import WalkForwardSplitter
 from src.model.evaluation.criteria import Weights
 from src.model.evaluation.schema import EvaluationMetric
@@ -33,7 +33,7 @@ from src.model.optimization.walk_forward_optimizer import (
 # ==============================================================================
 # 기본 단일 모델 레지스트리 (SSOT Registry)
 # ==============================================================================
-DEFAULT_MODEL_REGISTRY: Dict[str, Type[AbstractRegressor]] = {
+DEFAULT_MODEL_REGISTRY: Dict[str, Type[AbstractMLRegressor]] = {
     "ElasticNet": ElasticNetRegressor,
     "XGBoost": XGBoostRegressor,
     "RandomForest": RandomForestRegressor,
@@ -50,13 +50,13 @@ class BatchOptimizationResult:
 
     Attributes:
         results (Dict[str, SingleOptimizationResult]): 알고리즘 식별 명칭을 키로 하는 모델별 최적화 결과 DTO 맵.
-        best_models (Dict[str, AbstractRegressor]): 각 모델별 전체 학습 데이터로 재학습 완료된 최적 모델 인스턴스 맵.
+        best_models (Dict[str, AbstractMLRegressor]): 각 모델별 전체 학습 데이터로 재학습 완료된 최적 모델 인스턴스 맵.
         leaderboard (pd.DataFrame): Default 대비 Tuned 개선율 및 10대 지표를 망라한 마스터 비교 리더보드.
         boundary_audit_summary (pd.DataFrame): 전체 모델의 파라미터 경계선 도달 현황을 집약한 통합 감사 데이터프레임.
         total_elapsed_seconds (float): 3대 모델 일괄 최적화에 소요된 총 런타임(초).
     """
     results: Dict[str, SingleOptimizationResult]
-    best_models: Dict[str, AbstractRegressor]
+    best_models: Dict[str, AbstractMLRegressor]
     leaderboard: pd.DataFrame
     boundary_audit_summary: pd.DataFrame
     total_elapsed_seconds: float
@@ -112,14 +112,14 @@ class SingleModelOptimizer:
         self,
         X_train: pd.DataFrame,
         y_train: pd.Series,
-        model_registry: Optional[Dict[str, Type[AbstractRegressor]]] = None,
+        model_registry: Optional[Dict[str, Type[AbstractMLRegressor]]] = None,
     ) -> BatchOptimizationResult:
         """등록된 모델군에 대해 순차적으로 Walk-Forward HPO를 구동하고 종합 정산 결과를 반환합니다.
 
         Args:
             X_train (pd.DataFrame): HPO 학습용 전체 피처 데이터프레임.
             y_train (pd.Series): HPO 학습용 전체 타겟 시계열.
-            model_registry (Optional[Dict[str, Type[AbstractRegressor]]]): 최적화할 모델 클래스 맵 (None 시 3대 모델 실행).
+            model_registry (Optional[Dict[str, Type[AbstractMLRegressor]]]): 최적화할 모델 클래스 맵 (None 시 3대 모델 실행).
 
         Returns:
             BatchOptimizationResult: 모델별 최적 모델, 마스터 리더보드 및 통합 감사표가 포함된 불변 DTO.
@@ -134,7 +134,7 @@ class SingleModelOptimizer:
         start_total_time: float = time.perf_counter()
 
         optimization_results: Dict[str, SingleOptimizationResult] = {}
-        best_models_map: Dict[str, AbstractRegressor] = {}
+        best_models_map: Dict[str, AbstractMLRegressor] = {}
 
         total_models_count: int = len(active_registry)
 

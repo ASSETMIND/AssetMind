@@ -2,7 +2,7 @@
 단일 회귀 추정기 대상 시계열 Expanding Walk-Forward CV 기반 Optuna HPO 연산 코어 모듈.
 
 [핵심 아키텍처 및 단일 책임]
-1. AbstractRegressor 다형성 규격을 준수하는 임의의 모델에 대해 Expanding Window 시계열 교차검증을 집행합니다.
+1. AbstractMLRegressor 다형성 규격을 준수하는 임의의 모델에 대해 Expanding Window 시계열 교차검증을 집행합니다.
 2. ModelEvaluator와의 일원화된 데이터 계약을 통해 10대 원자적 지표를 추출하고 복합 목적함수를 극대화합니다.
 3. Search Space의 선언적 메타데이터를 기반으로 _get_parameters()를 통해 파라미터를 동적 샘플링합니다.
 4. 최적 파라미터의 경계선(상/하한) 도달 여부를 5대 핵심 수치 컬럼으로 간소화하여 감사합니다.
@@ -18,7 +18,7 @@ from optuna.samplers import TPESampler
 import pandas as pd
 from scipy import stats
 
-from src.model.core.abstract_regressor import AbstractRegressor
+from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
 from src.dataset.walk_forward_splitter import WalkForwardSplitter
 from src.model.evaluation.composite_score import compute_layer_scores, get_trial_score
 from src.model.evaluation.criteria import Weights
@@ -37,7 +37,7 @@ class SingleOptimizationResult:
     best_params: Dict[str, Any]
     best_score: float
     default_score: float
-    best_model: AbstractRegressor
+    best_model: AbstractMLRegressor
     study: optuna.Study
     default_metrics: Dict[EvaluationMetric, float]
     tuned_metrics: Dict[EvaluationMetric, float]
@@ -68,7 +68,7 @@ class WalkForwardOptimizer:
 
     def __init__(
         self,
-        model_class: Type[AbstractRegressor],
+        model_class: Type[AbstractMLRegressor],
         search_space: Dict[str, Dict[str, Any]],
         splitter: WalkForwardSplitter,
         weights: Optional[Weights] = None,
@@ -86,7 +86,7 @@ class WalkForwardOptimizer:
         """WalkForwardOptimizer 인스턴스를 초기화합니다.
 
         Args:
-            model_class (Type[AbstractRegressor]): 최적화할 모델 클래스 생성자.
+            model_class (Type[AbstractMLRegressor]): 최적화할 모델 클래스 생성자.
             search_space (Dict[str, Dict[str, Any]]): 모델별 파라미터 탐색 공간 명세.
             splitter (WalkForwardSplitter): Expanding Window 시계열 교차검증 분할기.
             weights (Optional[Weights]): 2대 핵심 계층(ML, Factor) 복합 스코어링 가중치 DTO.
@@ -100,7 +100,7 @@ class WalkForwardOptimizer:
             robustness_penalty_lambda (float): 로버스트성 페널티 하이퍼파라미터 (기본값: 0.1).
             pruning (bool): Optuna Pruning 기능 사용 여부 (기본값: True).
         """
-        self.model_class: Type[AbstractRegressor] = model_class
+        self.model_class: Type[AbstractMLRegressor] = model_class
         self.search_space: Dict[str, Dict[str, Any]] = search_space
         self.splitter: WalkForwardSplitter = splitter
         self.weights: Weights = weights or Weights()
@@ -265,7 +265,7 @@ class WalkForwardOptimizer:
         train_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_train_samples) - (n_train_samples - 1)))
         train_weights = train_weights / np.mean(train_weights)
 
-        best_model: AbstractRegressor = self.model_class(**refit_params)
+        best_model: AbstractMLRegressor = self.model_class(**refit_params)
         best_model.fit(X_train=X_train, y_train=y_train, sample_weight=train_weights)
 
         # [설계 의도] Out-of-Sample 평가 시 미래 정보 누수(Look-ahead Bias)를 차단하기 위해 Train 예측 표준편차를 동결 저장
@@ -420,7 +420,7 @@ class WalkForwardOptimizer:
             fold_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_samples) - (n_samples - 1)))
             fold_weights = fold_weights / np.mean(fold_weights)
 
-            fold_model: AbstractRegressor = self.model_class(**instantiation_params)
+            fold_model: AbstractMLRegressor = self.model_class(**instantiation_params)
             fold_model.fit(X_train=X_tr_fold, y_train=y_tr_fold, sample_weight=fold_weights)
 
             val_predictions: pd.Series = fold_model.predict(X_test=X_val_fold)
@@ -697,7 +697,7 @@ class WalkForwardOptimizer:
             fold_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_samples) - (n_samples - 1)))
             fold_weights = fold_weights / np.mean(fold_weights)
 
-            fold_model: AbstractRegressor = self.model_class(**instantiation_params)
+            fold_model: AbstractMLRegressor = self.model_class(**instantiation_params)
             
             # [설계 의도] XGBoost 부스팅 모델에 한해 Fold 검증 세트를 전달하여 조기 종료 지점 기록
             if is_boosting:

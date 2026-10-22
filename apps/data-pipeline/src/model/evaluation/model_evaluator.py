@@ -2,7 +2,7 @@ from typing import Dict, Optional, Union
 import numpy as np
 import pandas as pd
 
-from src.model.core.abstract_regressor import AbstractRegressor
+from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
 from src.model.evaluation import metrics
 from src.model.evaluation.criteria import Weights
 from src.model.evaluation.composite_score import get_trial_score
@@ -19,7 +19,7 @@ from src.model.evaluation.schema import (
 class ModelEvaluator:
     """단일 회귀 모델 인스턴스 또는 예측값 시계열에 대해 10대 지표 및 복합 스코어를 산출하는 전담 평가 엔진.
 
-    AbstractRegressor 규격을 준수하는 모든 구체 모델(단일 모델 및 향후 앙상블 모델)에 대해
+    AbstractMLRegressor 규격을 준수하는 모든 구체 모델(단일 모델 및 향후 앙상블 모델)에 대해
     추론 집행, 10대 원자적 금융/통계 지표 산출, 2대 핵심 계층(ML, Factor) 가중 복합 스코어링을 수행하여
     표준화된 불변 EvaluationResult DTO를 사출합니다.
     """
@@ -34,7 +34,7 @@ class ModelEvaluator:
 
     def evaluate(
         self,
-        model: AbstractRegressor,
+        model: AbstractMLRegressor,
         X_test: pd.DataFrame,
         y_test: pd.Series,
         target_std: Optional[float] = None,
@@ -42,7 +42,7 @@ class ModelEvaluator:
         """학습 완료된 단일 모델 인스턴스를 전달받아 추론을 집행하고 종합 평가 결과를 산출합니다.
 
         Args:
-            model (AbstractRegressor): 평가 대상 학습 완료 모델 인스턴스.
+            model (AbstractMLRegressor): 평가 대상 학습 완료 모델 인스턴스.
             X_test (pd.DataFrame): Out-of-Sample 테스트 피처 데이터프레임.
             y_test (pd.Series): Out-of-Sample 테스트 정답 타겟 시리즈.
             target_std (Optional[float]): RMSE/MAE 정규화용 타겟 표준편차 (None 시 y_test 표준편차 자동 산출).
@@ -51,7 +51,7 @@ class ModelEvaluator:
             EvaluationResult: 모델 식별자, 예측 시계열 Series, 10대 지표 딕셔너리,
                 복합 스코어가 캡슐화된 불변 결과 DTO.
         """
-        # AbstractRegressor 다형성 인터페이스 규격을 통해 예측값 사출
+        # AbstractMLRegressor 다형성 인터페이스 규격을 통해 예측값 사출
         predictions: pd.Series = model.predict(X_test)
 
         y_true_array: np.ndarray = y_test.to_numpy(dtype=np.float64).flatten()
