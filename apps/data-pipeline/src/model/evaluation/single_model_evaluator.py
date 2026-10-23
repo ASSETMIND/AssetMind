@@ -2,7 +2,7 @@ from typing import Dict, Optional, Union
 import numpy as np
 import pandas as pd
 
-from src.model.core.abstract_regressor import AbstractRegressor
+from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
 from src.model.evaluation import metrics
 from src.model.evaluation.criteria import Weights
 from src.model.evaluation.composite_score import get_trial_score
