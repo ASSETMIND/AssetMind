@@ -7,7 +7,7 @@ import pandas as pd
 # 단일 모델 및 앙상블 가중치 선언적 기본 탐색 공간 명세 (Declarative Metadata)
 # ==============================================================================
 
-# 3대 회귀 모델 및 가중 블렌딩 앙상블 실무 표준 탐색 공간 기본 템플릿
+# 4대 회귀 모델 및 가중 블렌딩 앙상블 실무 표준 탐색 공간 기본 템플릿
 DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "ElasticNet": {
         "alpha": {"type": "float", "low": 1e-3, "high": 2.0, "log": True},
@@ -35,6 +35,17 @@ DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
         "min_samples_leaf": {"type": "int", "low": 10, "high": 30, "step": 1},
         "max_features": {"type": "float", "low": 0.30, "high": 1.00, "step": 0.05},
     },
+    "CatBoost": {
+        "loss_function": {
+            "type": "categorical",
+            "choices": ["RMSE", "MAE", "Huber:delta=1.0"],
+        },
+        "iterations": {"type": "int", "low": 50, "high": 500, "step": 25},
+        "depth": {"type": "int", "low": 2, "high": 6, "step": 1},
+        "learning_rate": {"type": "float", "low": 0.005, "high": 0.20, "log": True},
+        "l2_leaf_reg": {"type": "float", "low": 1e-2, "high": 10.0, "log": True},
+        "random_strength": {"type": "float", "low": 1e-3, "high": 10.0, "log": True},
+    },
 }
 
 # ==============================================================================
@@ -42,7 +53,7 @@ DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
 # ==============================================================================
 
 def get_search_spaces() -> Dict[str, Dict[str, Dict[str, Any]]]:
-    """3대 모델 및 앙상블의 기본 HPO 탐색 공간 딕셔너리의 깊은 복사본(Deepcopy)을 반환합니다.
+    """4대 모델 및 앙상블의 기본 HPO 탐색 공간 딕셔너리의 깊은 복사본(Deepcopy)을 반환합니다.
 
     Returns:
         Dict[str, Dict[str, Dict[str, Any]]]: 모델명을 키로 하는 파라미터 탐색 범위 딕셔너리.

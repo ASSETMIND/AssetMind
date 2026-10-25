@@ -1,5 +1,5 @@
 """
-3대 단일 회귀 추정기(ElasticNet, XGBoost, RandomForest) 대상 Walk-Forward HPO 일괄 오케스트레이션 모듈.
+4대 단일 회귀 추정기(ElasticNet, XGBoost, RandomForest, CatBoost) 대상 Walk-Forward HPO 일괄 오케스트레이션 모듈.
 
 [주요 아키텍처 및 책임]
 1. 등록된 모델 클래스군을 순회하며 WalkForwardOptimizer 엔진을 통해 HPO를 일괄 집행합니다.
@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Type
 import pandas as pd
 
 from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
+from src.model.core.ml.catboost_regressor import CatBoostRegressor
 from src.model.core.ml.elasticnet_regressor import ElasticNetRegressor
 from src.model.core.ml.random_forest_regressor import RandomForestRegressor
 from src.model.core.ml.xgboost_regressor import XGBoostRegressor
@@ -37,6 +38,7 @@ DEFAULT_MODEL_REGISTRY: Dict[str, Type[AbstractMLRegressor]] = {
     "ElasticNet": ElasticNetRegressor,
     "XGBoost": XGBoostRegressor,
     "RandomForest": RandomForestRegressor,
+    "CatBoost": CatBoostRegressor,
 }
 
 
@@ -46,14 +48,14 @@ DEFAULT_MODEL_REGISTRY: Dict[str, Type[AbstractMLRegressor]] = {
 
 @dataclass(frozen=True)
 class BatchOptimizationResult:
-    """3대 모델 일괄 HPO 결과 및 통합 분석 메타데이터를 캡슐화한 불변 DTO.
+    """4대 모델 일괄 HPO 결과 및 통합 분석 메타데이터를 캡슐화한 불변 DTO.
 
     Attributes:
         results (Dict[str, SingleOptimizationResult]): 알고리즘 식별 명칭을 키로 하는 모델별 최적화 결과 DTO 맵.
         best_models (Dict[str, AbstractMLRegressor]): 각 모델별 전체 학습 데이터로 재학습 완료된 최적 모델 인스턴스 맵.
         leaderboard (pd.DataFrame): Default 대비 Tuned 개선율 및 10대 지표를 망라한 마스터 비교 리더보드.
         boundary_audit_summary (pd.DataFrame): 전체 모델의 파라미터 경계선 도달 현황을 집약한 통합 감사 데이터프레임.
-        total_elapsed_seconds (float): 3대 모델 일괄 최적화에 소요된 총 런타임(초).
+        total_elapsed_seconds (float): 4대 모델 일괄 최적화에 소요된 총 런타임(초).
     """
     results: Dict[str, SingleOptimizationResult]
     best_models: Dict[str, AbstractMLRegressor]
@@ -67,7 +69,7 @@ class BatchOptimizationResult:
 # ==============================================================================
 
 class SingleModelOptimizer:
-    """3대 회귀 모델군 대상 Walk-Forward CV HPO 배치 실행 및 리더보드 정산 오케스트레이터."""
+    """4대 회귀 모델군 대상 Walk-Forward CV HPO 배치 실행 및 리더보드 정산 오케스트레이터."""
 
     def __init__(
         self,
@@ -119,7 +121,7 @@ class SingleModelOptimizer:
         Args:
             X_train (pd.DataFrame): HPO 학습용 전체 피처 데이터프레임.
             y_train (pd.Series): HPO 학습용 전체 타겟 시계열.
-            model_registry (Optional[Dict[str, Type[AbstractMLRegressor]]]): 최적화할 모델 클래스 맵 (None 시 3대 모델 실행).
+            model_registry (Optional[Dict[str, Type[AbstractMLRegressor]]]): 최적화할 모델 클래스 맵 (None 시 4대 모델 실행).
 
         Returns:
             BatchOptimizationResult: 모델별 최적 모델, 마스터 리더보드 및 통합 감사표가 포함된 불변 DTO.
