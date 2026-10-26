@@ -245,6 +245,35 @@ def _check_log_scale_suitability(
     return (max_val / max(1e-12, min_val)) >= ratio_threshold
 
 
+def _resolve_slice_parameter_encoding(
+    raw_values: List[Any],
+    raw_opt_val: Any,
+) -> Tuple[np.ndarray, float, Optional[List[str]], bool]:
+    """슬라이스 패널 렌더링을 위해 수치형 및 비수치형(Tuple/Categorical) 파라미터 값을 X축 수치 좌표로 정규화합니다."""
+    try:
+        if any(isinstance(v, bool) for v in raw_values):
+            raise TypeError("Boolean parameter is treated as categorical")
+        numeric_values = np.array([float(v) for v in raw_values], dtype=float)
+        opt_x = float(raw_opt_val)
+        return numeric_values, opt_x, None, True
+    except (TypeError, ValueError):
+        try:
+            unique_categories = sorted(set(raw_values))
+        except TypeError:
+            unique_categories = list(dict.fromkeys(str(v) for v in raw_values))
+            raw_values = [str(v) for v in raw_values]
+            raw_opt_val = str(raw_opt_val)
+
+        if raw_opt_val not in unique_categories:
+            unique_categories.append(raw_opt_val)
+
+        category_to_idx = {cat: float(idx) for idx, cat in enumerate(unique_categories)}
+        encoded_values = np.array([category_to_idx[v] for v in raw_values], dtype=float)
+        opt_x = category_to_idx[raw_opt_val]
+        tick_labels = [format_parameter_value(cat) for cat in unique_categories]
+        return encoded_values, opt_x, tick_labels, False
+
+
 def _render_fanova_panel(
     ax: plt.Axes,
     model_name: str,
@@ -313,13 +342,18 @@ def _render_slice_panel(
     theme: VisualizationTheme,
 ) -> None:
     """선별된 핵심 파라미터의 1차원 슬라이스 반응면(Slice Surface)을 렌더링합니다."""
-    # 1. 해당 파라미터가 포함된 완료 Trial 수집
+    # 1. 해당 파라미터가 포함된 완료 Trial 수집 및 좌표 인코딩
     completed = [t for t in study.trials if t.value is not None and param_name in t.params]
     if not completed:
         render_empty_panel(ax=ax, message=f"No Completed Trials for {param_name}", theme=theme)
         return
 
-    param_values = np.array([float(t.params[param_name]) for t in completed])
+    raw_values = [t.params[param_name] for t in completed]
+    raw_opt_val = best_params.get(param_name, raw_values[0])
+    param_values, opt_x, category_labels, is_numeric = _resolve_slice_parameter_encoding(
+        raw_values=raw_values,
+        raw_opt_val=raw_opt_val,
+    )
     score_values = np.array([float(t.value) for t in completed])
 
     # 2. 산점도 플로팅 (Trial 관측 점)
@@ -348,10 +382,9 @@ def _render_slice_panel(
         )
 
     # 4. 최적해(Optimum) 마커 강조 표시
-    opt_val = float(best_params.get(param_name, param_values[0]))
     opt_score = float(best_score) if best_score is not None else float(np.max(score_values))
     ax.scatter(
-        [opt_val],
+        [opt_x],
         [opt_score],
         marker="*",
         s=180,
@@ -359,12 +392,15 @@ def _render_slice_panel(
         edgecolor=theme.status_palette.optimum_edge,
         linewidth=1.2,
         zorder=6,
-        label=f"Optimum: {format_parameter_value(opt_val)}",
+        label=f"Optimum: {format_parameter_value(raw_opt_val)}",
     )
 
-    # 5. 극단 스케일 파라미터의 로그 스케일 자동 적용
-    if _check_log_scale_suitability(param_values=param_values):
+    # 5. 수치형 극단 스케일 로그 변환 또는 범주형(Tuple/Str) X축 틱 라벨 바인딩
+    if is_numeric and _check_log_scale_suitability(param_values=param_values):
         ax.set_xscale("log")
+    elif category_labels is not None:
+        ax.set_xticks(np.arange(len(category_labels)))
+        ax.set_xticklabels(category_labels, fontsize=theme.typography.tick_label_size)
 
     # 6. 축 라벨, 그리드 및 범례 바인딩
     ax.set_title(

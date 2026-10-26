@@ -1,13 +1,3 @@
-"""
-단일 회귀 추정기 대상 시계열 Expanding Walk-Forward CV 기반 Optuna HPO 연산 코어 모듈.
-
-[핵심 아키텍처 및 단일 책임]
-1. AbstractMLRegressor 다형성 규격을 준수하는 임의의 모델에 대해 Expanding Window 시계열 교차검증을 집행합니다.
-2. ModelEvaluator와의 일원화된 데이터 계약을 통해 10대 원자적 지표를 추출하고 복합 목적함수를 극대화합니다.
-3. Search Space의 선언적 메타데이터를 기반으로 _get_parameters()를 통해 파라미터를 동적 샘플링합니다.
-4. 최적 파라미터의 경계선(상/하한) 도달 여부를 5대 핵심 수치 컬럼으로 간소화하여 감사합니다.
-"""
-
 from dataclasses import dataclass
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
@@ -18,7 +8,7 @@ from optuna.samplers import TPESampler
 import pandas as pd
 from scipy import stats
 
-from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
+from src.model.core.base.abstract_regressor import AbstractRegressor
 from src.dataset.walk_forward_splitter import WalkForwardSplitter
 from src.model.evaluation.composite_score import compute_layer_scores, get_trial_score
 from src.model.evaluation.criteria import Weights
@@ -37,7 +27,7 @@ class SingleOptimizationResult:
     best_params: Dict[str, Any]
     best_score: float
     default_score: float
-    best_model: AbstractMLRegressor
+    best_model: AbstractRegressor
     study: optuna.Study
     default_metrics: Dict[EvaluationMetric, float]
     tuned_metrics: Dict[EvaluationMetric, float]
@@ -68,7 +58,7 @@ class WalkForwardOptimizer:
 
     def __init__(
         self,
-        model_class: Type[AbstractMLRegressor],
+        model_class: Type[AbstractRegressor],
         search_space: Dict[str, Dict[str, Any]],
         splitter: WalkForwardSplitter,
         weights: Optional[Weights] = None,
@@ -82,11 +72,12 @@ class WalkForwardOptimizer:
         robustness_penalty_lambda: float = 0.5,
         # [설계 의도] 시장 레짐 이질성(폭락/횡보/상승)으로 인한 우수 모델 오탈락 방지를 위해 Pruning 기본 비활성화
         pruning: bool = False,
+        progress_prefix: Optional[str] = None,
     ) -> None:
         """WalkForwardOptimizer 인스턴스를 초기화합니다.
 
         Args:
-            model_class (Type[AbstractMLRegressor]): 최적화할 모델 클래스 생성자.
+            model_class (Type[AbstractRegressor]): 최적화할 모델 클래스 생성자.
             search_space (Dict[str, Dict[str, Any]]): 모델별 파라미터 탐색 공간 명세.
             splitter (WalkForwardSplitter): Expanding Window 시계열 교차검증 분할기.
             weights (Optional[Weights]): 2대 핵심 계층(ML, Factor) 복합 스코어링 가중치 DTO.
@@ -100,7 +91,7 @@ class WalkForwardOptimizer:
             robustness_penalty_lambda (float): 로버스트성 페널티 하이퍼파라미터 (기본값: 0.1).
             pruning (bool): Optuna Pruning 기능 사용 여부 (기본값: True).
         """
-        self.model_class: Type[AbstractMLRegressor] = model_class
+        self.model_class: Type[AbstractRegressor] = model_class
         self.search_space: Dict[str, Dict[str, Any]] = search_space
         self.splitter: WalkForwardSplitter = splitter
         self.weights: Weights = weights or Weights()
@@ -117,6 +108,9 @@ class WalkForwardOptimizer:
         self.n_jobs: int = n_jobs
         self.robustness_penalty_lambda: float = robustness_penalty_lambda
         self.pruning: bool = pruning
+        self.progress_prefix: Optional[str] = progress_prefix
+        self._optimization_start_time: float = 0.0
+        self._current_best_score: Optional[float] = None
 
     def optimize(
         self,
@@ -139,6 +133,8 @@ class WalkForwardOptimizer:
             raise ValueError(f"[{self.model_name}] 최적화 대상 데이터셋(X_train 또는 y_train)이 비어 있습니다.")
 
         start_time: float = time.perf_counter()
+        self._optimization_start_time = start_time
+        self._current_best_score = None
 
         # 스케일 정규화 기준 분모(target_std)를 시작 시점에 1회만 연산하여 오버헤드 박멸
         finite_targets = y_train.to_numpy(dtype=np.float64).flatten()
@@ -154,6 +150,7 @@ class WalkForwardOptimizer:
             y_train=y_train,
             target_std=target_std,
         )
+        self._current_best_score = default_score
 
         # 2. Optuna HPO 집행 (다변량 TPE Sampler 및 MedianPruner 구성)
         sampler = TPESampler(
@@ -241,6 +238,8 @@ class WalkForwardOptimizer:
         best_params: Dict[str, Any] = study.best_params.copy()
         best_params["random_state"] = self.random_state
         best_score: float = float(study.best_value)
+        self._current_best_score = best_score
+        self._render_live_progress(stage_status="Final Refit & Audit")
 
         # [설계 의도] Full Refit 이전에 5-Fold 상세 평가를 수행하여 Fold별 최적 반복수(best_iteration) 수집
         _, _, best_fold_details, fold_best_iterations = self._evaluate_cv_folds_detailed(
@@ -253,9 +252,10 @@ class WalkForwardOptimizer:
         # 4. CV 최적 반복수(Best Iteration) 주입 및 전체 학습셋 대상 최종 Refit (개선 2 적용)
         refit_params = best_params.copy()
         if fold_best_iterations:
-            optimal_n_estimators = int(np.round(np.mean(fold_best_iterations)))
-            refit_params["n_estimators"] = max(1, optimal_n_estimators)
-            best_params["n_estimators"] = refit_params["n_estimators"]
+            optimal_n_estimators = max(1, int(np.round(np.mean(fold_best_iterations))))
+            iter_key = "iterations" if "iterations" in refit_params else "n_estimators"
+            refit_params[iter_key] = optimal_n_estimators
+            best_params[iter_key] = optimal_n_estimators
 
         # [설계 의도] Full Refit 시에는 검증 세트가 없으므로 조기 종료 파라미터 완전 제거
         refit_params.pop("early_stopping_rounds", None)
@@ -265,7 +265,7 @@ class WalkForwardOptimizer:
         train_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_train_samples) - (n_train_samples - 1)))
         train_weights = train_weights / np.mean(train_weights)
 
-        best_model: AbstractMLRegressor = self.model_class(**refit_params)
+        best_model: AbstractRegressor = self.model_class(**refit_params)
         best_model.fit(X_train=X_train, y_train=y_train, sample_weight=train_weights)
 
         # [설계 의도] Out-of-Sample 평가 시 미래 정보 누수(Look-ahead Bias)를 차단하기 위해 Train 예측 표준편차를 동결 저장
@@ -321,6 +321,28 @@ class WalkForwardOptimizer:
     # --------------------------------------------------------------------------
     # 내부 최적화 서브루틴 (Private Helpers)
     # --------------------------------------------------------------------------
+    def _render_live_progress(self, stage_status: str) -> None:
+        """장시간 학습 모델의 동작 여부를 확인할 수 있도록 동일 라인에 실시간 진행 상태를 갱신합니다."""
+        if not self.progress_prefix:
+            return
+
+        elapsed_seconds: float = time.perf_counter() - self._optimization_start_time
+        running_label: str = f"{'Running':<7s}"
+        elapsed_str: str = f"{f'{elapsed_seconds:.2f}s':<9s}"
+        status_str: str = f"{stage_status:<25s}"
+        score_str: str = (
+            f"{self._current_best_score:.4f}"
+            if self._current_best_score is not None
+            else "N/A   "
+        )
+        print(
+            f"\r{self.progress_prefix}{running_label} ("
+            f"{elapsed_str} | {status_str} | "
+            f"Best Composite Score: {score_str})",
+            end="",
+            flush=True,
+        )
+
     def _create_objective(
         self,
         X_train: pd.DataFrame,
@@ -341,6 +363,11 @@ class WalkForwardOptimizer:
                 trial=trial,
             )
             trial.set_user_attr("metrics", {m.value: v for m, v in fold_metrics.items()})
+            if (
+                self._current_best_score is None
+                or trial_score > self._current_best_score
+            ):
+                self._current_best_score = trial_score
             return trial_score
 
         return objective
@@ -413,15 +440,32 @@ class WalkForwardOptimizer:
 
         fold_rirs: List[float] = []
 
+        total_folds: int = getattr(self.splitter, "n_splits", 5)
+
         for fold_idx, (X_tr_fold, y_tr_fold, X_val_fold, y_val_fold) in enumerate(
             self.splitter.split_walk_forward(X=X_train, y=y_train)
         ):
+            stage_label: str = (
+                f"Trial {trial.number + 1:02d}/{self.n_trials:02d} [Fold {fold_idx + 1}/{total_folds}]"
+                if trial is not None
+                else f"Baseline CV [Fold {fold_idx + 1}/{total_folds}]"
+            )
+            self._render_live_progress(stage_status=stage_label)
+
             n_samples = len(X_tr_fold)
             fold_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_samples) - (n_samples - 1)))
             fold_weights = fold_weights / np.mean(fold_weights)
 
-            fold_model: AbstractMLRegressor = self.model_class(**instantiation_params)
-            fold_model.fit(X_train=X_tr_fold, y_train=y_tr_fold, sample_weight=fold_weights)
+            fold_model: AbstractRegressor = self.model_class(**instantiation_params)
+            # [설계 의도] DL 모델의 검증 손실 기반 에포크 조기 종료(Early Stopping) 및 최적 가중치 복원이
+            # 정상 작동하도록 Fold 검증 데이터셋(X_val_fold, y_val_fold)을 표준 인터페이스로 주입함
+            fold_model.fit(
+                X_train=X_tr_fold,
+                y_train=y_tr_fold,
+                X_val=X_val_fold,
+                y_val=y_val_fold,
+                sample_weight=fold_weights,
+            )
 
             val_predictions: pd.Series = fold_model.predict(X_test=X_val_fold)
 
@@ -686,7 +730,7 @@ class WalkForwardOptimizer:
         instantiation_params = model_params.copy()
         instantiation_params.setdefault("random_state", self.random_state)
         # [설계 의도] 부스팅 모델의 경우 Fold 검증 세트를 활용해 과적합 직전 최적 반복수(best_iteration)를 탐색
-        is_boosting = "XGBoost" in self.model_name
+        is_boosting = ("XGBoost" in self.model_name) or ("CatBoost" in self.model_name)
         if is_boosting and "early_stopping_rounds" not in instantiation_params:
             instantiation_params["early_stopping_rounds"] = 20
 
@@ -697,22 +741,14 @@ class WalkForwardOptimizer:
             fold_weights = np.exp((np.log(2.0) / 1008.0) * (np.arange(n_samples) - (n_samples - 1)))
             fold_weights = fold_weights / np.mean(fold_weights)
 
-            fold_model: AbstractMLRegressor = self.model_class(**instantiation_params)
-            
-            # [설계 의도] XGBoost 부스팅 모델에 한해 Fold 검증 세트를 전달하여 조기 종료 지점 기록
-            if is_boosting:
-                try:
-                    fold_model.fit(
-                        X_train=X_tr_fold,
-                        y_train=y_tr_fold,
-                        sample_weight=fold_weights,
-                        eval_set=[(X_val_fold, y_val_fold)],
-                        verbose=False,
-                    )
-                except TypeError:
-                    fold_model.fit(X_train=X_tr_fold, y_train=y_tr_fold, sample_weight=fold_weights)
-            else:
-                fold_model.fit(X_train=X_tr_fold, y_train=y_tr_fold, sample_weight=fold_weights)
+            fold_model: AbstractRegressor = self.model_class(**instantiation_params)
+            fold_model.fit(
+                X_train=X_tr_fold,
+                y_train=y_tr_fold,
+                X_val=X_val_fold,
+                y_val=y_val_fold,
+                sample_weight=fold_weights,
+            )
 
             # [설계 의도] 래퍼 객체 및 내부 원본 모델(_model, model 등) 전수 스캔하여 best_iteration 안전 추출
             inner_estimator = (
