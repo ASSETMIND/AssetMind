@@ -1,21 +1,10 @@
-from typing import Any, Dict, Optional, Tuple
-
-import numpy as np
+from typing import Any, Dict, Tuple
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.model.core.base.abstract_dl_regressor import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_EARLY_STOPPING_PATIENCE,
-    DEFAULT_GRAD_CLIP_NORM,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_MAX_EPOCHS,
-    DEFAULT_MIN_DELTA,
-    DEFAULT_WEIGHT_DECAY,
-    AbstractDLRegressor,
-)
+from src.model.core.base.abstract_dl_regressor import AbstractDLRegressor
 from src.model.core.base.abstract_regressor import (
     DEFAULT_RANDOM_STATE,
     DEFAULT_REQUESTED_DEVICE,
@@ -36,13 +25,6 @@ DEFAULT_TCN_PARAMS: Dict[str, Any] = {
     "kernel_size": 3,                                               # 1D 인과적 합성곱(Causal Conv1d) 커널 크기
     "dropout_rate": 0.2,                                            # 시계열 잔차 블록 내부 과적합 방지 드롭아웃 비율
     "use_batch_norm": True,                                         # 합성곱 계층별 배치 정규화(BatchNorm1d) 적용 여부
-    "batch_size": DEFAULT_BATCH_SIZE,                               # 미니배치 학습 및 추론 시 배치 크기
-    "max_epochs": DEFAULT_MAX_EPOCHS,                               # 최대 학습 에포크 횟수
-    "learning_rate": DEFAULT_LEARNING_RATE,                         # AdamW 옵티마이저 학습률
-    "weight_decay": DEFAULT_WEIGHT_DECAY,                           # AdamW 가중치 감쇠(L2 정규화) 계수
-    "grad_clip_norm": DEFAULT_GRAD_CLIP_NORM,                       # 기울기 폭발 방지를 위한 그래디언트 클리핑 최대 노름
-    "early_stopping_patience": DEFAULT_EARLY_STOPPING_PATIENCE,     # 검증 손실 미개선 허용 에포크 횟수
-    "min_delta": DEFAULT_MIN_DELTA,                                 # 검증 손실 유의미 개선 판정 최소 변화량
 }
 
 
@@ -107,60 +89,6 @@ class TCNRegressor(AbstractDLRegressor):
             use_batch_norm=use_batch_norm,
         )
 
-    def _prepare_train_tensors(
-        self,
-        X_train: pd.DataFrame,
-        y_train: pd.Series,
-        X_val: Optional[pd.DataFrame] = None,
-        y_val: Optional[pd.Series] = None,
-        sample_weight: Optional[pd.Series] = None,
-    ) -> Tuple[
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-        Optional[Tuple[torch.Tensor, torch.Tensor]],
-    ]:
-        """2D 학습 및 검증 데이터프레임을 미래 참조 누수가 차단된 3D Causal Window 텐서로 변환합니다."""
-        # 1. 시계열 윈도우 길이(L) 추출 및 학습 피처/타겟 텐서 변환
-        sequence_length: int = max(1, int(self.hyperparameters["sequence_length"]))
-
-        x_train_tensor: torch.Tensor = self._convert_to_causal_3d_tensor(
-            features_df=X_train,
-            sequence_length=sequence_length,
-        )
-        y_train_tensor: torch.Tensor = torch.tensor(
-            y_train.values, dtype=torch.float32
-        ).view(-1, 1)
-
-        # 2. 샘플 가중치 텐서 구성 (미지정 시 동일 가중치 1.0 부여)
-        if sample_weight is not None:
-            weight_tensor: torch.Tensor = torch.tensor(
-                np.asarray(sample_weight, dtype=np.float32),
-                dtype=torch.float32,
-            ).view(-1, 1)
-        else:
-            weight_tensor = torch.ones_like(y_train_tensor)
-
-        # 3. 검증 데이터가 유효한 경우 피처 정렬 후 동일한 3D Causal Window 텐서로 변환
-        val_tensors: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
-        if (
-            X_val is not None
-            and y_val is not None
-            and not X_val.empty
-            and not y_val.empty
-        ):
-            aligned_val_features: pd.DataFrame = self._align_predict_features(
-                X_test=X_val
-            )
-            x_val_tensor: torch.Tensor = self._convert_to_causal_3d_tensor(
-                features_df=aligned_val_features,
-                sequence_length=sequence_length,
-            )
-            y_val_tensor: torch.Tensor = torch.tensor(
-                y_val.values, dtype=torch.float32
-            ).view(-1, 1)
-            val_tensors = (x_val_tensor, y_val_tensor)
-
-        # 4. 학습 텐서 튜플과 검증 텐서 튜플 반환
-        return (x_train_tensor, y_train_tensor, weight_tensor), val_tensors
 
     def _prepare_predict_tensors(self, X_test: pd.DataFrame) -> torch.Tensor:
         """추론용 2D 데이터프레임을 행 길이(N) 손실 없는 3D Causal Window 텐서로 변환합니다."""

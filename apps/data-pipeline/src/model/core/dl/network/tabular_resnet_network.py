@@ -3,11 +3,7 @@ from typing import List
 import torch
 import torch.nn as nn
 
-# ==============================================================================
-# Constants & Configuration
-# ==============================================================================
-# [회귀 신경망 출력 규격 설정]
-REGRESSION_OUTPUT_DIM: int = 1    # 단일 연속형 타겟 회귀 출력 차원
+from src.model.core.base.abstract_dl_regressor import REGRESSION_OUTPUT_DIM
 
 
 class TabularResNetNetwork(nn.Module):
@@ -103,19 +99,11 @@ class TabularResNetNetwork(nn.Module):
     ) -> nn.Sequential:
         """최종 잔차 블록 출력을 정규화 및 활성화한 후 단일 타겟 차원으로 투영하는 헤드를 생성합니다."""
         # 1. Pre-Norm 잔차 구조의 마지막 출력 스케일을 안정화하기 위한 정규화·활성화 및 선형 출력층 결합
-        return nn.Sequential(
-            _create_normalization_layer(
-                hidden_dim=hidden_dim,
-                use_batch_norm=use_batch_norm,
-            ),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, REGRESSION_OUTPUT_DIM),
-        )
-
-    def _create_normalization_layer(hidden_dim: int, use_batch_norm: bool) -> nn.Module:
-        """배치 정규화 활성화 여부에 따라 BatchNorm1d 또는 항등(Identity) 모듈을 반환합니다."""
-        # 1. 플래그 조건에 따라 정규화 연산 모듈을 동적으로 분기하여 반환
-        return nn.BatchNorm1d(hidden_dim) if use_batch_norm else nn.Identity()
+        layers: List[nn.Module] = []
+        if use_batch_norm:
+            layers.append(nn.BatchNorm1d(hidden_dim))
+        layers.extend([nn.SiLU(), nn.Linear(hidden_dim, REGRESSION_OUTPUT_DIM)])
+        return nn.Sequential(*layers)
 
 
 class _TabularResNetBlock(nn.Module):
@@ -151,14 +139,16 @@ class _TabularResNetBlock(nn.Module):
         """Pre-Norm 구조(Norm -> Linear -> SiLU -> Dropout -> Linear -> Dropout)의 잔차 분기를 생성합니다."""
         # [설계 의도] 깊은 블록 적층 시에도 항등 경로(x)를 통한 그래디언트 흐름이 왜곡되지 않도록
         # 선형 변환 이전에 정규화를 수행하는 Pre-Norm 아키텍처를 구성함
-        return nn.Sequential(
-            _create_normalization_layer(
-                hidden_dim=hidden_dim,
-                use_batch_norm=use_batch_norm,
-            ),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Dropout(p=dropout_rate),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.Dropout(p=dropout_rate),
+        layers: List[nn.Module] = []
+        if use_batch_norm:
+            layers.append(nn.BatchNorm1d(hidden_dim))
+        layers.extend(
+            [
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.SiLU(),
+                nn.Dropout(p=dropout_rate),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Dropout(p=dropout_rate),
+            ]
         )
+        return nn.Sequential(*layers)

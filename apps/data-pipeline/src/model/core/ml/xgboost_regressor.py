@@ -65,10 +65,11 @@ class XGBoostRegressor(AbstractMLRegressor):
         requested_device: str = str(
             merged_hyperparameters.get("device", DEFAULT_REQUESTED_DEVICE)
         )
-        merged_hyperparameters["device"] = self._detect_device(
+        detected_device: str = self._detect_device(
             requested_device=requested_device,
             supported_devices=XGBOOST_SUPPORTED_DEVICES,
         )
+        merged_hyperparameters["device"] = detected_device
 
         # 3. 상위 추상 클래스(AbstractMLRegressor) 공통 상태 및 메타데이터 초기화
         super().__init__(
@@ -76,6 +77,7 @@ class XGBoostRegressor(AbstractMLRegressor):
             random_state=random_state,
             **merged_hyperparameters,
         )
+        self.device: str = detected_device
         self.model: Optional[xgb.XGBRegressor] = None
 
     # --------------------------------------------------------------------------

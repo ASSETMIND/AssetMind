@@ -3,11 +3,7 @@ from typing import List, Sequence, Tuple
 import torch
 import torch.nn as nn
 
-# ==============================================================================
-# Constants & Configuration
-# ==============================================================================
-# [회귀 신경망 출력 규격 설정]
-REGRESSION_OUTPUT_DIM: int = 1    # 단일 연속형 타겟 회귀 출력 차원
+from src.model.core.base.abstract_dl_regressor import REGRESSION_OUTPUT_DIM
 
 
 class DCNv2Network(nn.Module):

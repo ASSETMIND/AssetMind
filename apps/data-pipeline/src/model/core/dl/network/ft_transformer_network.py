@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 
+from src.model.core.base.abstract_dl_regressor import REGRESSION_OUTPUT_DIM
+
 # ==============================================================================
 # Constants & Configuration
 # ==============================================================================
 # [토큰 시퀀스 및 회귀 신경망 출력 규격 설정]
-REGRESSION_OUTPUT_DIM: int = 1          # 단일 연속형 타겟 회귀 출력 차원
 CLS_TOKEN_COUNT: int = 1                # 전역 문맥 집계를 위한 [CLS] 토큰 개수
 CLS_TOKEN_INDEX: int = 0                # 시퀀스 내 [CLS] 토큰의 위치 인덱스
 TRANSFORMER_ACTIVATION: str = "gelu"    # 트랜스포머 FFN 블록 내부 활성화 함수

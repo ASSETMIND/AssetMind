@@ -1,13 +1,11 @@
 from abc import abstractmethod
-import copy
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
 
 from src.common.exceptions import ModelTrainingExecutionError
 from src.model.core.base.abstract_regressor import (
@@ -28,9 +26,23 @@ DEFAULT_WEIGHT_DECAY: float = 1e-4  # 가중치 감쇠(L2 정규화) 기본 계�
 DEFAULT_GRAD_CLIP_NORM: float = 1.0  # 기울기 폭발 방지를 위한 그래디언트 클리핑 최대 노름
 SINGLE_SAMPLE_BATCH_SIZE: int = 1  # BatchNorm1d 분산 산출 불능 방지를 위한 단일 샘플 잔여 배치 기준값
 
+# [회귀 신경망 출력 규격 설정]
+REGRESSION_OUTPUT_DIM: int = 1  # 단일 연속형 타겟 회귀 출력 차원
+
 # [조기 종료(Early Stopping) 기본 제어 설정]
-DEFAULT_EARLY_STOPPING_PATIENCE: int = 10  # 검증 손실 미개선 허용 에포크 횟수
-DEFAULT_MIN_DELTA: float = 1e-5  # 검증 손실 유의미 개선 판정을 위한 최소 변화량
+DEFAULT_EARLY_STOPPING_PATIENCE: int = 20    # 검증 손실 미개선 허용 에포크 횟수
+DEFAULT_MIN_DELTA: float = 1e-5              # 검증 손실 유의미 개선 판정을 위한 최소 변화량
+
+# [DL 모델 공통 학습 루프 기본 하이퍼파라미터 템플릿]
+DEFAULT_DL_TRAINING_PARAMS: Dict[str, Any] = {
+    "batch_size": DEFAULT_BATCH_SIZE,
+    "max_epochs": DEFAULT_MAX_EPOCHS,
+    "learning_rate": DEFAULT_LEARNING_RATE,
+    "weight_decay": DEFAULT_WEIGHT_DECAY,
+    "grad_clip_norm": DEFAULT_GRAD_CLIP_NORM,
+    "early_stopping_patience": DEFAULT_EARLY_STOPPING_PATIENCE,
+    "min_delta": DEFAULT_MIN_DELTA,
+}
 
 
 # ==============================================================================
@@ -63,10 +75,14 @@ class AbstractDLRegressor(AbstractRegressor):
             device (str): 요청 연산 디바이스('auto', 'cpu', 'cuda', 'mps'). 기본값은 'auto'.
             **hyperparameters (Any): 신경망 구조 및 학습 루프 제어용 하이퍼파라미터.
         """
+        merged_hyperparameters: Dict[str, Any] = self._merge_hyperparameters(
+            default_params=DEFAULT_DL_TRAINING_PARAMS,
+            custom_params=hyperparameters,
+        )
         super().__init__(
             model_name=model_name,
             random_state=random_state,
-            **hyperparameters,
+            **merged_hyperparameters,
         )
         self.device: str = self._detect_device(requested_device=device)
         self.network: Optional[nn.Module] = None
@@ -78,7 +94,7 @@ class AbstractDLRegressor(AbstractRegressor):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
-        sample_weight: Optional[pd.Series] = None,
+        sample_weight: Optional[Union[pd.Series, np.ndarray]] = None,
         **kwargs: Any,
     ) -> "AbstractDLRegressor":
         """입력 데이터를 텐서로 변환하고 PyTorch 신경망 학습 및 조기 종료를 집행합니다.
@@ -88,7 +104,7 @@ class AbstractDLRegressor(AbstractRegressor):
             y_train (pd.Series): 훈련용 1D 타겟 시계열.
             X_val (Optional[pd.DataFrame]): 조기 종료용 검증 피처 행렬. 기본값은 None.
             y_val (Optional[pd.Series]): 조기 종료용 검증 타겟 시리즈. 기본값은 None.
-            sample_weight (Optional[pd.Series]): 관측치별 중요도 가중치. 기본값은 None.
+            sample_weight (Optional[Union[pd.Series, np.ndarray]]): 관측치별 중요도 가중치. 기본값은 None.
             **kwargs (Any): 동적 런타임 학습 제어 인자.
 
         Returns:
@@ -184,39 +200,32 @@ class AbstractDLRegressor(AbstractRegressor):
         y_train: pd.Series,
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
-        sample_weight: Optional[pd.Series] = None,
+        sample_weight: Optional[Union[pd.Series, np.ndarray]] = None,
     ) -> Tuple[
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         Optional[Tuple[torch.Tensor, torch.Tensor]],
     ]:
-        """학습 및 검증 데이터를 2D 텐서로 변환하며, 3D 모델(TCN)에서 오버라이딩을 허용합니다."""
-        # [설계 의도] 2D 정형 모델(ResNet, DCNv2, FT-Transformer)은 본 기본 구현을 재사용하고,
-        # 3D 모델(TCN)만 본 메서드를 오버라이딩하여 2D -> 3D Causal Windowing을 수행함
-        x_train_tensor: torch.Tensor = torch.tensor(
-            X_train.values, dtype=torch.float32
-        )
+        """학습 및 검증 데이터를 텐서로 변환하며, 피처 변환은 _prepare_predict_tensors에 위임합니다."""
+        # [설계 의도] 피처 텐서 변환을 _prepare_predict_tensors로 일원화하여 2D 모델과
+        # 3D 모델(TCN) 모두 본 메서드의 중복 오버라이딩 없이 동일한 학습 데이터 준비 파이프라인을 공유함
+        x_train_tensor: torch.Tensor = self._prepare_predict_tensors(X_test=X_train)
         y_train_tensor: torch.Tensor = torch.tensor(
             y_train.values, dtype=torch.float32
         ).view(-1, 1)
 
         if sample_weight is not None:
+            weight_array: np.ndarray = np.asarray(sample_weight, dtype=np.float32)
             weight_tensor: torch.Tensor = torch.tensor(
-                np.asarray(sample_weight, dtype=np.float32),
-                dtype=torch.float32,
+                weight_array, dtype=torch.float32
             ).view(-1, 1)
         else:
             weight_tensor = torch.ones_like(y_train_tensor)
 
         val_tensors: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
-        if (
-            X_val is not None
-            and y_val is not None
-            and not X_val.empty
-            and not y_val.empty
-        ):
+        if X_val is not None and y_val is not None:
             aligned_val_features: pd.DataFrame = self._align_predict_features(X_test=X_val)
-            x_val_tensor: torch.Tensor = torch.tensor(
-                aligned_val_features.values, dtype=torch.float32
+            x_val_tensor: torch.Tensor = self._prepare_predict_tensors(
+                X_test=aligned_val_features
             )
             y_val_tensor: torch.Tensor = torch.tensor(
                 y_val.values, dtype=torch.float32
@@ -262,43 +271,55 @@ class AbstractDLRegressor(AbstractRegressor):
             self.hyperparameters.get("grad_clip_norm", DEFAULT_GRAD_CLIP_NORM)
         )
 
-        train_dataset: TensorDataset = TensorDataset(*train_tensors)
-        # [설계 의도] 마지막 미니배치 샘플 수가 1개일 때 BatchNorm1d의 채널 분산 계산 불가(ValueError)를
-        # 방지하기 위해 잔여 샘플이 1개인 경우에만 drop_last를 활성화하며, shuffle=True를 통해 에포크별 표본 누락을 방지함
-        should_drop_last: bool = (
-            len(train_dataset) > SINGLE_SAMPLE_BATCH_SIZE
-            and (len(train_dataset) % batch_size) == SINGLE_SAMPLE_BATCH_SIZE
+        # [설계 의도] 매 에포크/배치마다 발생하는 CPU-GPU 메모리 전송 및 DataLoader collate 병목을
+        # 원천 제거하기 위해 학습 및 검증 텐서를 루프 진입 전 타겟 디바이스에 일괄 사전 적재함
+        device_train_tensors: Tuple[torch.Tensor, torch.Tensor, torch.Tensor] = (
+            train_tensors[0].to(self.device),
+            train_tensors[1].to(self.device),
+            train_tensors[2].to(self.device),
         )
-        train_loader: DataLoader = DataLoader(
-            dataset=train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            drop_last=should_drop_last,
+        device_val_tensors: Optional[Tuple[torch.Tensor, torch.Tensor]] = (
+            (val_tensors[0].to(self.device), val_tensors[1].to(self.device))
+            if val_tensors is not None
+            else None
+        )
+
+        num_train_samples: int = int(device_train_tensors[0].size(0))
+        # [설계 의도] 마지막 미니배치 샘플 수가 1개일 때 BatchNorm1d의 채널 분산 계산 불가(ValueError)를
+        # 방지하기 위해 잔여 샘플이 1개인 경우에만 마지막 단일 표본 배치를 절삭함
+        should_drop_last: bool = (
+            num_train_samples > SINGLE_SAMPLE_BATCH_SIZE
+            and (num_train_samples % batch_size) == SINGLE_SAMPLE_BATCH_SIZE
         )
 
         best_val_loss: float = float("inf")
-        best_state_dict: Optional[Dict[str, Any]] = None
+        best_state_dict: Optional[Dict[str, torch.Tensor]] = None
         patience_counter: int = 0
 
         for _ in range(max_epochs):
             _train_one_epoch(
                 network=self.network,
-                dataloader=train_loader,
+                train_tensors=device_train_tensors,
                 optimizer=optimizer,
-                device=self.device,
+                batch_size=batch_size,
+                should_drop_last=should_drop_last,
                 grad_clip_norm=grad_clip_norm,
             )
 
-            if val_tensors is not None:
+            if device_val_tensors is not None:
                 current_val_loss: float = _validate_one_epoch(
                     network=self.network,
-                    val_tensors=val_tensors,
+                    val_tensors=device_val_tensors,
                     batch_size=batch_size,
-                    device=self.device,
                 )
                 if current_val_loss < (best_val_loss - min_delta):
                     best_val_loss = current_val_loss
-                    best_state_dict = copy.deepcopy(self.network.state_dict())
+                    # [설계 의도] copy.deepcopy의 파이썬 객체 그래프 탐색 오버헤드를 피하고
+                    # 텐서 버퍼만 고속 복제하여 최적 가중치 스냅샷을 보존함
+                    best_state_dict = {
+                        key: value.detach().clone()
+                        for key, value in self.network.state_dict().items()
+                    }
                     patience_counter = 0
                 else:
                     patience_counter += 1
@@ -312,22 +333,21 @@ class AbstractDLRegressor(AbstractRegressor):
     def _execute_inference_loop(self, predict_tensor: torch.Tensor) -> np.ndarray:
         """신경망을 평가 모드로 전환하고 미니배치 단위로 추론 결과를 산출합니다."""
         batch_size: int = int(self.hyperparameters.get("batch_size", DEFAULT_BATCH_SIZE))
-        predict_dataset: TensorDataset = TensorDataset(predict_tensor)
-        predict_loader: DataLoader = DataLoader(
-            dataset=predict_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-        )
+        num_samples: int = int(predict_tensor.size(0))
+        device_predict_tensor: torch.Tensor = predict_tensor.to(self.device)
 
         self.network.eval()
-        batch_predictions: List[np.ndarray] = []
+        batch_predictions: List[torch.Tensor] = []
         with torch.no_grad():
-            for (batch_features,) in predict_loader:
-                batch_features = batch_features.to(self.device)
+            for start_idx in range(0, num_samples, batch_size):
+                batch_features: torch.Tensor = device_predict_tensor[
+                    start_idx : start_idx + batch_size
+                ]
                 outputs: torch.Tensor = self.network(batch_features)
-                batch_predictions.append(outputs.detach().cpu().numpy())
+                batch_predictions.append(outputs)
 
-        return np.concatenate(batch_predictions, axis=0).ravel()
+        concatenated_outputs: torch.Tensor = torch.cat(batch_predictions, dim=0)
+        return concatenated_outputs.cpu().numpy().ravel()
 
     def _serialize_artifact(self, model_artifact_path: str) -> None:
         """PyTorch 직렬화 엔진(torch.save)을 사용하여 모델 메타데이터와 신경망 가중치를 저장합니다."""
@@ -392,29 +412,44 @@ def _compute_weighted_mse_loss(
     weights: torch.Tensor,
 ) -> torch.Tensor:
     """관측치별 가중치(sample_weight)가 반영된 평균 제곱 오차(MSE) 손실을 계산합니다."""
-    squared_errors: torch.Tensor = (predictions.view(-1, 1) - targets.view(-1, 1)) ** 2
-    weighted_errors: torch.Tensor = squared_errors * weights.view(-1, 1)
+    squared_errors: torch.Tensor = (predictions - targets) ** 2
+    weighted_errors: torch.Tensor = squared_errors * weights
     return torch.mean(weighted_errors)
 
 
 def _train_one_epoch(
     network: nn.Module,
-    dataloader: DataLoader,
+    train_tensors: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     optimizer: torch.optim.Optimizer,
-    device: str,
+    batch_size: int,
+    should_drop_last: bool,
     grad_clip_norm: float,
-) -> float:
+) -> None:
     """단일 에포크에 대한 미니배치 순전파, 역전파, 그래디언트 클리핑 및 가중치 갱신을 수행합니다."""
     network.train()
-    epoch_loss_sum: float = 0.0
-    total_samples: int = 0
+    x_train, y_train, weight_train = train_tensors
+    num_samples: int = int(x_train.size(0))
 
-    for batch_x, batch_y, batch_weight in dataloader:
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
-        batch_weight = batch_weight.to(device)
+    # [설계 의도] DataLoader의 파이썬 루프 오버헤드와 매 배치 loss.item() GPU-CPU 강제 동기화를 제거하고,
+    # 텐서 인덱스 셔플링 및 슬라이싱만으로 비동기 GPU 파이프라인이 끊김 없이 구동되도록 최적화함
+    shuffled_indices: torch.Tensor = torch.randperm(
+        num_samples, device=x_train.device
+    )
+    effective_samples: int = (
+        num_samples - SINGLE_SAMPLE_BATCH_SIZE
+        if should_drop_last
+        else num_samples
+    )
 
-        optimizer.zero_grad()
+    for start_idx in range(0, effective_samples, batch_size):
+        batch_indices: torch.Tensor = shuffled_indices[
+            start_idx : start_idx + batch_size
+        ]
+        batch_x: torch.Tensor = x_train[batch_indices]
+        batch_y: torch.Tensor = y_train[batch_indices]
+        batch_weight: torch.Tensor = weight_train[batch_indices]
+
+        optimizer.zero_grad(set_to_none=True)
         predictions: torch.Tensor = network(batch_x)
         loss: torch.Tensor = _compute_weighted_mse_loss(
             predictions=predictions,
@@ -429,44 +464,29 @@ def _train_one_epoch(
             )
         optimizer.step()
 
-        batch_count: int = batch_x.size(0)
-        epoch_loss_sum += float(loss.item()) * batch_count
-        total_samples += batch_count
-
-    return epoch_loss_sum / max(total_samples, 1)
-
 
 def _validate_one_epoch(
     network: nn.Module,
     val_tensors: Tuple[torch.Tensor, torch.Tensor],
     batch_size: int,
-    device: str,
 ) -> float:
     """검증 데이터셋에 대해 그래디언트 계산 없이 평균 제곱 오차(MSE) 손실을 평가합니다."""
-    val_dataset: TensorDataset = TensorDataset(*val_tensors)
-    val_loader: DataLoader = DataLoader(
-        dataset=val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
+    network.eval()
+    x_val, y_val = val_tensors
+    num_samples: int = int(x_val.size(0))
+
+    # [설계 의도] 매 배치마다 .item()을 호출하지 않고 GPU 텐서 상에서 제곱 오차 합계를 누적한 뒤,
+    # 에포크 종료 시점에 단 1회만 스칼라 동기화(.item())를 수행하여 검증 오버헤드를 최소화함
+    squared_error_sum: torch.Tensor = torch.zeros(
+        (), dtype=torch.float32, device=x_val.device
     )
 
-    network.eval()
-    val_loss_sum: float = 0.0
-    total_samples: int = 0
-
     with torch.no_grad():
-        for batch_x, batch_y in val_loader:
-            batch_x = batch_x.to(device)
-            batch_y = batch_y.to(device)
+        for start_idx in range(0, num_samples, batch_size):
+            batch_x: torch.Tensor = x_val[start_idx : start_idx + batch_size]
+            batch_y: torch.Tensor = y_val[start_idx : start_idx + batch_size]
             predictions: torch.Tensor = network(batch_x)
-            unit_weights: torch.Tensor = torch.ones_like(batch_y)
-            loss: torch.Tensor = _compute_weighted_mse_loss(
-                predictions=predictions,
-                targets=batch_y,
-                weights=unit_weights,
-            )
-            batch_count: int = batch_x.size(0)
-            val_loss_sum += float(loss.item()) * batch_count
-            total_samples += batch_count
+            batch_squared_errors: torch.Tensor = (predictions - batch_y) ** 2
+            squared_error_sum += torch.sum(batch_squared_errors)
 
-    return val_loss_sum / max(total_samples, 1)
+    return float((squared_error_sum / num_samples).item())

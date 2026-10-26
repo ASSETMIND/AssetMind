@@ -3,11 +3,12 @@ from typing import List, Sequence, Tuple
 import torch
 import torch.nn as nn
 
+from src.model.core.base.abstract_dl_regressor import REGRESSION_OUTPUT_DIM
+
 # ==============================================================================
 # Constants & Configuration
 # ==============================================================================
 # [시계열 합성곱 및 회귀 신경망 출력 규격 설정]
-REGRESSION_OUTPUT_DIM: int = 1    # 단일 연속형 타겟 회귀 출력 차원
 DILATION_BASE: int = 2            # 계층별 수용장 확장을 위한 지수적 팽창(Dilation) 밑수
 SHORTCUT_KERNEL_SIZE: int = 1     # 잔차 연결 시 채널 차원 정렬용 1x1 합성곱 커널 크기
 LAST_TIMESTEP_INDEX: int = -1     # 인과적 시퀀스 내 현재 시점(t) 표상 추출 인덱스

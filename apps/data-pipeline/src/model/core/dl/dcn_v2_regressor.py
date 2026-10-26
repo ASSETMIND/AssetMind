@@ -2,16 +2,7 @@ from typing import Any, Dict, Tuple
 
 import torch.nn as nn
 
-from src.model.core.base.abstract_dl_regressor import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_EARLY_STOPPING_PATIENCE,
-    DEFAULT_GRAD_CLIP_NORM,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_MAX_EPOCHS,
-    DEFAULT_MIN_DELTA,
-    DEFAULT_WEIGHT_DECAY,
-    AbstractDLRegressor,
-)
+from src.model.core.base.abstract_dl_regressor import AbstractDLRegressor
 from src.model.core.base.abstract_regressor import (
     DEFAULT_RANDOM_STATE,
     DEFAULT_REQUESTED_DEVICE,
@@ -30,13 +21,6 @@ DEFAULT_DCN_V2_PARAMS: Dict[str, Any] = {
     "deep_hidden_dims": (128, 64),                                 # 병렬 심층 신경망(Deep MLP) 계층별 은닉 차원 튜플
     "dropout_rate": 0.2,                                           # 심층 신경망 내부 과적합 방지 드롭아웃 비율
     "use_batch_norm": True,                                        # 심층 신경망 계층별 배치 정규화(BatchNorm1d) 적용 여부
-    "batch_size": DEFAULT_BATCH_SIZE,                              # 미니배치 학습 및 추론 시 배치 크기
-    "max_epochs": DEFAULT_MAX_EPOCHS,                              # 최대 학습 에포크 횟수
-    "learning_rate": DEFAULT_LEARNING_RATE,                        # AdamW 옵티마이저 학습률
-    "weight_decay": DEFAULT_WEIGHT_DECAY,                          # AdamW 가중치 감쇠(L2 정규화) 계수
-    "grad_clip_norm": DEFAULT_GRAD_CLIP_NORM,                      # 기울기 폭발 방지를 위한 그래디언트 클리핑 최대 노름
-    "early_stopping_patience": DEFAULT_EARLY_STOPPING_PATIENCE,    # 검증 손실 미개선 허용 에포크 횟수
-    "min_delta": DEFAULT_MIN_DELTA,                                # 검증 손실 유의미 개선 판정 최소 변화량
 }
 
 

@@ -83,6 +83,7 @@ class CatBoostRegressor(AbstractMLRegressor):
             random_state=random_state,
             **merged_hyperparameters,
         )
+        self.device: str = detected_device
         self.model: Optional[cb.CatBoostRegressor] = None
 
     # --------------------------------------------------------------------------

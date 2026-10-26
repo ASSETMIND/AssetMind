@@ -29,6 +29,7 @@ class AbstractRegressor(ABC):
         model_name (str): 모델 고유 식별 명칭.
         random_state (int): 재현성 제어를 위한 난수 시드.
         hyperparameters (Dict[str, Any]): 모델 알고리즘 하이퍼파라미터 딕셔너리.
+        device (str): 모델 연산이 수행될 런타임 하드웨어 가속기 식별자('cpu', 'cuda', 'mps').
         feature_names (Optional[List[str]]): 학습 시점의 입력 피처 컬럼명 리스트.
         is_fitted (bool): 모델 학습 완료 여부 상태 플래그.
     """
@@ -45,10 +46,11 @@ class AbstractRegressor(ABC):
             random_state (int): 난수 제어 시드. 기본값은 DEFAULT_RANDOM_STATE.
             **hyperparameters (Any): 하위 모델별 동적 하이퍼파라미터.
         """
-        # 모델 식별자, 시드, 하이퍼파라미터 및 학습 상태 메타데이터 초기화
+        # 모델 식별자, 시드, 하이퍼파라미터, 기본 연산 디바이스 및 학습 상태 메타데이터 초기화
         self.model_name: str = model_name
         self.random_state: int = random_state
         self.hyperparameters: Dict[str, Any] = hyperparameters
+        self.device: str = "cpu"
         self.feature_names: Optional[List[str]] = None
         self.is_fitted: bool = False
 
