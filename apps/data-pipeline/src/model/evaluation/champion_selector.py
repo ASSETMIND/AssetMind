@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from src.model.core.abstract_regressor import AbstractRegressor
+from src.model.core.base.abstract_ml_regressor import AbstractMLRegressor
 from src.model.evaluation.criteria import (
     FactorQualityGate,
     FinanceGate,
@@ -31,7 +31,7 @@ class ChampionSelectionResult:
 
     Attributes:
         champion_model_name (str): 리더보드 1위로 선정된 챔피언 모델 식별 명칭.
-        champion_model (AbstractRegressor): 학습 완료된 챔피언 모델 인스턴스.
+        champion_model (AbstractMLRegressor): 학습 완료된 챔피언 모델 인스턴스.
         champion_composite_score (float): 챔피언 모델의 2대 핵심 계층 가중 복합 스코어.
         champion_metrics (Dict[EvaluationMetric, float]): 챔피언 모델의 10대 원시 지표 맵.
         leaderboard (pd.DataFrame): 2단계 게이트를 통과한 적격 후보군 리더보드.
@@ -47,7 +47,7 @@ class ChampionSelectionResult:
         champion_layer_scores (Dict[str, float]): 챔피언 모델의 계층별 원천 부분 점수 (score_l1_ml, score_l2_factor).
     """
     champion_model_name: str
-    champion_model: AbstractRegressor
+    champion_model: AbstractMLRegressor
     champion_composite_score: float
     champion_metrics: Dict[EvaluationMetric, float]
     leaderboard: pd.DataFrame
@@ -187,7 +187,7 @@ class ChampionModelSelector:
 
     def select_champion(
         self,
-        models: Dict[str, AbstractRegressor],
+        models: Dict[str, AbstractMLRegressor],
         X_test: pd.DataFrame,
         y_test: pd.Series,
         target_std: Optional[float] = None,
@@ -198,7 +198,7 @@ class ChampionModelSelector:
         """후보 모델들을 전수 평가하고, 2단계 게이트 감사 및 리더보드 연산을 거쳐 최종 1위 챔피언 모델을 발탁합니다.
 
         Args:
-            models (Dict[str, AbstractRegressor]): 모델 식별 명칭을 키로 하고 학습 완료된 모델 객체를 값으로 갖는 딕셔너리.
+            models (Dict[str, AbstractMLRegressor]): 모델 식별 명칭을 키로 하고 학습 완료된 모델 객체를 값으로 갖는 딕셔너리.
             X_test (pd.DataFrame): Out-of-Sample 평가용 테스트 피처 데이터프레임.
             y_test (pd.Series): Out-of-Sample 평가용 테스트 정답 타겟 시리즈.
             target_std (Optional[float]): RMSE/MAE 정규화용 타겟 표준편차 (None 시 y_test 표준편차 자동 산출).
@@ -314,7 +314,7 @@ class ChampionModelSelector:
         # 6. 최종 1위 챔피언 모델 정보 사출
         champion_name: str = str(leaderboard.index[0])
         champion_score: float = float(leaderboard.iloc[0]["composite_score"])
-        champion_model_instance: AbstractRegressor = models[champion_name]
+        champion_model_instance: AbstractMLRegressor = models[champion_name]
         champion_raw_metrics: Dict[EvaluationMetric, float] = candidate_metrics[champion_name]
 
         # [설계 의도] 챔피언 모델의 복합 스코어 도출 산식 및 계층별 부분 점수 분해 메타데이터 추출
@@ -351,7 +351,7 @@ class ChampionModelSelector:
 
 def _evaluate_all_candidates(
     evaluator: ModelEvaluator,
-    models: Dict[str, AbstractRegressor],
+    models: Dict[str, AbstractMLRegressor],
     X_test: pd.DataFrame,
     y_test: pd.Series,
     target_std: Optional[float] = None,
@@ -360,7 +360,7 @@ def _evaluate_all_candidates(
 
     Args:
         evaluator (ModelEvaluator): 단일 모델 평가 엔진.
-        models (Dict[str, AbstractRegressor]): 후보 모델 딕셔너리.
+        models (Dict[str, AbstractMLRegressor]): 후보 모델 딕셔너리.
         X_test (pd.DataFrame): 테스트 피처 행렬.
         y_test (pd.Series): 테스트 타겟 시리즈.
         target_std (Optional[float]): 타겟 표준편차.

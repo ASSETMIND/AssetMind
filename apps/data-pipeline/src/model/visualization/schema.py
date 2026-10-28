@@ -8,6 +8,11 @@ from typing import Dict, Optional, Tuple
 DEFAULT_XGBOOST_COLOR: str = "#1F77B4"                        # XGBoost 기본 시각화 색상
 DEFAULT_RANDOM_FOREST_COLOR: str = "#2CA02C"                  # RandomForest 기본 시각화 색상
 DEFAULT_ELASTIC_NET_COLOR: str = "#FF7F0E"                    # ElasticNet 기본 시각화 색상
+DEFAULT_CATBOOST_COLOR: str = "#9467BD"                       # CatBoost 기본 시각화 색상
+DEFAULT_TABULAR_RESNET_COLOR: str = "#8C564B"                 # TabularResNet 기본 시각화 색상
+DEFAULT_DCN_V2_COLOR: str = "#E377C2"                         # DCNv2 기본 시각화 색상
+DEFAULT_FT_TRANSFORMER_COLOR: str = "#17BECF"                 # FTTransformer 기본 시각화 색상
+DEFAULT_TCN_COLOR: str = "#BCBD22"                            # TCN 기본 시각화 색상
 FALLBACK_MODEL_COLOR: str = "#4A90E2"                         # 미등록 모델 대체 기본 색상
 DEFAULT_ROLLING_LINE_COLORS: Tuple[str, ...] = (
     "#1F77B4",                                                # 1순위 피처 추적 라인 색상 (파랑)
@@ -78,6 +83,11 @@ class ModelColorPalette:
     xgboost: str = DEFAULT_XGBOOST_COLOR                       # XGBoost 색상
     random_forest: str = DEFAULT_RANDOM_FOREST_COLOR           # RandomForest 색상
     elastic_net: str = DEFAULT_ELASTIC_NET_COLOR               # ElasticNet 색상
+    catboost: str = DEFAULT_CATBOOST_COLOR                     # CatBoost 색상
+    tabular_resnet: str = DEFAULT_TABULAR_RESNET_COLOR         # TabularResNet 색상
+    dcn_v2: str = DEFAULT_DCN_V2_COLOR                         # DCNv2 색상
+    ft_transformer: str = DEFAULT_FT_TRANSFORMER_COLOR         # FTTransformer 색상
+    tcn: str = DEFAULT_TCN_COLOR                               # TCN 색상
     fallback: str = FALLBACK_MODEL_COLOR                       # 미등록 모델 대체 색상
     custom_models: Dict[str, str] = field(default_factory=dict) # 사용자 정의 추가 모델 색상 맵
     rolling_sequence: Tuple[str, ...] = DEFAULT_ROLLING_LINE_COLORS # 시계열 순환 색상 튜플
@@ -88,6 +98,11 @@ class ModelColorPalette:
             "XGBoost": self.xgboost,
             "RandomForest": self.random_forest,
             "ElasticNet": self.elastic_net,
+            "CatBoost": self.catboost,
+            "TabularResNet": self.tabular_resnet,
+            "DCNv2": self.dcn_v2,
+            "FTTransformer": self.ft_transformer,
+            "TCN": self.tcn,
         }
         color_map.update(self.custom_models)
         return color_map

@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 
 from src.dataset.walk_forward_splitter import WalkForwardSplitter
-from src.model.core.elasticnet_regressor import ElasticNetRegressor
-from src.model.core.random_forest_regressor import RandomForestRegressor
-from src.model.core.xgboost_regressor import XGBoostRegressor
+from src.model.core.ml.elasticnet_regressor import ElasticNetRegressor
+from src.model.core.ml.random_forest_regressor import RandomForestRegressor
+from src.model.core.ml.xgboost_regressor import XGBoostRegressor
 from src.model.evaluation import metrics
 from src.model.evaluation.composite_score import get_trial_score
 from src.model.evaluation.criteria import Weights
