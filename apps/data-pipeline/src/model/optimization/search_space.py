@@ -7,10 +7,10 @@ import pandas as pd
 # Constants & Configuration
 # ==============================================================================
 # [탐색 공간 경계 감사 리포트 스키마 및 속성 설정]
-ALGORITHM_COLUMN_NAME: str = "알고리즘 (Algorithm)"           # 경계 감사표 내 모델 식별 컬럼명
+ALGORITHM_COLUMN_NAME: str = "알고리즘 (Algorithm)"          # 경계 감사표 내 모델 식별 컬럼명
 PARAMETER_COLUMN_NAME: str = "파라미터 명칭"                  # 경계 감사표 내 하이퍼파라미터 식별 컬럼명
-BOUNDARY_HIT_ATTR_NAME: str = "has_boundary_hits"             # 결과 DTO 내 경계 도달 여부 플래그 속성명
-BOUNDARY_DF_ATTR_NAME: str = "boundary_audit_dataframe"       # 결과 DTO 내 경계 감사 데이터프레임 속성명
+BOUNDARY_HIT_ATTR_NAME: str = "has_boundary_hits"          # 결과 DTO 내 경계 도달 여부 플래그 속성명
+BOUNDARY_DF_ATTR_NAME: str = "boundary_audit_dataframe"    # 결과 DTO 내 경계 감사 데이터프레임 속성명
 
 # [전통 머신러닝(ML) 4종 기본 HPO 탐색 공간 설정]
 ML_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -45,9 +45,6 @@ ML_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
             "type": "categorical",
             "choices": ["RMSE", "MAE", "Huber:delta=1.0"],
         },
-        # [설계 의도] 저표본(Low-ESS) 금융 시계열에서 대칭 트리(Oblivious Tree)의 고차 교차항 암기 및
-        # 후기 잔차 과적합을 차단하기 위해 트리 깊이(2~4)와 부스팅 스텝을 제한하고 L2/분할 무작위성 규제를 강화함
-        # (근거: Prokhorenkova et al., NeurIPS 2018; Gu, Kelly, & Xiu, RFS 2020)
         "iterations": {"type": "int", "low": 50, "high": 350, "step": 25},
         "depth": {"type": "int", "low": 2, "high": 4, "step": 1},
         "learning_rate": {"type": "float", "low": 0.005, "high": 0.08, "log": True},
@@ -59,68 +56,54 @@ ML_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
 # [딥러닝(DL) 4종 기본 HPO 탐색 공간 설정]
 DL_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "TabularResNet": {
-        # [설계 의도] 소수 정예 피처(8개) 환경에서 과매개변수화 및 무검증(X_val=None) 100 에포크 과적합을 방지하기 위해
-        # 은닉 차원·블록 깊이를 경량화하고 스펙트럼 조기 종료(max_epochs 25~50) 및 그래디언트 클리핑을 공통 적용함
-        # (근거: Gorishniy et al., NeurIPS 2021; Kadra et al., NeurIPS 2021; Yao et al., 2007)
-        "hidden_dim": {"type": "categorical", "choices": [32, 64, 128]},
-        "num_blocks": {"type": "int", "low": 1, "high": 2, "step": 1},
-        "dropout_rate": {"type": "float", "low": 0.20, "high": 0.50, "step": 0.05},
-        "learning_rate": {"type": "float", "low": 1e-4, "high": 2e-3, "log": True},
-        "weight_decay": {"type": "float", "low": 5e-4, "high": 1e-1, "log": True},
+        "hidden_dim": {"type": "categorical", "choices": [64]},
+        "num_blocks": {"type": "categorical", "choices": [2]},
+        "dropout_rate": {"type": "float", "low": 0.20, "high": 0.40, "step": 0.05},
+        "learning_rate": {"type": "float", "low": 1e-4, "high": 5e-4, "log": True},
+        "weight_decay": {"type": "float", "low": 1.5e-3, "high": 1.5e-2, "log": True},
         "batch_size": {"type": "categorical", "choices": [64, 128]},
-        "max_epochs": {"type": "int", "low": 25, "high": 50, "step": 5},
-        "grad_clip_norm": {"type": "float", "low": 0.50, "high": 1.00, "step": 0.25},
+        "max_epochs": {"type": "int", "low": 25, "high": 40, "step": 5},
+        "grad_clip_norm": {"type": "categorical", "choices": [1.00]},
     },
     "DCNv2": {
-        # [설계 의도] 고차 다항식 교차항의 외삽 폭발(GDR·RIR 급증)을 차단하기 위해 Cross Layer를 1~2층으로 제한하고,
-        # 강한 L2 정규화 하한(1e-3)과 에포크 상한 제어(25~50)를 결합하여 일반화 안정성과 탐색 속도를 동시에 확보함
-        # (근거: Wang et al., WWW 2021; Grinsztajn et al., NeurIPS 2022; Yao et al., 2007)
-        "num_cross_layers": {"type": "int", "low": 1, "high": 2, "step": 1},
+        "num_cross_layers": {"type": "categorical", "choices": [2]},
         "deep_hidden_dims": {
             "type": "categorical",
-            "choices": [(32, 16), (64, 32), (64, 64)],
+            "choices": [(64, 64)],
         },
-        "dropout_rate": {"type": "float", "low": 0.25, "high": 0.50, "step": 0.05},
-        "learning_rate": {"type": "float", "low": 1e-4, "high": 2e-3, "log": True},
-        "weight_decay": {"type": "float", "low": 1e-3, "high": 1e-1, "log": True},
-        "batch_size": {"type": "categorical", "choices": [64, 128]},
-        "max_epochs": {"type": "int", "low": 25, "high": 50, "step": 5},
-        "grad_clip_norm": {"type": "float", "low": 0.50, "high": 1.00, "step": 0.25},
+        "dropout_rate": {"type": "float", "low": 0.10, "high": 0.35, "step": 0.05},
+        "learning_rate": {"type": "float", "low": 2e-4, "high": 1.5e-3, "log": True},
+        "weight_decay": {"type": "float", "low": 2e-3, "high": 5e-2, "log": True},
+        "batch_size": {"type": "categorical", "choices": [128]},
+        "max_epochs": {"type": "int", "low": 35, "high": 60, "step": 5},
+        "grad_clip_norm": {"type": "float", "low": 0.75, "high": 1.25, "step": 0.25},
     },
     "FTTransformer": {
-        # [설계 의도] 어텐션 헤드당 최소 차원(d_k >= 4) 보장을 위해 d_token을 [16, 32]로 정렬하고,
-        # 무검증 100 에포크 MSE 학습에 의한 팻테일(Kurtosis=7.01) 암기(OOF RMSE 과소화로 인한 RIR 폭발)를 막기 위해
-        # 에포크 상한(20~40)과 강한 그래디언트 클리핑(0.25~0.50, Huber 유사 효과) 및 L2 감쇠(>=5e-3)를 강제함
-        # (근거: Gorishniy et al., NeurIPS 2021; Advani et al., 2020; Zhang et al., ICLR 2020)
-        "d_token": {"type": "categorical", "choices": [16, 32]},
-        "num_heads": {"type": "categorical", "choices": [2, 4]},
-        "num_layers": {"type": "int", "low": 1, "high": 2, "step": 1},
-        "ffn_factor": {"type": "float", "low": 0.75, "high": 1.25, "step": 0.25},
-        "dropout_rate": {"type": "float", "low": 0.25, "high": 0.45, "step": 0.05},
-        "learning_rate": {"type": "float", "low": 1e-4, "high": 4e-4, "log": True},
-        "weight_decay": {"type": "float", "low": 5e-3, "high": 1e-1, "log": True},
-        "batch_size": {"type": "categorical", "choices": [64, 128]},
-        "max_epochs": {"type": "int", "low": 20, "high": 40, "step": 5},
-        "grad_clip_norm": {"type": "float", "low": 0.25, "high": 0.50, "step": 0.25},
+        "d_token": {"type": "categorical", "choices": [24]},
+        "num_heads": {"type": "categorical", "choices": [2]},
+        "num_layers": {"type": "categorical", "choices": [1]},
+        "ffn_factor": {"type": "categorical", "choices": [1.25]},
+        "dropout_rate": {"type": "float", "low": 0.08, "high": 0.12, "step": 0.02},
+        "learning_rate": {"type": "float", "low": 4.2e-4, "high": 5.2e-4, "log": True},
+        "weight_decay": {"type": "float", "low": 6.0e-2, "high": 1.4e-1, "log": True},
+        "batch_size": {"type": "categorical", "choices": [64]},
+        "max_epochs": {"type": "int", "low": 12, "high": 13, "step": 1},
+        "grad_clip_norm": {"type": "categorical", "choices": [0.15, 0.18]},
     },
     "TCN": {
-        # [설계 의도] 채널 단위 드롭아웃(nn.Dropout1d)과 BatchNorm1d 결합 시 발생하는 추론 분산 왜곡(Variance Shift)을
-        # 차단하기 위해 배치 정규화를 비활성화(use_batch_norm=False)하고 채널 드롭아웃을 적정 범위(0.15~0.35)로 조정하며,
-        # 20일 시계열 수용장(seq_len 10~20, 채널 16~32)과 에포크 제한(20~40)으로 예측력(Score)과 RIR·GDR을 동시 확보함
-        # (근거: Bai, Kolter, & Koltun, arXiv:1803.01271; Li et al., CVPR 2019; Yao et al., 2007)
-        "sequence_length": {"type": "int", "low": 10, "high": 20, "step": 5},
+        "sequence_length": {"type": "categorical", "choices": [10]},
         "hidden_channels": {
             "type": "categorical",
-            "choices": [(16, 16), (32, 16), (32, 32)],
+            "choices": [(16, 8)],
         },
-        "kernel_size": {"type": "categorical", "choices": [2, 3]},
+        "kernel_size": {"type": "categorical", "choices": [3]},
         "use_batch_norm": {"type": "categorical", "choices": [False]},
-        "dropout_rate": {"type": "float", "low": 0.15, "high": 0.35, "step": 0.05},
-        "learning_rate": {"type": "float", "low": 2e-4, "high": 1e-3, "log": True},
-        "weight_decay": {"type": "float", "low": 5e-3, "high": 1e-1, "log": True},
+        "dropout_rate": {"type": "float", "low": 0.40, "high": 0.60, "step": 0.05},
+        "learning_rate": {"type": "float", "low": 3e-4, "high": 5.5e-4, "log": True},
+        "weight_decay": {"type": "float", "low": 8e-2, "high": 2e-1, "log": True},
         "batch_size": {"type": "categorical", "choices": [64, 128]},
-        "max_epochs": {"type": "int", "low": 20, "high": 40, "step": 5},
-        "grad_clip_norm": {"type": "float", "low": 0.25, "high": 0.50, "step": 0.25},
+        "max_epochs": {"type": "int", "low": 20, "high": 30, "step": 5},
+        "grad_clip_norm": {"type": "categorical", "choices": [0.25, 0.40]},
     },
 }
 

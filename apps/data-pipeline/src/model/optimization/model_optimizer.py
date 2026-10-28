@@ -42,7 +42,7 @@ DEFAULT_DL_MODEL_REGISTRY: Dict[str, Type[AbstractRegressor]] = {
     "TCN": TCNRegressor,                                           # 3D 인과적 시간 합성곱 신경망 회귀 모델
 }
 DEFAULT_MODEL_REGISTRY: Dict[str, Type[AbstractRegressor]] = {
-    # **DEFAULT_ML_MODEL_REGISTRY,
+    **DEFAULT_ML_MODEL_REGISTRY,
     **DEFAULT_DL_MODEL_REGISTRY,
 }
 
