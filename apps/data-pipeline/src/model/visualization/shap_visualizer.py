@@ -997,9 +997,14 @@ def _normalize_inflection_targets(
     """입력된 변곡점 타겟을 [(피처명, 정보딕셔너리), ...] 형태로 표준화합니다."""
     normalized_list: List[Tuple[str, Dict[str, float]]] = []
 
-    if isinstance(targets, InflectionPolicyResult):
+    if isinstance(targets, InflectionPolicyResult) or hasattr(targets, "policy_records"):
         for feature_name, record in targets.policy_records.items():
-            normalized_list.append((feature_name, record.as_dictionary))
+            record_dict = (
+                record.as_dictionary
+                if hasattr(record, "as_dictionary")
+                else dict(record)
+            )
+            normalized_list.append((feature_name, record_dict))
     elif isinstance(targets, str):
         if fallback_info is None:
             raise ValueError("[_normalize_inflection_targets] 단일 피처명 지정 시 inflection_info가 필수입니다.")
